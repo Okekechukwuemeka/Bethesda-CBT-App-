@@ -9,7 +9,6 @@ interface NavItem {
   label: string;
   href: string;
   icon: React.ReactNode;
-  ariaLabel: string;
 }
 
 interface AdminLayoutProps {
@@ -22,6 +21,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [routeAnnouncement, setRouteAnnouncement] = useState("");
   const sidebarRef = useRef<HTMLElement>(null);
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -30,9 +30,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       id: "dashboard",
       label: "Dashboard",
       href: "/admin",
-      ariaLabel: "Dashboard",
       icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          focusable="false">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -46,9 +51,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       id: "students",
       label: "Students",
       href: "/admin/students",
-      ariaLabel: "Manage Students",
       icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          focusable="false">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -62,9 +72,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       id: "questions",
       label: "Questions",
       href: "/admin/questions",
-      ariaLabel: "Manage Questions",
       icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          focusable="false">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -78,9 +93,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       id: "exams",
       label: "Exams",
       href: "/admin/exams",
-      ariaLabel: "Manage Exams",
       icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          focusable="false">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -94,9 +114,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       id: "results",
       label: "Results",
       href: "/admin/results",
-      ariaLabel: "View Results",
       icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          focusable="false">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -123,11 +148,20 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Close sidebar on mobile when navigating
+  // Close sidebar on mobile when navigating, and announce the new page to
+  // screen reader users. Next.js client-side routing never reloads the page,
+  // so without this, navigating gives no audible confirmation of arrival.
   useEffect(() => {
     if (isMobile) {
       setIsSidebarOpen(false);
     }
+    const matched = navItems.find((item) =>
+      item.href === "/admin"
+        ? pathname === "/admin" || pathname === "/admin/"
+        : pathname === item.href || pathname?.startsWith(item.href + "/"),
+    );
+    setRouteAnnouncement(matched ? `${matched.label} page loaded` : "Page loaded");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, isMobile]);
 
   // Handle Escape key to close sidebar
@@ -162,16 +196,24 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
   // Helper function to check if a nav item is active
   const isNavItemActive = (item: NavItem) => {
-    // For dashboard, only match exactly "/admin" or "/admin/"
     if (item.href === "/admin") {
       return pathname === "/admin" || pathname === "/admin/";
     }
-    // For other items, match the path or any subpaths
     return pathname === item.href || pathname?.startsWith(item.href + "/");
   };
 
+  // Background content is covered by the sidebar overlay on mobile — mark it
+  // inert so Tab/screen-reader virtual cursor can't reach hidden content.
+  const mainIsInert = isMobile && isSidebarOpen;
+
   return (
     <div className="min-h-screen bg-[#E8F0FE] font-sans">
+      {/* Live region announcing page changes for screen reader users,
+          since client-side navigation doesn't trigger a normal page load. */}
+      <div aria-live="polite" role="status" className="sr-only">
+        {routeAnnouncement}
+      </div>
+
       {/* Skip to main content link */}
       <a
         href="#main-content"
@@ -188,7 +230,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
           aria-expanded={isSidebarOpen}
           aria-controls="sidebar"
           aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}>
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            focusable="false">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -200,9 +248,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         <span className="text-white font-bold text-sm">Admin Panel</span>
         <button
           onClick={handleLogout}
-          className="text-white hover:text-[#8BB8E8] focus:outline-none focus:ring-2 focus:ring-[#8BB8E8] rounded p-1 text-sm"
-          aria-label="Logout">
-          Logout
+          disabled={isLoading}
+          className="text-white hover:text-[#8BB8E8] focus:outline-none focus:ring-2 focus:ring-[#8BB8E8] rounded p-1 text-sm disabled:opacity-50"
+          aria-label={isLoading ? "Logging out, please wait" : "Logout"}>
+          {isLoading ? "Logging out..." : "Logout"}
         </button>
       </div>
 
@@ -215,15 +264,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar — single nav landmark, no duplicate wrapper landmark on the aside */}
       <aside
         id="sidebar"
         ref={sidebarRef}
         className={`fixed top-0 left-0 h-full w-64 bg-[#1A3A5C] shadow-xl z-50 transition-transform duration-300 ease-in-out overflow-y-auto ${
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         } lg:translate-x-0 focus:outline-none`}
-        role="navigation"
-        aria-label="Admin navigation"
         tabIndex={-1}>
         {/* Sidebar Header */}
         <div className="px-6 py-6 border-b border-white/10">
@@ -231,8 +278,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
           <p className="text-[#8BB8E8] text-xs mt-1">Bethesda Home & School</p>
         </div>
 
-        {/* Navigation */}
-        <nav className="px-3 py-4" aria-label="Main navigation">
+        {/* Navigation — the one and only nav landmark in this component */}
+        <nav className="px-3 py-4" aria-label="Admin navigation">
           <ul className="space-y-1">
             {navItems.map((item) => {
               const isActive = isNavItemActive(item);
@@ -245,8 +292,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         ? "bg-white/20 text-white"
                         : "text-white/70 hover:bg-white/10 hover:text-white"
                     }`}
-                    aria-current={isActive ? "page" : undefined}
-                    aria-label={item.ariaLabel}>
+                    aria-current={isActive ? "page" : undefined}>
                     <span className="flex-shrink-0">{item.icon}</span>
                     <span>{item.label}</span>
                   </Link>
@@ -262,8 +308,14 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             onClick={handleLogout}
             disabled={isLoading}
             className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition duration-200 focus:outline-none focus:ring-2 focus:ring-[#8BB8E8] disabled:opacity-50"
-            aria-label="Logout from admin panel">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            aria-label={isLoading ? "Logging out, please wait" : "Logout from admin panel"}>
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              focusable="false">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -273,18 +325,19 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             </svg>
             <span>{isLoading ? "Logging out..." : "Logout"}</span>
           </button>
-          <p className="text-[8A9CAE] text-xs text-center mt-2">© {new Date().getFullYear()}</p>
+          <p className="text-[#8A9CAE] text-xs text-center mt-2">© {new Date().getFullYear()}</p>
         </div>
       </aside>
 
       {/* Main Content */}
       <main
         id="main-content"
+        // @ts-expect-error -- `inert` is a valid HTML boolean attribute (React 19+); it prevents
+        // focus and screen-reader access to content hidden behind the mobile sidebar overlay.
+        inert={mainIsInert ? "" : undefined}
         className={`transition-all duration-300 ${
           isSidebarOpen && !isMobile ? "lg:ml-64" : "ml-0"
-        } ${isMobile ? "pt-16" : ""}`}
-        role="main"
-        aria-label="Main content">
+        } ${isMobile ? "pt-16" : ""}`}>
         <div className="p-4 lg:p-8">{children}</div>
       </main>
     </div>
