@@ -1,4 +1,3 @@
-// components/ui/PasswordInput.tsx
 "use client";
 
 import React, { forwardRef, useState } from "react";

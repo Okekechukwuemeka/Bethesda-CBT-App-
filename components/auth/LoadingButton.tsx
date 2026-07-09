@@ -1,4 +1,3 @@
-// components/ui/LoadingButton.tsx
 import React from "react";
 
 interface LoadingButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
