@@ -40,9 +40,17 @@ const ExamPage: React.FC = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
+  // Separate, throttled announcement for the timer. The visible clock
+  // updates every second, but a live region that updates every second
+  // is unusable for screen reader users — it never stops talking. This
+  // only changes at meaningful checkpoints.
+  const [timerAnnouncement, setTimerAnnouncement] = useState("");
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const submitButtonRef = useRef<HTMLButtonElement>(null);
+  const submitDialogRef = useRef<HTMLDivElement | null>(null);
+  const submittedHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const notFoundHeadingRef = useRef<HTMLHeadingElement | null>(null);
 
   // Mock exam data with both objective and theory questions
   const examData: Record<string, ExamData> = {
@@ -423,10 +431,30 @@ const ExamPage: React.FC = () => {
     };
   }, [isExamStarted, isSubmitted]);
 
+  // Throttled timer announcements: every 5 minutes while there's more
+  // than 5 minutes left, every minute inside the last 5 minutes, and at
+  // 30s / 10s. This keeps a blind user informed without the live region
+  // re-announcing every single second.
+  useEffect(() => {
+    if (!isExamStarted || isSubmitted) return;
+
+    const minutes = Math.floor(timeRemaining / 60);
+
+    if (timeRemaining > 300 && timeRemaining % 300 === 0) {
+      setTimerAnnouncement(`${minutes} minutes remaining`);
+    } else if (timeRemaining <= 300 && timeRemaining > 0 && timeRemaining % 60 === 0) {
+      setTimerAnnouncement(`${minutes} minute${minutes === 1 ? "" : "s"} remaining`);
+    } else if (timeRemaining === 30) {
+      setTimerAnnouncement("30 seconds remaining");
+    } else if (timeRemaining === 10) {
+      setTimerAnnouncement("10 seconds remaining");
+    }
+  }, [timeRemaining, isExamStarted, isSubmitted]);
+
   const handleAutoSubmit = () => {
     setStatusMessage({
       type: "warning",
-      text: "⏰ Time is up! Your exam has been automatically submitted.",
+      text: "Time is up. Your exam has been automatically submitted.",
     });
     setIsSubmitted(true);
     setIsExamStarted(false);
@@ -443,12 +471,12 @@ const ExamPage: React.FC = () => {
     setIsExamStarted(true);
     setStatusMessage({
       type: "success",
-      text: " Exam started. Good luck!",
+      text: "Exam started. Good luck!",
     });
-    const firstQuestion = document.getElementById("question-0");
-    if (firstQuestion) {
-      firstQuestion.focus();
-    }
+    // Give React a tick to render the question list before moving focus.
+    setTimeout(() => {
+      document.getElementById("question-0")?.focus();
+    }, 50);
   };
 
   const handleAnswerChange = (questionId: number, value: string) => {
@@ -504,6 +532,7 @@ const ExamPage: React.FC = () => {
     }
   };
 
+  // Escape closes the submit-confirmation dialog
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape" && showSubmitDialog) {
@@ -514,11 +543,62 @@ const ExamPage: React.FC = () => {
     return () => document.removeEventListener("keydown", handleEscape);
   }, [showSubmitDialog]);
 
+  // Focus trap for the submit-confirmation dialog, same reasoning as the
+  // exam-code modal: without it, Tab can leak focus onto the exam page
+  // sitting behind the overlay.
+  useEffect(() => {
+    if (!showSubmitDialog) return;
+
+    const handleTrap = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !submitDialogRef.current) return;
+
+      const focusable = submitDialogRef.current.querySelectorAll<HTMLElement>(
+        'button, a[href], input, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleTrap);
+    return () => document.removeEventListener("keydown", handleTrap);
+  }, [showSubmitDialog]);
+
+  // When the exam finishes (submitted or time-out) or the exam-not-found
+  // screen appears, move focus to that screen's heading. Otherwise a
+  // screen reader user's focus is left on a button/element that no
+  // longer exists, and they get no indication anything happened.
+  useEffect(() => {
+    if (isSubmitted) {
+      submittedHeadingRef.current?.focus();
+    }
+  }, [isSubmitted]);
+
+  useEffect(() => {
+    if (!exam) {
+      notFoundHeadingRef.current?.focus();
+    }
+  }, [exam]);
+
   if (!exam) {
     return (
       <div className="min-h-screen bg-[#E8F0FE] flex items-center justify-center px-4">
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full border border-[#B8D0E8] text-center">
-          <h1 className="text-2xl font-bold text-[#1A3A5C] mb-4">Exam Not Found</h1>
+          <h1
+            ref={notFoundHeadingRef}
+            tabIndex={-1}
+            className="text-2xl font-bold text-[#1A3A5C] mb-4">
+            Exam Not Found
+          </h1>
           <p className="text-[#5A7A9A] mb-6">The examination you are looking for does not exist.</p>
           <a
             href="/student/exams"
@@ -540,7 +620,12 @@ const ExamPage: React.FC = () => {
                 ? "bg-yellow-100 text-yellow-800 border-yellow-300"
                 : "bg-green-100 text-green-800 border-green-300"
             }`}>
-            <h2 className="text-2xl font-bold mb-2">Exam Submitted</h2>
+            <h1
+              ref={submittedHeadingRef}
+              tabIndex={-1}
+              className="text-2xl font-bold mb-2 focus:outline-none">
+              Exam Submitted
+            </h1>
             <p>Your answers have been recorded successfully.</p>
           </div>
           <div className="bg-[#F8FAFE] border border-[#C5D8EC] rounded-lg p-4 mb-6">
@@ -572,7 +657,7 @@ const ExamPage: React.FC = () => {
     <div className="min-h-screen bg-[#E8F0FE] py-6 px-4 font-sans">
       <div className="max-w-3xl mx-auto">
         {/* Exam Header */}
-        <div className="bg-[#1A3A5C] rounded-t-2xl px-6 py-5">
+        <header className="bg-[#1A3A5C] rounded-t-2xl px-6 py-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h1 className="text-2xl font-bold text-white tracking-wide">{exam.subject}</h1>
@@ -587,18 +672,25 @@ const ExamPage: React.FC = () => {
               <p className="text-white/70 text-sm">Time Allowed: {exam.duration} min</p>
             </div>
           </div>
-        </div>
+        </header>
 
         {/* Timer & Progress */}
         <div className="bg-white border-x border-[#B8D0E8] px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-[#1A3A5C]">Timer:</span>
+            {/* The visible clock is NOT a live region — updating it every
+                second would make a screen reader narrate the countdown
+                constantly. A hidden region below announces at checkpoints
+                instead. */}
             <span
               className={`text-xl font-bold font-mono ${
                 timeRemaining < 300 ? "text-red-600 animate-pulse" : "text-[#1A3A5C]"
               }`}
-              aria-live="polite">
+              aria-hidden="true">
               {formatTime(timeRemaining)}
+            </span>
+            <span className="sr-only" role="timer" aria-live="polite" aria-atomic="true">
+              {timerAnnouncement}
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -618,8 +710,8 @@ const ExamPage: React.FC = () => {
         {/* Status Message */}
         {statusMessage && (
           <div
-            role="alert"
-            aria-live="polite"
+            role={statusMessage.type === "success" ? "status" : "alert"}
+            aria-live={statusMessage.type === "success" ? "polite" : "assertive"}
             className={`px-6 py-3 border-x ${
               statusMessage.type === "success"
                 ? "bg-green-100 text-green-800 border-green-300"
@@ -632,22 +724,24 @@ const ExamPage: React.FC = () => {
         )}
 
         {/* Exam Content */}
-        <div className="bg-white rounded-b-2xl shadow-2xl overflow-hidden border border-[#B8D0E8] p-6">
+        <main className="bg-white rounded-b-2xl shadow-2xl overflow-hidden border border-[#B8D0E8] p-6">
           {/* Instructions */}
           {!isExamStarted && (
             <div className="mb-4">
               <h2 className="text-xl font-semibold text-[#1A3A5C] mb-3">Instructions</h2>
               <div className="bg-[#F8FAFE] border border-[#C5D8EC] rounded-lg p-4">
-                <ul className="space-y-2">
+                <ol className="space-y-2">
                   {exam.instructions.map((instruction, index) => (
                     <li key={index} className="flex items-start gap-3 text-[#4A6A8A]">
-                      <span className="text-[#1A3A5C] font-bold mt-0.5">{index + 1}.</span>
+                      <span className="text-[#1A3A5C] font-bold mt-0.5" aria-hidden="true">
+                        {index + 1}.
+                      </span>
                       <span>{instruction}</span>
                     </li>
                   ))}
-                </ul>
+                </ol>
                 <p className="text-sm text-[#8A9CAE] mt-3 pt-3 border-t border-[#E8EEF5]">
-                  Click &quot;Start Exam&quot; above to begin.
+                  Click &quot;Start Exam&quot; above to begin. The timer starts as soon as you do.
                 </p>
               </div>
             </div>
@@ -659,77 +753,88 @@ const ExamPage: React.FC = () => {
               <h2 className="text-xl font-semibold text-[#1A3A5C] border-b border-[#E8EEF5] pb-3">
                 Questions
               </h2>
-              {exam.questions.map((question, index) => (
-                <div
-                  key={question.id}
-                  id={`question-${index}`}
-                  className="border border-[#C5D8EC] rounded-lg p-4 bg-[#F8FAFE] focus-within:ring-2 focus-within:ring-[#2B6CB0] focus-within:border-transparent"
-                  role="group"
-                  aria-labelledby={`question-label-${question.id}`}>
-                  <div className="flex justify-between items-start mb-3">
-                    <h3
-                      id={`question-label-${question.id}`}
-                      className="text-base font-medium text-[#1A3A5C]">
-                      Question {index + 1} {question.type === "theory" && "(Theory)"}
-                    </h3>
+              {exam.questions.map((question, index) => {
+                const isAnswered = Boolean(answers[question.id]);
+                return (
+                  <div
+                    key={question.id}
+                    id={`question-${index}`}
+                    tabIndex={-1}
+                    className="border border-[#C5D8EC] rounded-lg p-4 bg-[#F8FAFE] focus-within:ring-2 focus-within:ring-[#2B6CB0] focus-within:border-transparent focus:outline-none focus:ring-2 focus:ring-[#2B6CB0]"
+                    role="group"
+                    aria-labelledby={`question-label-${question.id}`}>
+                    <div className="flex justify-between items-start mb-3">
+                      <h3
+                        id={`question-label-${question.id}`}
+                        className="text-base font-medium text-[#1A3A5C]">
+                        Question {index + 1} of {getTotalQuestions()}
+                        {question.type === "theory" && " (Theory)"}
+                        {isAnswered && <span className="sr-only"> — answered</span>}
+                      </h3>
+                    </div>
+                    <p className="text-[#4A6A8A] mb-3 whitespace-pre-wrap">{question.text}</p>
+
+                    {/* Objective Questions */}
+                    {question.type === "objective" && question.options && (
+                      <div
+                        className="space-y-2"
+                        role="radiogroup"
+                        aria-labelledby={`question-label-${question.id}`}
+                        aria-required="true">
+                        {question.options.map((option, optIndex) => {
+                          const letter = String.fromCharCode(65 + optIndex);
+                          return (
+                            <label
+                              key={optIndex}
+                              className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition ${
+                                answers[question.id] === option
+                                  ? "bg-[#D4E4F7] ring-2 ring-[#2B6CB0]"
+                                  : "hover:bg-[#E8EEF5]"
+                              }`}>
+                              <input
+                                type="radio"
+                                name={`question-${question.id}`}
+                                value={option}
+                                checked={answers[question.id] === option}
+                                onChange={(e) => handleAnswerChange(question.id, e.target.value)}
+                                className="w-4 h-4 text-[#1A3A5C] focus:ring-2 focus:ring-[#2B6CB0]"
+                                aria-label={`Option ${letter}: ${option}`}
+                              />
+                              <span className="text-[#4A6A8A] font-medium" aria-hidden="true">
+                                {letter}.
+                              </span>
+                              <span className="text-[#4A6A8A]" aria-hidden="true">
+                                {option}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Theory Questions */}
+                    {question.type === "theory" && (
+                      <div>
+                        <label htmlFor={`answer-${question.id}`} className="sr-only">
+                          Your answer for question {index + 1}
+                        </label>
+                        <textarea
+                          id={`answer-${question.id}`}
+                          value={answers[question.id] || ""}
+                          onChange={(e) => handleAnswerChange(question.id, e.target.value)}
+                          rows={6}
+                          className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-white text-[#1A1A1A] resize-y"
+                          placeholder="Write your answer here..."
+                          aria-describedby={`question-label-${question.id} char-count-${question.id}`}
+                        />
+                        <p id={`char-count-${question.id}`} className="text-xs text-[#8A9CAE] mt-1">
+                          {answers[question.id]?.length || 0} characters typed
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <p className="text-[#4A6A8A] mb-3 whitespace-pre-wrap">{question.text}</p>
-
-                  {/* Objective Questions */}
-                  {question.type === "objective" && question.options && (
-                    <div
-                      className="space-y-2"
-                      role="radiogroup"
-                      aria-label={`Options for question ${index + 1}`}>
-                      {question.options.map((option, optIndex) => {
-                        const letter = String.fromCharCode(65 + optIndex);
-                        return (
-                          <label
-                            key={optIndex}
-                            className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition ${
-                              answers[question.id] === option
-                                ? "bg-[#D4E4F7] ring-2 ring-[#2B6CB0]"
-                                : "hover:bg-[#E8EEF5]"
-                            }`}>
-                            <input
-                              type="radio"
-                              name={`question-${question.id}`}
-                              value={option}
-                              checked={answers[question.id] === option}
-                              onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-                              className="w-4 h-4 text-[#1A3A5C] focus:ring-2 focus:ring-[#2B6CB0]"
-                              aria-label={`Option ${letter}: ${option}`}
-                            />
-                            <span className="text-[#4A6A8A] font-medium">{letter}.</span>
-                            <span className="text-[#4A6A8A]">{option}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Theory Questions */}
-                  {question.type === "theory" && (
-                    <div>
-                      <label htmlFor={`answer-${question.id}`} className="sr-only">
-                        Your answer for question {index + 1}
-                      </label>
-                      <textarea
-                        id={`answer-${question.id}`}
-                        value={answers[question.id] || ""}
-                        onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-                        rows={6}
-                        className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-white text-[#1A1A1A] resize-y"
-                        placeholder="Write your answer here..."
-                        aria-describedby={`question-label-${question.id}`}
-                      />
-                      <p className="text-xs text-[#8A9CAE] mt-1">
-                        {answers[question.id]?.length || 0} characters typed
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
 
               {/* Submit Button */}
               <div className="flex flex-col sm:flex-row gap-4 justify-end border-t border-[#E8EEF5] pt-6 mt-4">
@@ -742,26 +847,28 @@ const ExamPage: React.FC = () => {
                   ref={submitButtonRef}
                   onClick={handleSubmitExam}
                   className="bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium py-2.5 px-6 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50 active:scale-[0.98]"
-                  aria-label="Submit your exam">
+                  aria-label={`Submit your exam. ${getAnsweredCount()} of ${getTotalQuestions()} questions answered.`}>
                   Submit Exam
                 </button>
               </div>
             </div>
           )}
-        </div>
+        </main>
       </div>
 
       {/* Submit Confirmation Dialog */}
       {showSubmitDialog && (
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="dialog-title"
           onClick={(e) => {
             if (e.target === e.currentTarget) cancelSubmit();
           }}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-[#B8D0E8]">
+          <div
+            ref={submitDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dialog-title"
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-[#B8D0E8]">
             <div className="bg-[#1A3A5C] -mx-6 -mt-6 px-6 py-4 rounded-t-2xl">
               <h2 id="dialog-title" className="text-xl font-bold text-white">
                 Submit Examination?
