@@ -18,7 +18,7 @@ interface Exam {
 }
 
 const ExamsPage: React.FC = () => {
-  const [exams, setExams] = useState<Exam[]>([
+  const [exams] = useState<Exam[]>([
     {
       id: 1,
       title: "Chemistry First Term Examination",
@@ -73,6 +73,19 @@ const ExamsPage: React.FC = () => {
     }
   };
 
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "scheduled":
+        return "Scheduled";
+      case "ongoing":
+        return "Ongoing";
+      case "completed":
+        return "Completed";
+      default:
+        return status;
+    }
+  };
+
   const getTypeBadgeColor = (type: string) => {
     switch (type) {
       case "objective":
@@ -83,6 +96,19 @@ const ExamsPage: React.FC = () => {
         return "bg-green-100 text-green-800";
       default:
         return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case "objective":
+        return "Objective";
+      case "theory":
+        return "Theory";
+      case "mixed":
+        return "Mixed";
+      default:
+        return type;
     }
   };
 
@@ -97,95 +123,131 @@ const ExamsPage: React.FC = () => {
         <Link
           href="/admin/exams/create"
           className="bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50 flex items-center gap-2">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            focusable="false">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           Create Exam
         </Link>
       </div>
 
-      {/* Exams Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {exams.map((exam) => (
-          <div
-            key={exam.id}
-            className="bg-white rounded-xl border border-[#C5D8EC] p-6 shadow-sm hover:shadow-md transition">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="font-semibold text-[#1A3A5C]">{exam.title}</h3>
-                <p className="text-sm text-[#4A6A8A]">
-                  {exam.subject} • {exam.class}
-                </p>
-              </div>
-              <span
-                className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusBadgeColor(exam.status)}`}>
-                {exam.status}
-              </span>
-            </div>
+      {/* Exams List */}
+      {exams.length === 0 ? (
+        <div className="bg-white rounded-xl border border-[#C5D8EC] p-12 text-center">
+          <p className="text-[#5A7A9A]">No exams have been created yet.</p>
+          <Link
+            href="/admin/exams/create"
+            className="inline-block mt-4 bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium px-6 py-2 rounded-lg transition">
+            Create your first exam
+          </Link>
+        </div>
+      ) : (
+        <ul role="list" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {exams.map((exam) => {
+            const titleId = `exam-title-${exam.id}`;
+            return (
+              <li
+                key={exam.id}
+                role="listitem"
+                aria-labelledby={titleId}
+                className="bg-white rounded-xl border border-[#C5D8EC] p-6 shadow-sm hover:shadow-md transition">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h2 id={titleId} className="font-semibold text-[#1A3A5C]">
+                      {exam.title}
+                    </h2>
+                    <p className="text-sm text-[#4A6A8A]">
+                      {exam.subject} &bull; {exam.class}
+                    </p>
+                  </div>
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusBadgeColor(exam.status)}`}>
+                    {getStatusLabel(exam.status)}
+                  </span>
+                </div>
 
-            <div className="mt-3 space-y-1 text-sm text-[#5A7A9A]">
-              <p className="flex items-center gap-2">
-                <svg
-                  className="w-4 h-4 flex-shrink-0"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  />
-                </svg>
-                {exam.date} at {exam.time}
-              </p>
-              <p className="flex items-center gap-2">
-                <svg
-                  className="w-4 h-4 flex-shrink-0"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                {exam.duration} minutes
-              </p>
-              <p className="flex items-center gap-2">
-                <svg
-                  className="w-4 h-4 flex-shrink-0"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-                {exam.type} • {exam.questionCount} questions
-              </p>
-            </div>
+                <div className="mt-3 space-y-1 text-sm text-[#5A7A9A]">
+                  <p className="flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      focusable="false">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
+                    </svg>
+                    {exam.date} at {exam.time}
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      focusable="false">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    {exam.duration} minutes
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      focusable="false">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
+                    </svg>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full font-medium ${getTypeBadgeColor(exam.type)}`}>
+                      {getTypeLabel(exam.type)}
+                    </span>
+                    <span>{exam.questionCount} questions</span>
+                  </p>
+                </div>
 
-            <div className="mt-4 pt-4 border-t border-[#E8EEF5] flex gap-2">
-              <Link
-                href={`/admin/exams/${exam.id}/edit`}
-                className="flex-1 text-center bg-[#E8EEF5] hover:bg-[#D5DFE8] text-[#1A3A5C] font-medium py-1.5 px-3 rounded-lg transition text-sm focus:outline-none focus:ring-2 focus:ring-[#2B6CB0]">
-                Edit
-              </Link>
-              <Link
-                href={`/admin/exams/${exam.id}/questions`}
-                className="flex-1 text-center bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium py-1.5 px-3 rounded-lg transition text-sm focus:outline-none focus:ring-2 focus:ring-[#2B6CB0]">
-                Questions
-              </Link>
-            </div>
-          </div>
-        ))}
-      </div>
+                <div className="mt-4 pt-4 border-t border-[#E8EEF5] flex gap-2">
+                  <Link
+                    href={`/admin/exams/${exam.id}/edit`}
+                    aria-label={`Edit ${exam.title}`}
+                    className="flex-1 text-center bg-[#E8EEF5] hover:bg-[#D5DFE8] text-[#1A3A5C] font-medium py-1.5 px-3 rounded-lg transition text-sm focus:outline-none focus:ring-2 focus:ring-[#2B6CB0]">
+                    Edit
+                  </Link>
+                  <Link
+                    href={`/admin/exams/${exam.id}/questions`}
+                    aria-label={`Manage questions for ${exam.title}`}
+                    className="flex-1 text-center bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium py-1.5 px-3 rounded-lg transition text-sm focus:outline-none focus:ring-2 focus:ring-[#2B6CB0]">
+                    Questions
+                  </Link>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 
 interface DashboardStats {
@@ -29,6 +29,9 @@ interface UpcomingExam {
   status: "upcoming" | "today" | "ongoing";
 }
 
+const TAB_IDS = ["overview", "exams", "students", "submissions"] as const;
+type TabId = (typeof TAB_IDS)[number];
+
 const DashboardPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats>({
@@ -40,15 +43,12 @@ const DashboardPage: React.FC = () => {
   });
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
   const [upcomingExams, setUpcomingExams] = useState<UpcomingExam[]>([]);
-  const [selectedTab, setSelectedTab] = useState("overview");
-  const [statusMessage, setStatusMessage] = useState<{
-    type: "success" | "error" | "warning";
-    text: string;
-  } | null>(null);
+  const [selectedTab, setSelectedTab] = useState<TabId>("overview");
+
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   // Mock data - in production, this would come from an API
   useEffect(() => {
-    // Simulate loading data
     setTimeout(() => {
       setStats({
         totalStudents: 245,
@@ -142,11 +142,7 @@ const DashboardPage: React.FC = () => {
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   };
 
   const getStatusColor = (status: string) => {
@@ -187,6 +183,50 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+  const tabLabel = (id: TabId) => {
+    switch (id) {
+      case "overview":
+        return "Overview";
+      case "exams":
+        return "Exams";
+      case "students":
+        return "Students";
+      case "submissions":
+        return "Submissions";
+    }
+  };
+
+  const tabCount = (id: TabId): number | undefined => {
+    switch (id) {
+      case "exams":
+        return stats.activeExams;
+      case "students":
+        return stats.totalStudents;
+      case "submissions":
+        return stats.pendingSubmissions;
+      default:
+        return undefined;
+    }
+  };
+
+  // Standard ARIA tabs keyboard pattern: Left/Right/Home/End move focus AND
+  // activate the tab (select-follows-focus), matching what a screen reader
+  // user expects from a "tab" role rather than plain Tab-key cycling.
+  const handleTabListKeyDown = (e: React.KeyboardEvent) => {
+    const currentIndex = TAB_IDS.indexOf(selectedTab);
+    let newIndex = currentIndex;
+
+    if (e.key === "ArrowRight") newIndex = (currentIndex + 1) % TAB_IDS.length;
+    else if (e.key === "ArrowLeft") newIndex = (currentIndex - 1 + TAB_IDS.length) % TAB_IDS.length;
+    else if (e.key === "Home") newIndex = 0;
+    else if (e.key === "End") newIndex = TAB_IDS.length - 1;
+    else return;
+
+    e.preventDefault();
+    setSelectedTab(TAB_IDS[newIndex]);
+    tabRefs.current[newIndex]?.focus();
+  };
+
   const StatCard: React.FC<{
     title: string;
     value: number | string;
@@ -196,14 +236,16 @@ const DashboardPage: React.FC = () => {
   }> = ({ title, value, icon, change, changeType = "neutral" }) => (
     <div
       className="bg-white border border-[#C5D8EC] rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
-      role="article"
+      role="group"
       aria-label={`${title}: ${value}`}>
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-[#5A7A9A]">{title}</p>
           <p className="text-2xl font-bold text-[#1A3A5C] mt-1">{value}</p>
         </div>
-        <div className="bg-[#E8F0FE] rounded-full p-3 text-[#1A3A5C]">{icon}</div>
+        <div className="bg-[#E8F0FE] rounded-full p-3 text-[#1A3A5C]" aria-hidden="true">
+          {icon}
+        </div>
       </div>
       {change && (
         <p
@@ -220,39 +262,16 @@ const DashboardPage: React.FC = () => {
     </div>
   );
 
-  const TabButton: React.FC<{
-    id: string;
-    label: string;
-    count?: number;
-    ariaLabel?: string;
-  }> = ({ id, label, count, ariaLabel }) => (
-    <button
-      onClick={() => setSelectedTab(id)}
-      className={`px-4 py-2 text-sm font-medium rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] ${
-        selectedTab === id
-          ? "bg-[#1A3A5C] text-white"
-          : "bg-white text-[#4A6A8A] hover:bg-[#E8F0FE]"
-      }`}
-      aria-label={ariaLabel || label}
-      aria-selected={selectedTab === id}
-      role="tab">
-      {label}
-      {count !== undefined && (
-        <span
-          className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
-            selectedTab === id ? "bg-white/20 text-white" : "bg-[#E8F0FE] text-[#4A6A8A]"
-          }`}>
-          {count}
-        </span>
-      )}
-    </button>
-  );
-
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+      <div
+        className="flex items-center justify-center min-h-[60vh]"
+        role="status"
+        aria-live="polite">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-[#1A3A5C] border-t-transparent"></div>
+          <div
+            className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-[#1A3A5C] border-t-transparent"
+            aria-hidden="true"></div>
           <p className="mt-4 text-[#4A6A8A]">Loading dashboard...</p>
         </div>
       </div>
@@ -266,22 +285,6 @@ const DashboardPage: React.FC = () => {
         <h1 className="text-2xl font-bold text-[#1A3A5C]">Dashboard</h1>
         <p className="text-[#5A7A9A] text-sm">Overview of your examination system</p>
       </div>
-
-      {/* Status Message */}
-      {statusMessage && (
-        <div
-          role="alert"
-          aria-live="polite"
-          className={`p-3 rounded-lg text-sm font-medium ${
-            statusMessage.type === "success"
-              ? "bg-green-100 text-green-800 border border-green-300"
-              : statusMessage.type === "warning"
-                ? "bg-yellow-100 text-yellow-800 border border-yellow-300"
-                : "bg-red-100 text-red-800 border border-red-300"
-          }`}>
-          {statusMessage.text}
-        </div>
-      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -298,7 +301,7 @@ const DashboardPage: React.FC = () => {
               />
             </svg>
           }
-          change="+12 this month"
+          change="Up 12 this month"
           changeType="positive"
         />
         <StatCard
@@ -314,7 +317,7 @@ const DashboardPage: React.FC = () => {
               />
             </svg>
           }
-          change="+3 this week"
+          change="Up 3 this week"
           changeType="positive"
         />
         <StatCard
@@ -362,7 +365,7 @@ const DashboardPage: React.FC = () => {
               />
             </svg>
           }
-          change="↑ 5% from last week"
+          change="Up 5% from last week"
           changeType="positive"
         />
       </div>
@@ -372,31 +375,50 @@ const DashboardPage: React.FC = () => {
         <div
           className="border-b border-[#E8EEF5] px-4 py-3 overflow-x-auto"
           role="tablist"
-          aria-label="Dashboard sections">
+          aria-label="Dashboard sections"
+          onKeyDown={handleTabListKeyDown}>
           <div className="flex gap-2">
-            <TabButton id="overview" label="Overview" ariaLabel="Overview section" />
-            <TabButton
-              id="exams"
-              label="Exams"
-              count={stats.activeExams}
-              ariaLabel="Exams section"
-            />
-            <TabButton
-              id="students"
-              label="Students"
-              count={stats.totalStudents}
-              ariaLabel="Students section"
-            />
-            <TabButton
-              id="submissions"
-              label="Submissions"
-              count={stats.pendingSubmissions}
-              ariaLabel="Submissions section"
-            />
+            {TAB_IDS.map((id, index) => {
+              const isSelected = selectedTab === id;
+              const count = tabCount(id);
+              return (
+                <button
+                  key={id}
+                  ref={(el) => {
+                    tabRefs.current[index] = el;
+                  }}
+                  id={`tab-${id}`}
+                  role="tab"
+                  aria-selected={isSelected}
+                  aria-controls={`panel-${id}`}
+                  tabIndex={isSelected ? 0 : -1}
+                  onClick={() => setSelectedTab(id)}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] ${
+                    isSelected
+                      ? "bg-[#1A3A5C] text-white"
+                      : "bg-white text-[#4A6A8A] hover:bg-[#E8F0FE]"
+                  }`}>
+                  {tabLabel(id)}
+                  {count !== undefined && (
+                    <span
+                      className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
+                        isSelected ? "bg-white/20 text-white" : "bg-[#E8F0FE] text-[#4A6A8A]"
+                      }`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div className="p-6">
+        <div
+          className="p-6"
+          role="tabpanel"
+          id={`panel-${selectedTab}`}
+          aria-labelledby={`tab-${selectedTab}`}
+          tabIndex={0}>
           {/* Overview Tab Content */}
           {selectedTab === "overview" && (
             <div className="space-y-8">
@@ -409,7 +431,7 @@ const DashboardPage: React.FC = () => {
                   <Link
                     href="/admin/reports"
                     className="text-sm text-[#2B6CB0] hover:text-[#1A3A5C] font-medium focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] rounded px-1">
-                    View All →
+                    View All <span aria-hidden="true">→</span>
                   </Link>
                 </div>
                 <div className="space-y-3">
@@ -447,7 +469,7 @@ const DashboardPage: React.FC = () => {
                   <Link
                     href="/admin/exams"
                     className="text-sm text-[#2B6CB0] hover:text-[#1A3A5C] font-medium focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] rounded px-1">
-                    Manage Exams →
+                    Manage Exams <span aria-hidden="true">→</span>
                   </Link>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -481,8 +503,10 @@ const DashboardPage: React.FC = () => {
           {/* Other Tabs (Placeholder content) */}
           {selectedTab === "exams" && (
             <div className="text-center py-12">
-              <div className="text-6xl mb-4">📝</div>
-              <h3 className="text-xl font-semibold text-[#1A3A5C]">Manage Exams</h3>
+              <div className="text-6xl mb-4" aria-hidden="true">
+                📝
+              </div>
+              <h2 className="text-xl font-semibold text-[#1A3A5C]">Manage Exams</h2>
               <p className="text-[#5A7A9A] mt-2">View and manage all examinations</p>
               <Link
                 href="/admin/exams"
@@ -494,8 +518,10 @@ const DashboardPage: React.FC = () => {
 
           {selectedTab === "students" && (
             <div className="text-center py-12">
-              <div className="text-6xl mb-4">👨‍🎓</div>
-              <h3 className="text-xl font-semibold text-[#1A3A5C]">Manage Students</h3>
+              <div className="text-6xl mb-4" aria-hidden="true">
+                👨‍🎓
+              </div>
+              <h2 className="text-xl font-semibold text-[#1A3A5C]">Manage Students</h2>
               <p className="text-[#5A7A9A] mt-2">View and manage student accounts</p>
               <Link
                 href="/admin/students"
@@ -507,8 +533,10 @@ const DashboardPage: React.FC = () => {
 
           {selectedTab === "submissions" && (
             <div className="text-center py-12">
-              <div className="text-6xl mb-4">📋</div>
-              <h3 className="text-xl font-semibold text-[#1A3A5C]">Review Submissions</h3>
+              <div className="text-6xl mb-4" aria-hidden="true">
+                📋
+              </div>
+              <h2 className="text-xl font-semibold text-[#1A3A5C]">Review Submissions</h2>
               <p className="text-[#5A7A9A] mt-2">Grade and review student submissions</p>
               <Link
                 href="/admin/results"
