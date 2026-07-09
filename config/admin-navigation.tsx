@@ -1,4 +1,3 @@
-// config/admin-navigation.tsx
 import React from "react";
 
 export interface NavItem {

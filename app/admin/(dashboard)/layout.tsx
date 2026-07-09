@@ -7,8 +7,8 @@ import MobileHeader from "@/components/admin/MobileHeader";
 import SidebarOverlay from "@/components/admin/SidebarOverlay";
 import SkipToContent from "@/components/admin/SkipToContent";
 import PageAnnouncement from "@/components/admin/PageAnnouncement";
-import { useAdminLayout } from "@/app/hooks/useAdminLayout";
-import { adminNavItems } from "@/components/admin/admin-navigation";
+import { useAdminLayout } from "@/hooks/useAdminLayout";
+import { adminNavItems } from "@/config/admin-navigation";
 
 interface AdminLayoutProps {
   children: React.ReactNode;

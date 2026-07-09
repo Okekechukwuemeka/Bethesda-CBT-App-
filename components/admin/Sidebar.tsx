@@ -3,7 +3,7 @@
 import { forwardRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NavItem } from "./admin-navigation";
+import { NavItem } from "@/config/admin-navigation";
 
 interface SidebarProps {
   navItems: NavItem[];
