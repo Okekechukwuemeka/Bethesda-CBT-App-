@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
+import { useModalFocusTrap } from "@/hooks/useModalFocusTrap"; // adjust path to match your project structure
 
 interface Question {
   id: number;
@@ -79,6 +80,7 @@ const QuestionsPage: React.FC = () => {
   const [filterSubject, setFilterSubject] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
   const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -95,23 +97,49 @@ const QuestionsPage: React.FC = () => {
     difficulty: "easy",
   });
 
-  const firstInputRef = useRef<HTMLInputElement>(null);
+  const firstInputRef = useRef<HTMLTextAreaElement>(null);
+  const subjectRef = useRef<HTMLInputElement>(null);
+  const classRef = useRef<HTMLSelectElement>(null);
+  const optionRefs = useRef<(HTMLInputElement | null)[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const formModalRef = useRef<HTMLDivElement>(null);
+  const formTriggerRef = useRef<HTMLElement | null>(null);
+  const importModalRef = useRef<HTMLDivElement>(null);
+  const importTriggerRef = useRef<HTMLElement | null>(null);
+
+  const closeFormModal = () => {
+    if (isSubmitting) return;
+    setIsModalOpen(false);
+    setFormError(null);
+  };
+  const closeImportModal = () => {
+    if (isImporting) return;
+    setIsImportModalOpen(false);
+    setImportPreview([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  useModalFocusTrap(isModalOpen, formModalRef, formTriggerRef, closeFormModal, !isSubmitting);
+  useModalFocusTrap(
+    isImportModalOpen,
+    importModalRef,
+    importTriggerRef,
+    closeImportModal,
+    !isImporting,
+  );
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
-    if (name === "options") {
-      const options = value.split(",").map((opt) => opt.trim());
-      setFormData((prev) => ({ ...prev, options }));
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
-    }
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleAddQuestion = () => {
+  const handleAddQuestion = (e: React.MouseEvent<HTMLButtonElement>) => {
+    formTriggerRef.current = e.currentTarget;
     setIsEditing(false);
+    setFormError(null);
     setFormData({
       text: "",
       type: "objective",
@@ -126,8 +154,11 @@ const QuestionsPage: React.FC = () => {
     setTimeout(() => firstInputRef.current?.focus(), 100);
   };
 
-  const handleEditQuestion = (question: Question) => {
+  const handleEditQuestion = (question: Question, e: React.MouseEvent<HTMLButtonElement>) => {
+    formTriggerRef.current = e.currentTarget;
     setIsEditing(true);
+    setSelectedQuestion(question);
+    setFormError(null);
     setFormData(question);
     setIsModalOpen(true);
     setTimeout(() => firstInputRef.current?.focus(), 100);
@@ -140,49 +171,49 @@ const QuestionsPage: React.FC = () => {
       )
     ) {
       setQuestions((prev) => prev.filter((q) => q.id !== question.id));
-      setStatusMessage({
-        type: "warning",
-        text: "⚠️ Question deleted successfully.",
-      });
+      setStatusMessage({ type: "warning", text: "Question deleted successfully." });
       setTimeout(() => setStatusMessage(null), 3000);
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    setStatusMessage(null);
+    setFormError(null);
 
-    if (!formData.text || !formData.subject || !formData.class) {
-      setStatusMessage({
-        type: "error",
-        text: "Please fill in all required fields.",
-      });
-      setIsSubmitting(false);
+    if (!formData.text?.trim()) {
+      setFormError("Please enter the question text.");
+      firstInputRef.current?.focus();
       return;
     }
-
+    if (!formData.subject?.trim()) {
+      setFormError("Please enter a subject.");
+      subjectRef.current?.focus();
+      return;
+    }
+    if (!formData.class) {
+      setFormError("Please select a class.");
+      classRef.current?.focus();
+      return;
+    }
     if (
       formData.type === "objective" &&
       (!formData.options || formData.options.some((opt) => !opt))
     ) {
-      setStatusMessage({
-        type: "error",
-        text: "Please provide all options for objective questions.",
-      });
-      setIsSubmitting(false);
+      setFormError("Please provide all four options for objective questions.");
+      const emptyIndex = formData.options?.findIndex((opt) => !opt) ?? 0;
+      optionRefs.current[emptyIndex]?.focus();
       return;
     }
 
+    setIsSubmitting(true);
+
+    // TODO (integration): POST/PUT to /api/questions instead of this mock delay.
     setTimeout(() => {
       if (isEditing && selectedQuestion) {
         setQuestions((prev) =>
           prev.map((q) => (q.id === selectedQuestion.id ? ({ ...q, ...formData } as Question) : q)),
         );
-        setStatusMessage({
-          type: "success",
-          text: "✅ Question updated successfully!",
-        });
+        setStatusMessage({ type: "success", text: "Question updated successfully." });
       } else {
         const newQuestion: Question = {
           id: questions.length + 1,
@@ -197,10 +228,7 @@ const QuestionsPage: React.FC = () => {
           createdAt: new Date().toISOString().split("T")[0],
         };
         setQuestions((prev) => [...prev, newQuestion]);
-        setStatusMessage({
-          type: "success",
-          text: "✅ Question added to bank successfully!",
-        });
+        setStatusMessage({ type: "success", text: "Question added to bank successfully." });
       }
 
       setIsSubmitting(false);
@@ -211,7 +239,8 @@ const QuestionsPage: React.FC = () => {
 
   // ============ BULK IMPORT FUNCTIONS ============
 
-  const handleOpenImportModal = () => {
+  const handleOpenImportModal = (e: React.MouseEvent<HTMLButtonElement>) => {
+    importTriggerRef.current = e.currentTarget;
     setIsImportModalOpen(true);
     setImportPreview([]);
     setStatusMessage(null);
@@ -237,14 +266,11 @@ const QuestionsPage: React.FC = () => {
         } else {
           setStatusMessage({
             type: "success",
-            text: `✅ Found ${parsedQuestions.length} questions ready to import.`,
+            text: `Found ${parsedQuestions.length} questions ready to import.`,
           });
         }
-      } catch (error) {
-        setStatusMessage({
-          type: "error",
-          text: "Error parsing file. Please check the format.",
-        });
+      } catch {
+        setStatusMessage({ type: "error", text: "Error parsing file. Please check the format." });
       }
     };
     reader.readAsText(file);
@@ -253,14 +279,10 @@ const QuestionsPage: React.FC = () => {
   const parseFileContent = (content: string, fileName: string): Partial<Question>[] => {
     const questions: Partial<Question>[] = [];
     const lines = content.split("\n").filter((line) => line.trim());
-
-    // Determine file type
     const isCSV = fileName.endsWith(".csv");
 
     if (isCSV) {
-      // Parse CSV - headers: question,type,options,correctAnswer,marks,subject,class,difficulty
       const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
-
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(",").map((v) => v.trim());
         if (values.length < 3) continue;
@@ -271,7 +293,6 @@ const QuestionsPage: React.FC = () => {
           marks: 5,
           difficulty: "easy",
         };
-
         headers.forEach((header, index) => {
           const value = values[index] || "";
           switch (header) {
@@ -304,23 +325,16 @@ const QuestionsPage: React.FC = () => {
               break;
           }
         });
-
-        if (question.text) {
-          questions.push(question);
-        }
+        if (question.text) questions.push(question);
       }
     } else {
-      // Parse Word/Text format
       let currentQuestion: Partial<Question> = {};
       let isParsingOptions = false;
-      let optionIndex = 0;
 
       for (const line of lines) {
         const trimmed = line.trim();
 
-        // Check if line is a question number (e.g., "1.", "Q1.", "Question 1:")
         if (trimmed.match(/^(\d+\.|Q\d+\.|Question\s+\d+:)/i)) {
-          // Save previous question
           if (currentQuestion.text) {
             if (!currentQuestion.type) currentQuestion.type = "objective";
             if (!currentQuestion.options) currentQuestion.options = [];
@@ -328,67 +342,39 @@ const QuestionsPage: React.FC = () => {
             if (!currentQuestion.difficulty) currentQuestion.difficulty = "easy";
             questions.push(currentQuestion);
           }
-
-          // Start new question
-          currentQuestion = {
-            type: "objective",
-            options: [],
-            marks: 5,
-            difficulty: "easy",
-          };
-          const textPart = trimmed.replace(/^(\d+\.|Q\d+\.|Question\s+\d+:)/i, "").trim();
-          currentQuestion.text = textPart;
+          currentQuestion = { type: "objective", options: [], marks: 5, difficulty: "easy" };
+          currentQuestion.text = trimmed.replace(/^(\d+\.|Q\d+\.|Question\s+\d+:)/i, "").trim();
           isParsingOptions = false;
-          optionIndex = 0;
-        }
-        // Check if line is an option (e.g., "A.", "A)", "a)", etc.)
-        else if (trimmed.match(/^[A-Da-d][\.\)]\s*/)) {
+        } else if (trimmed.match(/^[A-Da-d][\.\)]\s*/)) {
           if (!currentQuestion.options) currentQuestion.options = [];
-          const optionText = trimmed.replace(/^[A-Da-d][\.\)]\s*/, "").trim();
-          currentQuestion.options.push(optionText);
+          currentQuestion.options.push(trimmed.replace(/^[A-Da-d][\.\)]\s*/, "").trim());
           isParsingOptions = true;
-        }
-        // Check if line is the correct answer indicator
-        else if (
+        } else if (
           trimmed.toLowerCase().startsWith("answer:") ||
           trimmed.toLowerCase().startsWith("correct:")
         ) {
-          const answer = trimmed.replace(/^(answer:|correct:)/i, "").trim();
-          currentQuestion.correctAnswer = answer;
-        }
-        // Check if line is marks
-        else if (
+          currentQuestion.correctAnswer = trimmed.replace(/^(answer:|correct:)/i, "").trim();
+        } else if (
           trimmed.toLowerCase().startsWith("marks:") ||
           trimmed.toLowerCase().startsWith("score:")
         ) {
           const marks = parseInt(trimmed.replace(/^(marks:|score:)/i, "").trim());
           if (!isNaN(marks)) currentQuestion.marks = marks;
-        }
-        // Check if line is subject
-        else if (trimmed.toLowerCase().startsWith("subject:")) {
+        } else if (trimmed.toLowerCase().startsWith("subject:")) {
           currentQuestion.subject = trimmed.replace(/^subject:/i, "").trim();
-        }
-        // Check if line is class
-        else if (trimmed.toLowerCase().startsWith("class:")) {
+        } else if (trimmed.toLowerCase().startsWith("class:")) {
           currentQuestion.class = trimmed.replace(/^class:/i, "").trim();
-        }
-        // Check if line is type
-        else if (trimmed.toLowerCase().startsWith("type:")) {
+        } else if (trimmed.toLowerCase().startsWith("type:")) {
           const type = trimmed
             .replace(/^type:/i, "")
             .trim()
             .toLowerCase();
           currentQuestion.type = type.includes("theory") ? "theory" : "objective";
-        }
-        // Continue question text (multi-line)
-        else if (currentQuestion.text && trimmed && !trimmed.match(/^[A-Da-d][\.\)]/)) {
-          if (!isParsingOptions) {
-            currentQuestion.text += " " + trimmed;
-          }
+        } else if (currentQuestion.text && trimmed && !trimmed.match(/^[A-Da-d][\.\)]/)) {
+          if (!isParsingOptions) currentQuestion.text += " " + trimmed;
         }
       }
 
-      // Save the last question
       if (currentQuestion.text) {
         if (!currentQuestion.type) currentQuestion.type = "objective";
         if (!currentQuestion.options) currentQuestion.options = [];
@@ -403,22 +389,20 @@ const QuestionsPage: React.FC = () => {
 
   const confirmImport = () => {
     if (importPreview.length === 0) {
-      setStatusMessage({
-        type: "error",
-        text: "No questions to import.",
-      });
+      setStatusMessage({ type: "error", text: "No questions to import." });
       return;
     }
 
     setIsImporting(true);
 
+    // TODO (integration): POST the parsed questions to /api/questions/bulk-import.
     setTimeout(() => {
       let importedCount = 0;
       const newQuestions: Question[] = [];
 
-      importPreview.forEach((q, index) => {
+      importPreview.forEach((q) => {
         if (q.text) {
-          const question: Question = {
+          newQuestions.push({
             id: questions.length + newQuestions.length + 1,
             text: q.text || "",
             type: (q.type as "objective" | "theory") || "objective",
@@ -429,8 +413,7 @@ const QuestionsPage: React.FC = () => {
             class: q.class || "",
             difficulty: (q.difficulty as "easy" | "medium" | "hard") || "easy",
             createdAt: new Date().toISOString().split("T")[0],
-          };
-          newQuestions.push(question);
+          });
           importedCount++;
         }
       });
@@ -438,7 +421,7 @@ const QuestionsPage: React.FC = () => {
       setQuestions((prev) => [...prev, ...newQuestions]);
       setStatusMessage({
         type: "success",
-        text: `✅ Successfully imported ${importedCount} questions!`,
+        text: `Successfully imported ${importedCount} questions.`,
       });
 
       setIsImporting(false);
@@ -451,7 +434,6 @@ const QuestionsPage: React.FC = () => {
   };
 
   const downloadTemplate = () => {
-    // Create CSV template
     const headers = [
       "question",
       "type",
@@ -472,7 +454,6 @@ const QuestionsPage: React.FC = () => {
       "JSS3",
       "easy",
     ];
-
     const csvContent = [
       headers.join(","),
       sampleRow.join(","),
@@ -489,10 +470,7 @@ const QuestionsPage: React.FC = () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    setStatusMessage({
-      type: "success",
-      text: "📥 Template downloaded successfully!",
-    });
+    setStatusMessage({ type: "success", text: "Template downloaded successfully." });
     setTimeout(() => setStatusMessage(null), 3000);
   };
 
@@ -505,10 +483,8 @@ const QuestionsPage: React.FC = () => {
     return matchesSearch && matchesSubject && matchesType;
   });
 
-  const getTypeBadgeColor = (type: string) => {
-    return type === "objective" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800";
-  };
-
+  const getTypeBadgeColor = (type: string) =>
+    type === "objective" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800";
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
       case "easy":
@@ -521,208 +497,249 @@ const QuestionsPage: React.FC = () => {
         return "bg-gray-100 text-gray-800";
     }
   };
+  const truncate = (text: string, len: number) =>
+    text.length > len ? `${text.slice(0, len)}…` : text;
+
+  const anyModalOpen = isModalOpen || isImportModalOpen;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[#1A3A5C]">Question Bank</h1>
-          <p className="text-[#5A7A9A] text-sm">Create and manage questions for all exams</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={handleOpenImportModal}
-            className="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-green-500/50 flex items-center gap-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-              />
-            </svg>
-            Import Bulk
-          </button>
-          <button
-            onClick={handleAddQuestion}
-            className="bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50 flex items-center gap-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            Add Question
-          </button>
-        </div>
-      </div>
-
-      {/* Status Message */}
-      {statusMessage && (
-        <div
-          role="alert"
-          aria-live="polite"
-          className={`p-4 rounded-lg text-sm font-medium ${
-            statusMessage.type === "success"
-              ? "bg-green-100 text-green-800 border border-green-300"
-              : statusMessage.type === "warning"
-                ? "bg-yellow-100 text-yellow-800 border border-yellow-300"
-                : "bg-red-100 text-red-800 border border-red-300"
-          }`}>
-          {statusMessage.text}
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="bg-white rounded-xl border border-[#C5D8EC] p-4 shadow-sm">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1">
-            <label htmlFor="search" className="sr-only">
-              Search questions
-            </label>
-            <input
-              id="search"
-              type="text"
-              placeholder="Search by question or subject..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE]"
-            />
+    <>
+      <div className="space-y-6" inert={anyModalOpen ? ("" as unknown as true) : undefined}>
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-[#1A3A5C]">Question Bank</h1>
+            <p className="text-[#5A7A9A] text-sm">Create and manage questions for all exams</p>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <select
-              value={filterSubject}
-              onChange={(e) => setFilterSubject(e.target.value)}
-              className="px-4 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE]"
-              aria-label="Filter by subject">
-              <option value="all">All Subjects</option>
-              <option value="Chemistry">Chemistry</option>
-              <option value="Physics">Physics</option>
-              <option value="Mathematics">Mathematics</option>
-              <option value="English Language">English Language</option>
-              <option value="Biology">Biology</option>
-            </select>
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="px-4 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE]"
-              aria-label="Filter by type">
-              <option value="all">All Types</option>
-              <option value="objective">Objective</option>
-              <option value="theory">Theory</option>
-            </select>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleOpenImportModal}
+              className="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-green-500/50 flex items-center gap-2">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                focusable="false">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                />
+              </svg>
+              Import Bulk
+            </button>
+            <button
+              onClick={handleAddQuestion}
+              className="bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50 flex items-center gap-2">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                focusable="false">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+              Add Question
+            </button>
           </div>
         </div>
-      </div>
 
-      {/* Questions Table */}
-      <div className="bg-white rounded-xl border border-[#C5D8EC] overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full" role="table" aria-label="Questions list">
-            <thead className="bg-[#F8FAFE] border-b border-[#E8EEF5]">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                  Question
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                  Type
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                  Subject
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                  Class
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                  Marks
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                  Difficulty
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E8EEF5]">
-              {filteredQuestions.length === 0 ? (
+        {/* Status Message */}
+        {statusMessage && (
+          <div
+            role={statusMessage.type === "error" ? "alert" : "status"}
+            aria-live={statusMessage.type === "error" ? "assertive" : "polite"}
+            className={`p-4 rounded-lg text-sm font-medium ${
+              statusMessage.type === "success"
+                ? "bg-green-100 text-green-800 border border-green-300"
+                : statusMessage.type === "warning"
+                  ? "bg-yellow-100 text-yellow-800 border border-yellow-300"
+                  : "bg-red-100 text-red-800 border border-red-300"
+            }`}>
+            {statusMessage.text}
+          </div>
+        )}
+
+        {/* Filters */}
+        <div className="bg-white rounded-xl border border-[#C5D8EC] p-4 shadow-sm" role="search">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <label htmlFor="search" className="sr-only">
+                Search questions
+              </label>
+              <input
+                id="search"
+                type="text"
+                placeholder="Search by question or subject..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-4 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE]"
+              />
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <select
+                value={filterSubject}
+                onChange={(e) => setFilterSubject(e.target.value)}
+                className="px-4 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE]"
+                aria-label="Filter by subject">
+                <option value="all">All Subjects</option>
+                <option value="Chemistry">Chemistry</option>
+                <option value="Physics">Physics</option>
+                <option value="Mathematics">Mathematics</option>
+                <option value="English Language">English Language</option>
+                <option value="Biology">Biology</option>
+              </select>
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="px-4 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE]"
+                aria-label="Filter by type">
+                <option value="all">All Types</option>
+                <option value="objective">Objective</option>
+                <option value="theory">Theory</option>
+              </select>
+            </div>
+          </div>
+          <p className="sr-only" role="status" aria-live="polite">
+            {filteredQuestions.length} question{filteredQuestions.length !== 1 ? "s" : ""} found
+          </p>
+        </div>
+
+        {/* Questions Table */}
+        <div className="bg-white rounded-xl border border-[#C5D8EC] overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full" aria-label="Questions list">
+              <thead className="bg-[#F8FAFE] border-b border-[#E8EEF5]">
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-[#8A9CAE]">
-                    <div className="text-4xl mb-2">📝</div>
-                    <p className="font-medium">No questions found</p>
-                    <p className="text-sm">Add your first question to the bank</p>
-                  </td>
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
+                    Question
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
+                    Type
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
+                    Subject
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
+                    Class
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
+                    Marks
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
+                    Difficulty
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
-              ) : (
-                filteredQuestions.map((question) => (
-                  <tr key={question.id} className="hover:bg-[#F8FAFE] transition">
-                    <td className="px-4 py-3 text-sm text-[#4A6A8A] max-w-xs truncate">
-                      {question.text}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`text-xs px-2 py-1 rounded-full font-medium ${getTypeBadgeColor(question.type)}`}>
-                        {question.type}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-[#4A6A8A]">{question.subject}</td>
-                    <td className="px-4 py-3 text-sm text-[#4A6A8A]">{question.class}</td>
-                    <td className="px-4 py-3 text-sm text-[#4A6A8A]">{question.marks}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`text-xs px-2 py-1 rounded-full font-medium ${getDifficultyColor(question.difficulty)}`}>
-                        {question.difficulty}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleEditQuestion(question)}
-                          className="text-[#2B6CB0] hover:text-[#1A3A5C] p-1 rounded focus:outline-none focus:ring-2 focus:ring-[#2B6CB0]"
-                          aria-label={`Edit question`}>
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                            />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteQuestion(question)}
-                          className="text-red-600 hover:text-red-800 p-1 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
-                          aria-label={`Delete question`}>
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
-                          </svg>
-                        </button>
+              </thead>
+              <tbody className="divide-y divide-[#E8EEF5]">
+                {filteredQuestions.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-12 text-center text-[#8A9CAE]">
+                      <div className="text-4xl mb-2" aria-hidden="true">
+                        📝
                       </div>
+                      <p className="font-medium">No questions found</p>
+                      <p className="text-sm">Add your first question to the bank</p>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="px-4 py-3 border-t border-[#E8EEF5]">
-          <p className="text-sm text-[#5A7A9A]">Total: {filteredQuestions.length} questions</p>
+                ) : (
+                  filteredQuestions.map((question, index) => (
+                    <tr key={question.id} className="hover:bg-[#F8FAFE] transition">
+                      <td className="px-4 py-3 text-sm text-[#4A6A8A] max-w-xs truncate">
+                        {question.text}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`text-xs px-2 py-1 rounded-full font-medium ${getTypeBadgeColor(question.type)}`}>
+                          {question.type}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-[#4A6A8A]">{question.subject}</td>
+                      <td className="px-4 py-3 text-sm text-[#4A6A8A]">{question.class}</td>
+                      <td className="px-4 py-3 text-sm text-[#4A6A8A]">{question.marks}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`text-xs px-2 py-1 rounded-full font-medium ${getDifficultyColor(question.difficulty)}`}>
+                          {question.difficulty}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => handleEditQuestion(question, e)}
+                            className="text-[#2B6CB0] hover:text-[#1A3A5C] p-1 rounded focus:outline-none focus:ring-2 focus:ring-[#2B6CB0]"
+                            aria-label={`Edit question ${index + 1}: ${truncate(question.text, 40)}`}>
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                              focusable="false">
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                              />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteQuestion(question)}
+                            className="text-red-600 hover:text-red-800 p-1 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                            aria-label={`Delete question ${index + 1}: ${truncate(question.text, 40)}`}>
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                              focusable="false">
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-4 py-3 border-t border-[#E8EEF5]">
+            <p className="text-sm text-[#5A7A9A]">Total: {filteredQuestions.length} questions</p>
+          </div>
         </div>
       </div>
 
@@ -734,30 +751,42 @@ const QuestionsPage: React.FC = () => {
           aria-modal="true"
           aria-labelledby="modal-title"
           onClick={(e) => {
-            if (e.target === e.currentTarget && !isSubmitting) {
-              setIsModalOpen(false);
-            }
+            if (e.target === e.currentTarget) closeFormModal();
           }}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-[#B8D0E8]">
+          <div
+            ref={formModalRef}
+            className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-[#B8D0E8]">
             <div className="bg-[#1A3A5C] px-6 py-4 rounded-t-2xl sticky top-0 z-10">
               <h2 id="modal-title" className="text-xl font-bold text-white">
                 {isEditing ? "Edit Question" : "Add New Question"}
               </h2>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6">
+            <form onSubmit={handleSubmit} noValidate className="p-6">
               <div className="space-y-4">
+                {formError && (
+                  <div
+                    role="alert"
+                    aria-live="assertive"
+                    className="p-3 rounded-lg text-sm font-medium bg-red-100 text-red-800 border border-red-300">
+                    {formError}
+                  </div>
+                )}
+
                 <div>
                   <label htmlFor="text" className="block text-sm font-medium text-[#1A3A5C] mb-1">
-                    Question Text <span className="text-red-500">*</span>
+                    Question Text{" "}
+                    <span className="text-red-500" aria-hidden="true">
+                      *
+                    </span>
                   </label>
                   <textarea
-                    ref={firstInputRef as any}
+                    ref={firstInputRef}
                     id="text"
                     name="text"
                     value={formData.text || ""}
                     onChange={handleInputChange}
-                    required
+                    aria-required="true"
                     rows={3}
                     className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE] resize-y"
                   />
@@ -766,7 +795,10 @@ const QuestionsPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="type" className="block text-sm font-medium text-[#1A3A5C] mb-1">
-                      Question Type <span className="text-red-500">*</span>
+                      Question Type{" "}
+                      <span className="text-red-500" aria-hidden="true">
+                        *
+                      </span>
                     </label>
                     <select
                       id="type"
@@ -783,7 +815,10 @@ const QuestionsPage: React.FC = () => {
                     <label
                       htmlFor="marks"
                       className="block text-sm font-medium text-[#1A3A5C] mb-1">
-                      Marks <span className="text-red-500">*</span>
+                      Marks{" "}
+                      <span className="text-red-500" aria-hidden="true">
+                        *
+                      </span>
                     </label>
                     <input
                       type="number"
@@ -791,7 +826,7 @@ const QuestionsPage: React.FC = () => {
                       name="marks"
                       value={formData.marks || 5}
                       onChange={handleInputChange}
-                      required
+                      aria-required="true"
                       min="1"
                       max="50"
                       className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE]"
@@ -802,15 +837,19 @@ const QuestionsPage: React.FC = () => {
                     <label
                       htmlFor="subject"
                       className="block text-sm font-medium text-[#1A3A5C] mb-1">
-                      Subject <span className="text-red-500">*</span>
+                      Subject{" "}
+                      <span className="text-red-500" aria-hidden="true">
+                        *
+                      </span>
                     </label>
                     <input
+                      ref={subjectRef}
                       type="text"
                       id="subject"
                       name="subject"
                       value={formData.subject || ""}
                       onChange={handleInputChange}
-                      required
+                      aria-required="true"
                       className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE]"
                     />
                   </div>
@@ -819,14 +858,18 @@ const QuestionsPage: React.FC = () => {
                     <label
                       htmlFor="class"
                       className="block text-sm font-medium text-[#1A3A5C] mb-1">
-                      Class <span className="text-red-500">*</span>
+                      Class{" "}
+                      <span className="text-red-500" aria-hidden="true">
+                        *
+                      </span>
                     </label>
                     <select
+                      ref={classRef}
                       id="class"
                       name="class"
                       value={formData.class || ""}
                       onChange={handleInputChange}
-                      required
+                      aria-required="true"
                       className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE]">
                       <option value="">Select Class</option>
                       <option value="JSS1">JSS1</option>
@@ -861,7 +904,11 @@ const QuestionsPage: React.FC = () => {
                       htmlFor="correctAnswer"
                       className="block text-sm font-medium text-[#1A3A5C] mb-1">
                       Correct Answer{" "}
-                      {formData.type === "objective" && <span className="text-red-500">*</span>}
+                      {formData.type === "objective" && (
+                        <span className="text-red-500" aria-hidden="true">
+                          *
+                        </span>
+                      )}
                     </label>
                     <input
                       type="text"
@@ -869,7 +916,7 @@ const QuestionsPage: React.FC = () => {
                       name="correctAnswer"
                       value={formData.correctAnswer || ""}
                       onChange={handleInputChange}
-                      required={formData.type === "objective"}
+                      aria-required={formData.type === "objective"}
                       placeholder={
                         formData.type === "objective"
                           ? "Enter the correct option"
@@ -883,12 +930,18 @@ const QuestionsPage: React.FC = () => {
                 {formData.type === "objective" && (
                   <div>
                     <label className="block text-sm font-medium text-[#1A3A5C] mb-1">
-                      Options <span className="text-red-500">*</span>
+                      Options{" "}
+                      <span className="text-red-500" aria-hidden="true">
+                        *
+                      </span>
                     </label>
                     <div className="space-y-2">
                       {[0, 1, 2, 3].map((index) => (
                         <input
                           key={index}
+                          ref={(el) => {
+                            optionRefs.current[index] = el;
+                          }}
                           type="text"
                           placeholder={`Option ${String.fromCharCode(65 + index)}`}
                           value={formData.options?.[index] || ""}
@@ -909,7 +962,7 @@ const QuestionsPage: React.FC = () => {
               <div className="flex gap-3 mt-6 pt-4 border-t border-[#E8EEF5]">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={closeFormModal}
                   disabled={isSubmitting}
                   className="flex-1 bg-[#E8EEF5] hover:bg-[#D5DFE8] text-[#1A3A5C] font-medium py-2.5 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/30 disabled:opacity-50">
                   Cancel
@@ -934,11 +987,11 @@ const QuestionsPage: React.FC = () => {
           aria-modal="true"
           aria-labelledby="import-title"
           onClick={(e) => {
-            if (e.target === e.currentTarget && !isImporting) {
-              setIsImportModalOpen(false);
-            }
+            if (e.target === e.currentTarget) closeImportModal();
           }}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-[#B8D0E8]">
+          <div
+            ref={importModalRef}
+            className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-[#B8D0E8]">
             <div className="bg-[#1A3A5C] px-6 py-4 rounded-t-2xl sticky top-0 z-10">
               <h2 id="import-title" className="text-xl font-bold text-white">
                 Bulk Import Questions
@@ -946,9 +999,10 @@ const QuestionsPage: React.FC = () => {
             </div>
 
             <div className="p-6">
-              {/* Instructions */}
               <div className="bg-[#F8FAFE] border border-[#C5D8EC] rounded-lg p-4 mb-6">
-                <h3 className="font-medium text-[#1A3A5C] mb-2">📋 Instructions</h3>
+                <h3 className="font-medium text-[#1A3A5C] mb-2">
+                  <span aria-hidden="true">📋 </span>Instructions
+                </h3>
                 <ul className="text-sm text-[#4A6A8A] space-y-1 list-disc list-inside">
                   <li>
                     Upload a <strong>CSV</strong> or <strong>Word/Text</strong> file with questions
@@ -965,11 +1019,16 @@ const QuestionsPage: React.FC = () => {
                 </ul>
               </div>
 
-              {/* Download Template */}
               <button
                 onClick={downloadTemplate}
                 className="mb-4 text-[#2B6CB0] hover:text-[#1A3A5C] text-sm font-medium flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] rounded px-2 py-1">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  focusable="false">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -980,25 +1039,29 @@ const QuestionsPage: React.FC = () => {
                 Download CSV Template
               </button>
 
-              {/* File Upload */}
-              <div className="border-2 border-dashed border-[#C5D8EC] rounded-lg p-6 text-center hover:border-[#2B6CB0] transition">
+              {/* File Upload — input is visually hidden with sr-only (not display:none),
+                  so it stays keyboard-focusable and reachable by Tab. The peer-focus
+                  ring on the label gives a visible focus indicator too. */}
+              <div className="relative border-2 border-dashed border-[#C5D8EC] rounded-lg p-6 text-center hover:border-[#2B6CB0] transition">
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept=".csv,.txt,.doc,.docx"
                   onChange={handleFileUpload}
-                  className="hidden"
+                  className="peer sr-only"
                   id="file-upload"
-                  aria-label="Upload questions file"
+                  aria-label="Upload questions file (CSV, Word, or Text)"
                 />
                 <label
                   htmlFor="file-upload"
-                  className="cursor-pointer flex flex-col items-center gap-2">
+                  className="cursor-pointer flex flex-col items-center gap-2 rounded-lg peer-focus:ring-2 peer-focus:ring-[#2B6CB0] peer-focus:ring-offset-2">
                   <svg
                     className="w-12 h-12 text-[#8A9CAE]"
                     fill="none"
                     stroke="currentColor"
-                    viewBox="0 0 24 24">
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    focusable="false">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -1007,26 +1070,33 @@ const QuestionsPage: React.FC = () => {
                     />
                   </svg>
                   <span className="text-[#1A3A5C] font-medium">
-                    Click to upload or drag and drop
+                    Click or press Enter to choose a file
                   </span>
                   <span className="text-[#8A9CAE] text-sm">CSV, Word, or Text files supported</span>
                 </label>
               </div>
 
-              {/* Preview */}
               {importPreview.length > 0 && (
                 <div className="mt-6">
                   <h3 className="font-medium text-[#1A3A5C] mb-2">
                     Preview ({importPreview.length} questions found)
                   </h3>
                   <div className="max-h-60 overflow-y-auto border border-[#C5D8EC] rounded-lg">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm" aria-label="Import preview">
                       <thead className="bg-[#F8FAFE] sticky top-0">
                         <tr>
-                          <th className="px-3 py-2 text-left text-[#5A7A9A]">#</th>
-                          <th className="px-3 py-2 text-left text-[#5A7A9A]">Question</th>
-                          <th className="px-3 py-2 text-left text-[#5A7A9A]">Type</th>
-                          <th className="px-3 py-2 text-left text-[#5A7A9A]">Subject</th>
+                          <th scope="col" className="px-3 py-2 text-left text-[#5A7A9A]">
+                            #
+                          </th>
+                          <th scope="col" className="px-3 py-2 text-left text-[#5A7A9A]">
+                            Question
+                          </th>
+                          <th scope="col" className="px-3 py-2 text-left text-[#5A7A9A]">
+                            Type
+                          </th>
+                          <th scope="col" className="px-3 py-2 text-left text-[#5A7A9A]">
+                            Subject
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#E8EEF5]">
@@ -1036,11 +1106,7 @@ const QuestionsPage: React.FC = () => {
                             <td className="px-3 py-2 text-[#4A6A8A] truncate max-w-xs">{q.text}</td>
                             <td className="px-3 py-2">
                               <span
-                                className={`text-xs px-2 py-1 rounded-full font-medium ${
-                                  q.type === "theory"
-                                    ? "bg-purple-100 text-purple-800"
-                                    : "bg-blue-100 text-blue-800"
-                                }`}>
+                                className={`text-xs px-2 py-1 rounded-full font-medium ${q.type === "theory" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"}`}>
                                 {q.type || "objective"}
                               </span>
                             </td>
@@ -1060,15 +1126,10 @@ const QuestionsPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Actions */}
               <div className="flex gap-3 mt-6 pt-4 border-t border-[#E8EEF5]">
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsImportModalOpen(false);
-                    setImportPreview([]);
-                    if (fileInputRef.current) fileInputRef.current.value = "";
-                  }}
+                  onClick={closeImportModal}
                   disabled={isImporting}
                   className="flex-1 bg-[#E8EEF5] hover:bg-[#D5DFE8] text-[#1A3A5C] font-medium py-2.5 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/30 disabled:opacity-50">
                   Cancel
@@ -1076,14 +1137,21 @@ const QuestionsPage: React.FC = () => {
                 <button
                   onClick={confirmImport}
                   disabled={importPreview.length === 0 || isImporting}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 px-4 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-green-500/50 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 px-4 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-green-500/50 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label={
+                    isImporting
+                      ? "Importing questions, please wait"
+                      : `Import ${importPreview.length} questions`
+                  }>
                   {isImporting ? (
                     <span className="flex items-center justify-center gap-2">
                       <svg
                         className="animate-spin h-4 w-4 text-white"
                         xmlns="http://www.w3.org/2000/svg"
                         fill="none"
-                        viewBox="0 0 24 24">
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        focusable="false">
                         <circle
                           className="opacity-25"
                           cx="12"
@@ -1107,7 +1175,7 @@ const QuestionsPage: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
