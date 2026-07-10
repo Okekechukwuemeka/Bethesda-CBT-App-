@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 
 interface ClassResult {
@@ -13,7 +13,7 @@ interface ClassResult {
 }
 
 const ResultsPage: React.FC = () => {
-  const [classes, setClasses] = useState<ClassResult[]>([
+  const [classes] = useState<ClassResult[]>([
     {
       id: 1,
       className: "JSS1",
@@ -83,10 +83,18 @@ const ResultsPage: React.FC = () => {
   };
 
   const getPerformanceIcon = (performance: string) => {
+    const iconProps = {
+      className: "w-4 h-4",
+      fill: "none",
+      stroke: "currentColor",
+      viewBox: "0 0 24 24",
+      "aria-hidden": true as const,
+      focusable: "false" as const,
+    };
     switch (performance) {
       case "excellent":
         return (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg {...iconProps}>
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -97,7 +105,7 @@ const ResultsPage: React.FC = () => {
         );
       case "good":
         return (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg {...iconProps}>
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -108,7 +116,7 @@ const ResultsPage: React.FC = () => {
         );
       case "average":
         return (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg {...iconProps}>
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -119,7 +127,7 @@ const ResultsPage: React.FC = () => {
         );
       case "poor":
         return (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg {...iconProps}>
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -139,6 +147,14 @@ const ResultsPage: React.FC = () => {
     return matchesSearch && matchesPerformance;
   });
 
+  // Debounced live-region announcement, consistent with the Question Bank page,
+  // so rapid typing doesn't queue up an announcement per keystroke.
+  const [announcedCount, setAnnouncedCount] = useState(filteredClasses.length);
+  useEffect(() => {
+    const timer = setTimeout(() => setAnnouncedCount(filteredClasses.length), 500);
+    return () => clearTimeout(timer);
+  }, [filteredClasses.length]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -150,7 +166,7 @@ const ResultsPage: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-[#C5D8EC] p-4 shadow-sm">
+      <div className="bg-white rounded-xl border border-[#C5D8EC] p-4 shadow-sm" role="search">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
             <label htmlFor="search" className="sr-only">
@@ -163,7 +179,6 @@ const ResultsPage: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full px-4 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE]"
-              aria-label="Search classes"
             />
           </div>
           <div>
@@ -174,8 +189,7 @@ const ResultsPage: React.FC = () => {
               id="filterPerformance"
               value={filterPerformance}
               onChange={(e) => setFilterPerformance(e.target.value)}
-              className="px-4 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE]"
-              aria-label="Filter by performance">
+              className="px-4 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE]">
               <option value="all">All Performance</option>
               <option value="excellent">Excellent</option>
               <option value="good">Good</option>
@@ -184,65 +198,72 @@ const ResultsPage: React.FC = () => {
             </select>
           </div>
         </div>
+        <p className="sr-only" role="status" aria-live="polite">
+          {announcedCount} class{announcedCount !== 1 ? "es" : ""} found
+        </p>
       </div>
 
       {/* Classes Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <ul role="list" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredClasses.map((cls) => (
-          <Link
-            key={cls.id}
-            href={`/admin/results/${cls.className}`}
-            className="bg-white rounded-xl border border-[#C5D8EC] p-6 shadow-sm hover:shadow-md transition-all hover:border-[#2B6CB0] focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] group">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-[#1A3A5C]">{cls.className}</h3>
-                <p className="text-sm text-[#4A6A8A]">
-                  {cls.studentCount} students • {cls.completedExams} exams
-                </p>
-              </div>
-              <div
-                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getPerformanceColor(cls.performance)}`}>
-                {getPerformanceIcon(cls.performance)}
-                <span className="capitalize">{cls.performance}</span>
-              </div>
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-[#E8EEF5]">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-[#5A7A9A]">Average Score</span>
-                <span className="text-2xl font-bold text-[#1A3A5C]">{cls.averageScore}%</span>
-              </div>
-              <div className="mt-2 w-full bg-[#E8EEF5] rounded-full h-2">
+          <li key={cls.id}>
+            <Link
+              href={`/admin/results/${cls.className}`}
+              aria-label={`View results for ${cls.className}: ${cls.studentCount} students, average score ${cls.averageScore}%, ${cls.performance} performance`}
+              className="block bg-white rounded-xl border border-[#C5D8EC] p-6 shadow-sm hover:shadow-md transition-all hover:border-[#2B6CB0] focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] group">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-[#1A3A5C]">{cls.className}</h2>
+                  <p className="text-sm text-[#4A6A8A]">
+                    {cls.studentCount} students &bull; {cls.completedExams} exams
+                  </p>
+                </div>
                 <div
-                  className={`h-2 rounded-full transition-all ${
-                    cls.averageScore >= 70
-                      ? "bg-green-500"
-                      : cls.averageScore >= 60
-                        ? "bg-blue-500"
-                        : cls.averageScore >= 50
-                          ? "bg-yellow-500"
-                          : "bg-red-500"
-                  }`}
-                  style={{ width: `${cls.averageScore}%` }}
-                  role="progressbar"
-                  aria-valuenow={cls.averageScore}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-label={`Average score ${cls.averageScore}%`}
-                />
+                  className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getPerformanceColor(cls.performance)}`}>
+                  {getPerformanceIcon(cls.performance)}
+                  <span className="capitalize">{cls.performance}</span>
+                </div>
               </div>
-            </div>
 
-            <div className="mt-4 flex items-center justify-end text-sm text-[#2B6CB0] group-hover:text-[#1A3A5C] transition">
-              <span>View Results →</span>
-            </div>
-          </Link>
+              <div className="mt-4 pt-4 border-t border-[#E8EEF5]">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-[#5A7A9A]">Average Score</span>
+                  <span className="text-2xl font-bold text-[#1A3A5C]">{cls.averageScore}%</span>
+                </div>
+                {/* Purely decorative re-visualization of the score already shown as text
+                    above and already included in the link's aria-label — hidden from AT
+                    to avoid announcing the same percentage twice in two different forms. */}
+                <div className="mt-2 w-full bg-[#E8EEF5] rounded-full h-2" aria-hidden="true">
+                  <div
+                    className={`h-2 rounded-full transition-all ${
+                      cls.averageScore >= 70
+                        ? "bg-green-500"
+                        : cls.averageScore >= 60
+                          ? "bg-blue-500"
+                          : cls.averageScore >= 50
+                            ? "bg-yellow-500"
+                            : "bg-red-500"
+                    }`}
+                    style={{ width: `${cls.averageScore}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-center justify-end text-sm text-[#2B6CB0] group-hover:text-[#1A3A5C] transition">
+                <span>
+                  View Results <span aria-hidden="true">→</span>
+                </span>
+              </div>
+            </Link>
+          </li>
         ))}
-      </div>
+      </ul>
 
       {filteredClasses.length === 0 && (
         <div className="bg-white rounded-xl border border-[#C5D8EC] p-12 text-center">
-          <div className="text-6xl mb-4">📊</div>
+          <div className="text-6xl mb-4" aria-hidden="true">
+            📊
+          </div>
           <p className="text-[#5A7A9A] font-medium">No classes found</p>
           <p className="text-sm text-[#8A9CAE]">Try adjusting your search or filters</p>
         </div>
