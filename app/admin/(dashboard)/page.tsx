@@ -29,6 +29,41 @@ interface UpcomingExam {
   status: "upcoming" | "today" | "ongoing";
 }
 
+// Mock data interfaces for other tabs
+interface ExamData {
+  id: number;
+  subject: string;
+  class: string;
+  term: string;
+  totalQuestions: number;
+  duration: string;
+  status: "active" | "scheduled" | "completed";
+  date: string;
+  participants: number;
+}
+
+interface StudentData {
+  id: number;
+  name: string;
+  class: string;
+  email: string;
+  examsTaken: number;
+  avgScore: number;
+  status: "active" | "inactive";
+  lastActive: string;
+}
+
+interface SubmissionData {
+  id: number;
+  student: string;
+  exam: string;
+  subject: string;
+  submittedDate: string;
+  score: number | null;
+  status: "graded" | "pending" | "in-review";
+  timeTaken: string;
+}
+
 const TAB_IDS = ["overview", "exams", "students", "submissions"] as const;
 type TabId = (typeof TAB_IDS)[number];
 
@@ -44,6 +79,11 @@ const DashboardPage: React.FC = () => {
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
   const [upcomingExams, setUpcomingExams] = useState<UpcomingExam[]>([]);
   const [selectedTab, setSelectedTab] = useState<TabId>("overview");
+
+  // Mock data for other tabs
+  const [examsData, setExamsData] = useState<ExamData[]>([]);
+  const [studentsData, setStudentsData] = useState<StudentData[]>([]);
+  const [submissionsData, setSubmissionsData] = useState<SubmissionData[]>([]);
 
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
@@ -136,6 +176,194 @@ const DashboardPage: React.FC = () => {
         },
       ]);
 
+      // Mock data for Exams tab
+      setExamsData([
+        {
+          id: 1,
+          subject: "Chemistry",
+          class: "JSS3",
+          term: "First Term",
+          totalQuestions: 50,
+          duration: "2 hours",
+          status: "active",
+          date: "2025-07-15",
+          participants: 45,
+        },
+        {
+          id: 2,
+          subject: "Mathematics",
+          class: "JSS3",
+          term: "First Term",
+          totalQuestions: 40,
+          duration: "2.5 hours",
+          status: "scheduled",
+          date: "2025-07-16",
+          participants: 52,
+        },
+        {
+          id: 3,
+          subject: "Physics",
+          class: "JSS3",
+          term: "First Term",
+          totalQuestions: 35,
+          duration: "2 hours",
+          status: "scheduled",
+          date: "2025-07-17",
+          participants: 48,
+        },
+        {
+          id: 4,
+          subject: "English Language",
+          class: "JSS3",
+          term: "First Term",
+          totalQuestions: 60,
+          duration: "2 hours",
+          status: "scheduled",
+          date: "2025-07-18",
+          participants: 55,
+        },
+        {
+          id: 5,
+          subject: "Biology",
+          class: "JSS2",
+          term: "Second Term",
+          totalQuestions: 45,
+          duration: "1.5 hours",
+          status: "completed",
+          date: "2025-06-20",
+          participants: 38,
+        },
+        {
+          id: 6,
+          subject: "History",
+          class: "JSS1",
+          term: "Second Term",
+          totalQuestions: 30,
+          duration: "1 hour",
+          status: "completed",
+          date: "2025-06-18",
+          participants: 42,
+        },
+      ]);
+
+      // Mock data for Students tab
+      setStudentsData([
+        {
+          id: 1,
+          name: "John Doe",
+          class: "JSS3",
+          email: "john.doe@school.edu",
+          examsTaken: 8,
+          avgScore: 85,
+          status: "active",
+          lastActive: "2 hours ago",
+        },
+        {
+          id: 2,
+          name: "Jane Smith",
+          class: "JSS3",
+          email: "jane.smith@school.edu",
+          examsTaken: 10,
+          avgScore: 92,
+          status: "active",
+          lastActive: "15 minutes ago",
+        },
+        {
+          id: 3,
+          name: "Mike Johnson",
+          class: "JSS2",
+          email: "mike.johnson@school.edu",
+          examsTaken: 7,
+          avgScore: 78,
+          status: "active",
+          lastActive: "1 day ago",
+        },
+        {
+          id: 4,
+          name: "Sarah Williams",
+          class: "JSS3",
+          email: "sarah.williams@school.edu",
+          examsTaken: 9,
+          avgScore: 88,
+          status: "inactive",
+          lastActive: "3 days ago",
+        },
+        {
+          id: 5,
+          name: "David Brown",
+          class: "JSS1",
+          email: "david.brown@school.edu",
+          examsTaken: 6,
+          avgScore: 71,
+          status: "active",
+          lastActive: "5 hours ago",
+        },
+      ]);
+
+      // Mock data for Submissions tab
+      setSubmissionsData([
+        {
+          id: 1,
+          student: "John Doe",
+          exam: "Chemistry First Term",
+          subject: "Chemistry",
+          submittedDate: "2025-07-15",
+          score: 85,
+          status: "graded",
+          timeTaken: "1h 45m",
+        },
+        {
+          id: 2,
+          student: "Jane Smith",
+          exam: "Mathematics First Term",
+          subject: "Mathematics",
+          submittedDate: "2025-07-14",
+          score: 92,
+          status: "graded",
+          timeTaken: "2h 10m",
+        },
+        {
+          id: 3,
+          student: "Mike Johnson",
+          exam: "Physics First Term",
+          subject: "Physics",
+          submittedDate: "2025-07-15",
+          score: null,
+          status: "in-review",
+          timeTaken: "1h 30m",
+        },
+        {
+          id: 4,
+          student: "Sarah Williams",
+          exam: "Biology First Term",
+          subject: "Biology",
+          submittedDate: "2025-07-13",
+          score: null,
+          status: "pending",
+          timeTaken: "1h 15m",
+        },
+        {
+          id: 5,
+          student: "David Brown",
+          exam: "English First Term",
+          subject: "English",
+          submittedDate: "2025-07-12",
+          score: 78,
+          status: "graded",
+          timeTaken: "2h 5m",
+        },
+        {
+          id: 6,
+          student: "Emily Davis",
+          exam: "History Second Term",
+          subject: "History",
+          submittedDate: "2025-07-11",
+          score: 88,
+          status: "graded",
+          timeTaken: "1h 20m",
+        },
+      ]);
+
       setIsLoading(false);
     }, 1000);
   }, []);
@@ -148,17 +376,21 @@ const DashboardPage: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "completed":
+      case "graded":
+      case "today":
         return "bg-green-100 text-green-800";
       case "in-progress":
+      case "scheduled":
+      case "upcoming":
+      case "in-review":
         return "bg-blue-100 text-blue-800";
       case "pending":
         return "bg-yellow-100 text-yellow-800";
-      case "today":
-        return "bg-green-100 text-green-800";
-      case "upcoming":
-        return "bg-blue-100 text-blue-800";
       case "ongoing":
+      case "active":
         return "bg-red-100 text-red-800";
+      case "inactive":
+        return "bg-gray-100 text-gray-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -167,17 +399,26 @@ const DashboardPage: React.FC = () => {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case "completed":
+      case "graded":
         return "Completed";
       case "in-progress":
         return "In Progress";
       case "pending":
-        return "Pending Review";
+        return "Pending";
       case "today":
         return "Today";
       case "upcoming":
         return "Upcoming";
       case "ongoing":
         return "Ongoing";
+      case "active":
+        return "Active";
+      case "inactive":
+        return "Inactive";
+      case "scheduled":
+        return "Scheduled";
+      case "in-review":
+        return "In Review";
       default:
         return status;
     }
@@ -500,50 +741,195 @@ const DashboardPage: React.FC = () => {
             </div>
           )}
 
-          {/* Other Tabs (Placeholder content) */}
+          {/* Exams Tab Content */}
           {selectedTab === "exams" && (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4" aria-hidden="true">
-                📝
+            <section aria-labelledby="exams-title">
+              <div className="flex items-center justify-between mb-6">
+                <h2 id="exams-title" className="text-lg font-semibold text-[#1A3A5C]">
+                  All Exams
+                </h2>
+                <Link
+                  href="/admin/exams"
+                  className="text-sm text-[#2B6CB0] hover:text-[#1A3A5C] font-medium focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] rounded px-1">
+                  Manage Exams <span aria-hidden="true">→</span>
+                </Link>
               </div>
-              <h2 className="text-xl font-semibold text-[#1A3A5C]">Manage Exams</h2>
-              <p className="text-[#5A7A9A] mt-2">View and manage all examinations</p>
-              <Link
-                href="/admin/exams"
-                className="inline-block mt-4 bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium px-6 py-2 rounded-lg transition">
-                Go to Exams
-              </Link>
-            </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[#E8EEF5]">
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Subject</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Class</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Term</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Questions</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Duration</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Status</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Date</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">
+                        Participants
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {examsData.map((exam) => (
+                      <tr
+                        key={exam.id}
+                        className="border-b border-[#F0F4F9] hover:bg-[#F8FAFE] transition">
+                        <td className="py-3 px-4 font-medium text-[#1A3A5C]">{exam.subject}</td>
+                        <td className="py-3 px-4 text-[#4A6A8A]">{exam.class}</td>
+                        <td className="py-3 px-4 text-[#4A6A8A]">{exam.term}</td>
+                        <td className="py-3 px-4 text-[#4A6A8A]">{exam.totalQuestions}</td>
+                        <td className="py-3 px-4 text-[#4A6A8A]">{exam.duration}</td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(exam.status)}`}>
+                            {getStatusLabel(exam.status)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-[#4A6A8A]">{formatDate(exam.date)}</td>
+                        <td className="py-3 px-4 text-[#4A6A8A]">{exam.participants}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           )}
 
+          {/* Students Tab Content */}
           {selectedTab === "students" && (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4" aria-hidden="true">
-                👨‍🎓
+            <section aria-labelledby="students-title">
+              <div className="flex items-center justify-between mb-6">
+                <h2 id="students-title" className="text-lg font-semibold text-[#1A3A5C]">
+                  Students
+                </h2>
+                <Link
+                  href="/admin/students"
+                  className="text-sm text-[#2B6CB0] hover:text-[#1A3A5C] font-medium focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] rounded px-1">
+                  Manage Students <span aria-hidden="true">→</span>
+                </Link>
               </div>
-              <h2 className="text-xl font-semibold text-[#1A3A5C]">Manage Students</h2>
-              <p className="text-[#5A7A9A] mt-2">View and manage student accounts</p>
-              <Link
-                href="/admin/students"
-                className="inline-block mt-4 bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium px-6 py-2 rounded-lg transition">
-                Go to Students
-              </Link>
-            </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[#E8EEF5]">
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Name</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Class</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Email</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">
+                        Exams Taken
+                      </th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Avg Score</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Status</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">
+                        Last Active
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {studentsData.map((student) => (
+                      <tr
+                        key={student.id}
+                        className="border-b border-[#F0F4F9] hover:bg-[#F8FAFE] transition">
+                        <td className="py-3 px-4 font-medium text-[#1A3A5C]">{student.name}</td>
+                        <td className="py-3 px-4 text-[#4A6A8A]">{student.class}</td>
+                        <td className="py-3 px-4 text-[#4A6A8A]">{student.email}</td>
+                        <td className="py-3 px-4 text-[#4A6A8A]">{student.examsTaken}</td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`font-medium ${
+                              student.avgScore >= 80
+                                ? "text-green-600"
+                                : student.avgScore >= 60
+                                  ? "text-yellow-600"
+                                  : "text-red-600"
+                            }`}>
+                            {student.avgScore}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(student.status)}`}>
+                            {getStatusLabel(student.status)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-[#4A6A8A]">{student.lastActive}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           )}
 
+          {/* Submissions Tab Content */}
           {selectedTab === "submissions" && (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4" aria-hidden="true">
-                📋
+            <section aria-labelledby="submissions-title">
+              <div className="flex items-center justify-between mb-6">
+                <h2 id="submissions-title" className="text-lg font-semibold text-[#1A3A5C]">
+                  Submissions
+                </h2>
+                <Link
+                  href="/admin/results"
+                  className="text-sm text-[#2B6CB0] hover:text-[#1A3A5C] font-medium focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] rounded px-1">
+                  View Results <span aria-hidden="true">→</span>
+                </Link>
               </div>
-              <h2 className="text-xl font-semibold text-[#1A3A5C]">Review Submissions</h2>
-              <p className="text-[#5A7A9A] mt-2">Grade and review student submissions</p>
-              <Link
-                href="/admin/results"
-                className="inline-block mt-4 bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium px-6 py-2 rounded-lg transition">
-                Go to Results
-              </Link>
-            </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[#E8EEF5]">
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Student</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Exam</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Subject</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Submitted</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Time Taken</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Score</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {submissionsData.map((submission) => (
+                      <tr
+                        key={submission.id}
+                        className="border-b border-[#F0F4F9] hover:bg-[#F8FAFE] transition">
+                        <td className="py-3 px-4 font-medium text-[#1A3A5C]">
+                          {submission.student}
+                        </td>
+                        <td className="py-3 px-4 text-[#4A6A8A]">{submission.exam}</td>
+                        <td className="py-3 px-4 text-[#4A6A8A]">{submission.subject}</td>
+                        <td className="py-3 px-4 text-[#4A6A8A]">
+                          {formatDate(submission.submittedDate)}
+                        </td>
+                        <td className="py-3 px-4 text-[#4A6A8A]">{submission.timeTaken}</td>
+                        <td className="py-3 px-4">
+                          {submission.score !== null ? (
+                            <span
+                              className={`font-medium ${
+                                submission.score >= 80
+                                  ? "text-green-600"
+                                  : submission.score >= 60
+                                    ? "text-yellow-600"
+                                    : "text-red-600"
+                              }`}>
+                              {submission.score}%
+                            </span>
+                          ) : (
+                            <span className="text-[#8A9CAE]">N/A</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(submission.status)}`}>
+                            {getStatusLabel(submission.status)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           )}
         </div>
       </div>
