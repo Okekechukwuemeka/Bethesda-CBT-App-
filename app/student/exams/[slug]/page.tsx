@@ -1,4 +1,3 @@
-// app/student/exams/[slug]/page.tsx
 "use client";
 
 import React from "react";
@@ -60,7 +59,6 @@ const ExamPage: React.FC = () => {
           answeredCount={getAnsweredCount()}
           totalQuestions={getTotalQuestions()}
         />
-
         <TimerAnnouncement announcement={timerAnnouncement} />
 
         {statusMessage && (
