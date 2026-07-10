@@ -294,7 +294,7 @@ const StudentsPage: React.FC = () => {
         );
         setStatusMessage({
           type: "success",
-          text: `✅ Student ${formData.firstName} ${formData.lastName} updated successfully!`,
+          text: `Student ${formData.firstName} ${formData.lastName} updated successfully!`,
         });
       } else {
         const newStudent: Student = {
@@ -314,7 +314,7 @@ const StudentsPage: React.FC = () => {
         setStudents((prev) => [...prev, newStudent]);
         setStatusMessage({
           type: "success",
-          text: `✅ Student ${formData.firstName} ${formData.lastName} added successfully!`,
+          text: `Student ${formData.firstName} ${formData.lastName} added successfully!`,
         });
       }
 
@@ -330,7 +330,7 @@ const StudentsPage: React.FC = () => {
       setStudents((prev) => prev.filter((s) => s.id !== selectedStudent.id));
       setStatusMessage({
         type: "warning",
-        text: `⚠️ Student ${selectedStudent.firstName} ${selectedStudent.lastName} has been deleted.`,
+        text: `Student ${selectedStudent.firstName} ${selectedStudent.lastName} has been deleted.`,
       });
       setIsDeleteModalOpen(false);
       setSelectedStudent(null);
@@ -366,7 +366,7 @@ const StudentsPage: React.FC = () => {
         } else {
           setStatusMessage({
             type: "success",
-            text: `✅ Found ${parsedStudents.length} students ready to import.`,
+            text: `Found ${parsedStudents.length} students ready to import.`,
           });
         }
       } catch (error) {
@@ -576,7 +576,7 @@ const StudentsPage: React.FC = () => {
       setStudents((prev) => [...prev, ...newStudents]);
       setStatusMessage({
         type: "success",
-        text: `✅ Successfully imported ${importedCount} students!`,
+        text: `Successfully imported ${importedCount} students!`,
       });
 
       setIsImporting(false);
@@ -627,7 +627,7 @@ const StudentsPage: React.FC = () => {
 
     setStatusMessage({
       type: "success",
-      text: "📥 Template downloaded successfully!",
+      text: "Template downloaded successfully!",
     });
     setTimeout(() => setStatusMessage(null), 3000);
   };

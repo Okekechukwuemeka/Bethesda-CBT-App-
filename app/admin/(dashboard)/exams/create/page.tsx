@@ -4,6 +4,18 @@ import React, { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+interface Question {
+  id: number;
+  text: string;
+  type: "objective" | "theory";
+  options: string[];
+  correctAnswer: string;
+  marks: number;
+  subject: string;
+  class: string;
+  difficulty: "easy" | "medium" | "hard";
+}
+
 interface StatusMessage {
   type: "success" | "error" | "warning";
   text: string;
@@ -18,9 +30,106 @@ const CreateExamPage: React.FC = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [selectedQuestions, setSelectedQuestions] = useState<Question[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState<string>("all");
+  const [filterSubject, setFilterSubject] = useState<string>("all");
+  const [showQuestionBank, setShowQuestionBank] = useState(false);
 
   const titleInputRef = useRef<HTMLInputElement>(null);
   const fieldRefs = useRef<Partial<Record<RequiredField, HTMLElement | null>>>({});
+
+  // Mock question bank - in production, this would come from an API
+  const [questionBank, setQuestionBank] = useState<Question[]>([
+    {
+      id: 1,
+      text: "What is the chemical symbol for water?",
+      type: "objective",
+      options: ["H2O", "CO2", "NaCl", "HCl"],
+      correctAnswer: "H2O",
+      marks: 5,
+      subject: "Chemistry",
+      class: "JSS3",
+      difficulty: "easy",
+    },
+    {
+      id: 2,
+      text: "What is the atomic number of Carbon?",
+      type: "objective",
+      options: ["6", "12", "14", "8"],
+      correctAnswer: "6",
+      marks: 5,
+      subject: "Chemistry",
+      class: "JSS3",
+      difficulty: "easy",
+    },
+    {
+      id: 3,
+      text: "Define an acid and give two examples with their chemical formulas.",
+      type: "theory",
+      options: [],
+      correctAnswer: "",
+      marks: 10,
+      subject: "Chemistry",
+      class: "JSS3",
+      difficulty: "medium",
+    },
+    {
+      id: 4,
+      text: "Explain the process of photosynthesis and write the chemical equation.",
+      type: "theory",
+      options: [],
+      correctAnswer: "",
+      marks: 15,
+      subject: "Chemistry",
+      class: "JSS3",
+      difficulty: "hard",
+    },
+    {
+      id: 5,
+      text: "What is the SI unit of force?",
+      type: "objective",
+      options: ["Newton", "Joule", "Watt", "Pascal"],
+      correctAnswer: "Newton",
+      marks: 5,
+      subject: "Physics",
+      class: "JSS3",
+      difficulty: "easy",
+    },
+    {
+      id: 6,
+      text: "State Newton's three laws of motion.",
+      type: "theory",
+      options: [],
+      correctAnswer: "",
+      marks: 15,
+      subject: "Physics",
+      class: "JSS3",
+      difficulty: "hard",
+    },
+    {
+      id: 7,
+      text: "What is the value of 3² + 4²?",
+      type: "objective",
+      options: ["7", "12", "25", "5"],
+      correctAnswer: "25",
+      marks: 5,
+      subject: "Mathematics",
+      class: "JSS3",
+      difficulty: "easy",
+    },
+    {
+      id: 8,
+      text: "Solve for x: 2x + 5 = 13",
+      type: "theory",
+      options: [],
+      correctAnswer: "x = 4",
+      marks: 10,
+      subject: "Mathematics",
+      class: "JSS3",
+      difficulty: "medium",
+    },
+  ]);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -36,7 +145,6 @@ const CreateExamPage: React.FC = () => {
     shuffleQuestions: false,
   });
 
-  // Focus the first field on load, consistent with the other admin forms.
   useEffect(() => {
     titleInputRef.current?.focus();
   }, []);
@@ -52,7 +160,6 @@ const CreateExamPage: React.FC = () => {
       [name]: type === "checkbox" ? checked : type === "number" ? parseInt(value) || 0 : value,
     }));
 
-    // Clear a field's error as soon as the admin starts fixing it.
     if (name in fieldErrors) {
       setFieldErrors((prev) => {
         const next = { ...prev };
@@ -73,6 +180,32 @@ const CreateExamPage: React.FC = () => {
     return errors;
   };
 
+  const handleAddQuestion = (question: Question) => {
+    if (!selectedQuestions.find((q) => q.id === question.id)) {
+      setSelectedQuestions((prev) => [...prev, question]);
+      setStatusMessage({
+        type: "success",
+        text: `✅ Question "${question.text.substring(0, 30)}..." added to exam.`,
+      });
+      setTimeout(() => setStatusMessage(null), 3000);
+    } else {
+      setStatusMessage({
+        type: "warning",
+        text: "⚠️ This question is already in the exam.",
+      });
+      setTimeout(() => setStatusMessage(null), 3000);
+    }
+  };
+
+  const handleRemoveQuestion = (questionId: number) => {
+    setSelectedQuestions((prev) => prev.filter((q) => q.id !== questionId));
+    setStatusMessage({
+      type: "warning",
+      text: "⚠️ Question removed from exam.",
+    });
+    setTimeout(() => setStatusMessage(null), 3000);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const errors = validate();
@@ -88,19 +221,25 @@ const CreateExamPage: React.FC = () => {
       return;
     }
 
+    if (selectedQuestions.length === 0) {
+      setStatusMessage({
+        type: "error",
+        text: "Please add at least one question to the exam.",
+      });
+      return;
+    }
+
     setStatusMessage(null);
     setIsSubmitting(true);
 
-    // TODO (integration): POST to /api/exams instead of this mock delay.
+    // TODO (integration): POST to /api/exams with formData and selectedQuestions
     setTimeout(() => {
       setStatusMessage({
         type: "success",
-        text: "Exam created successfully.",
+        text: `✅ Exam "${formData.title}" created with ${selectedQuestions.length} questions.`,
       });
       setIsSubmitted(true);
       setIsSubmitting(false);
-      // No forced redirect — the admin chooses what to do next below,
-      // so a screen reader isn't cut off mid-announcement.
     }, 1000);
   };
 
@@ -118,11 +257,20 @@ const CreateExamPage: React.FC = () => {
       passingScore: 40,
       shuffleQuestions: false,
     });
+    setSelectedQuestions([]);
     setIsSubmitted(false);
     setStatusMessage(null);
     setFieldErrors({});
     titleInputRef.current?.focus();
   };
+
+  // Filter questions from bank
+  const filteredQuestions = questionBank.filter((q) => {
+    const matchesSearch = q.text.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = filterType === "all" || q.type === filterType;
+    const matchesSubject = filterSubject === "all" || q.subject === filterSubject;
+    return matchesSearch && matchesType && matchesSubject;
+  });
 
   const errorId = (field: RequiredField) => `${field}-error`;
   const describedBy = (field: RequiredField, hasHint = false) => {
@@ -132,13 +280,19 @@ const CreateExamPage: React.FC = () => {
     return ids.length ? ids.join(" ") : undefined;
   };
 
+  const getTypeBadgeColor = (type: string) => {
+    return type === "objective" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800";
+  };
+
+  const totalMarks = selectedQuestions.reduce((sum, q) => sum + q.marks, 0);
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#1A3A5C]">Create Exam</h1>
-          <p className="text-[#5A7A9A] text-sm">Create a new examination</p>
+          <p className="text-[#5A7A9A] text-sm">Create a new examination with questions</p>
         </div>
         <Link
           href="/admin/exams"
@@ -182,8 +336,10 @@ const CreateExamPage: React.FC = () => {
         {isSubmitted ? (
           <div className="text-center py-8 space-y-4">
             <p className="text-[#1A3A5C]">
-              &ldquo;{formData.title}&rdquo; has been created. What would you like to do next?
+              &ldquo;{formData.title}&rdquo; has been created with{" "}
+              <strong>{selectedQuestions.length}</strong> questions.
             </p>
+            <p className="text-sm text-[#5A7A9A]">Total Marks: {totalMarks}</p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button
                 type="button"
@@ -503,6 +659,192 @@ const CreateExamPage: React.FC = () => {
               />
             </div>
 
+            {/* Questions Section */}
+            <fieldset className="pt-2 border-t border-[#E8EEF5]">
+              <legend className="text-base font-semibold text-[#1A3A5C] mb-4 pt-4">
+                Questions{" "}
+                <span className="text-sm font-normal text-[#5A7A9A]">
+                  ({selectedQuestions.length} selected)
+                </span>
+              </legend>
+
+              {/* Selected Questions */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-medium text-[#1A3A5C]">Selected Questions</h3>
+                  <span className="text-sm text-[#5A7A9A]">Total Marks: {totalMarks}</span>
+                </div>
+                {selectedQuestions.length === 0 ? (
+                  <p className="text-sm text-[#8A9CAE] py-4 text-center border-2 border-dashed border-[#C5D8EC] rounded-lg">
+                    No questions added yet. Search and add questions from the question bank below.
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {selectedQuestions.map((q, index) => (
+                      <div
+                        key={q.id}
+                        className="flex items-center justify-between p-3 bg-[#F8FAFE] border border-[#C5D8EC] rounded-lg">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <span className="text-xs font-medium text-[#5A7A9A] w-6">
+                            {index + 1}.
+                          </span>
+                          <span className="text-sm text-[#1A3A5C] truncate">{q.text}</span>
+                          <span
+                            className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${getTypeBadgeColor(q.type)}`}>
+                            {q.type}
+                          </span>
+                          <span className="text-xs text-[#5A7A9A] flex-shrink-0">
+                            {q.marks} marks
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveQuestion(q.id)}
+                          className="text-red-600 hover:text-red-800 p-1 rounded focus:outline-none focus:ring-2 focus:ring-red-500 flex-shrink-0"
+                          aria-label={`Remove question ${index + 1}`}>
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Question Bank */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowQuestionBank(!showQuestionBank)}
+                  className="text-[#2B6CB0] hover:text-[#1A3A5C] text-sm font-medium flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] rounded px-2 py-1"
+                  aria-expanded={showQuestionBank}>
+                  <svg
+                    className={`w-4 h-4 transition-transform ${showQuestionBank ? "rotate-180" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                  {showQuestionBank ? "Hide Question Bank" : "Browse Question Bank"}
+                </button>
+
+                {showQuestionBank && (
+                  <div className="mt-4 border border-[#C5D8EC] rounded-lg p-4">
+                    {/* Search and Filters */}
+                    <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                      <div className="flex-1">
+                        <label htmlFor="searchQuestions" className="sr-only">
+                          Search questions
+                        </label>
+                        <input
+                          id="searchQuestions"
+                          type="text"
+                          placeholder="Search questions..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE] text-sm"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <select
+                          value={filterType}
+                          onChange={(e) => setFilterType(e.target.value)}
+                          className="px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE] text-sm"
+                          aria-label="Filter by type">
+                          <option value="all">All Types</option>
+                          <option value="objective">Objective</option>
+                          <option value="theory">Theory</option>
+                        </select>
+                        <select
+                          value={filterSubject}
+                          onChange={(e) => setFilterSubject(e.target.value)}
+                          className="px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE] text-sm"
+                          aria-label="Filter by subject">
+                          <option value="all">All Subjects</option>
+                          <option value="Chemistry">Chemistry</option>
+                          <option value="Physics">Physics</option>
+                          <option value="Mathematics">Mathematics</option>
+                          <option value="Biology">Biology</option>
+                          <option value="English Language">English Language</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Question List */}
+                    <div className="max-h-60 overflow-y-auto space-y-2">
+                      {filteredQuestions.length === 0 ? (
+                        <p className="text-sm text-[#8A9CAE] text-center py-4">
+                          No questions found in the question bank.
+                          <br />
+                          <Link href="/admin/questions" className="text-[#2B6CB0] hover:underline">
+                            Create questions first
+                          </Link>
+                        </p>
+                      ) : (
+                        filteredQuestions.map((q) => {
+                          const isSelected = selectedQuestions.some((sq) => sq.id === q.id);
+                          return (
+                            <div
+                              key={q.id}
+                              className={`flex items-center justify-between p-3 border rounded-lg ${
+                                isSelected
+                                  ? "bg-green-50 border-green-300"
+                                  : "bg-white border-[#C5D8EC] hover:border-[#2B6CB0]"
+                              } transition`}>
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <span className="text-sm text-[#1A3A5C] truncate">{q.text}</span>
+                                <span
+                                  className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${getTypeBadgeColor(q.type)}`}>
+                                  {q.type}
+                                </span>
+                                <span className="text-xs text-[#5A7A9A] flex-shrink-0">
+                                  {q.marks} marks
+                                </span>
+                                <span className="text-xs text-[#5A7A9A] flex-shrink-0">
+                                  {q.subject}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleAddQuestion(q)}
+                                disabled={isSelected}
+                                className={`px-3 py-1 text-sm rounded-lg transition focus:outline-none focus:ring-2 flex-shrink-0 ${
+                                  isSelected
+                                    ? "bg-green-100 text-green-700 cursor-default"
+                                    : "bg-[#1A3A5C] hover:bg-[#14304D] text-white focus:ring-[#2B6CB0]"
+                                }`}
+                                aria-label={
+                                  isSelected
+                                    ? "Already added"
+                                    : `Add question: ${q.text.substring(0, 50)}`
+                                }>
+                                {isSelected ? "Added ✓" : "Add"}
+                              </button>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </fieldset>
+
             {/* Form Actions */}
             <div className="flex gap-3 pt-4 border-t border-[#E8EEF5]">
               <Link
@@ -515,7 +857,9 @@ const CreateExamPage: React.FC = () => {
                 disabled={isSubmitting}
                 className="flex-1 bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium py-2.5 px-4 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                 aria-label={isSubmitting ? "Creating exam, please wait" : "Create exam"}>
-                {isSubmitting ? "Creating..." : "Create Exam"}
+                {isSubmitting
+                  ? "Creating..."
+                  : `Create Exam (${selectedQuestions.length} questions)`}
               </button>
             </div>
           </form>
