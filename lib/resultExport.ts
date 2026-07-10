@@ -1,4 +1,3 @@
-// lib/resultExport.ts
 import ExcelJS from "exceljs";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
