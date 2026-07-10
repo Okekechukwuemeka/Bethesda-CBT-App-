@@ -3,7 +3,14 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useModalFocusTrap } from "@/hooks/useModalFocusTrap"; // adjust path to match your project structure
+import { useModalFocusTrap } from "@/hooks/useModalFocusTrap";
+import ExcelJS from "exceljs";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+
+/* ============================================================
+   TYPES
+   ============================================================ */
 
 interface SubjectResult {
   id: number;
@@ -17,6 +24,11 @@ interface SubjectResult {
   status: "completed" | "pending" | "in-progress";
 }
 
+interface StudentAnswer {
+  questionNo: number;
+  answer: string;
+}
+
 interface StudentScript {
   id: number;
   studentName: string;
@@ -24,12 +36,145 @@ interface StudentScript {
   score: number;
   status: "marked" | "pending" | "in-progress";
   submittedAt: string;
+  answers?: StudentAnswer[]; // only present/used for theory subjects
 }
 
 interface StatusMessage {
   type: "success" | "error" | "warning";
   text: string;
 }
+
+/* ============================================================
+   EXPORT HELPERS
+   These are plain functions, kept outside the component so
+   they don't get recreated every render. In a bigger app you'd
+   move this whole block into e.g. lib/resultExport.ts and
+   import { generateObjectiveExcel, generateTheoryScriptPDF,
+   generateAllTheoryScriptsPDF } from "@/lib/resultExport";
+   ============================================================ */
+
+// ---------- OBJECTIVE / MIXED -> Excel (bold headers, class/subject/date) ----------
+async function generateObjectiveExcel(
+  className: string,
+  subject: SubjectResult,
+  students: StudentScript[],
+) {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Results");
+
+  sheet.mergeCells("A1:D1");
+  sheet.getCell("A1").value = className;
+  sheet.getCell("A1").font = { bold: true, size: 14 };
+
+  sheet.mergeCells("A2:D2");
+  sheet.getCell("A2").value = subject.subject;
+  sheet.getCell("A2").font = { bold: true, size: 12 };
+
+  sheet.mergeCells("A3:D3");
+  sheet.getCell("A3").value = `Exam Type: ${subject.examType}`;
+  sheet.getCell("A3").font = { bold: true };
+
+  sheet.mergeCells("A4:D4");
+  sheet.getCell("A4").value = `Date: ${new Date().toLocaleDateString()}`;
+  sheet.getCell("A4").font = { bold: true };
+
+  sheet.addRow([]); // spacer row
+
+  const headerRow = sheet.addRow(["Admission No.", "Student Name", "Score (%)", "Status"]);
+  headerRow.font = { bold: true };
+  headerRow.eachCell((cell) => {
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8EEF5" } };
+  });
+
+  students.forEach((s) => {
+    sheet.addRow([s.admissionNo, s.studentName, s.score > 0 ? s.score : "Not marked", s.status]);
+  });
+
+  sheet.columns.forEach((col) => {
+    col.width = 24;
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${className}_${subject.subject}_Results.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---------- THEORY -> PDF script (no score — this is the unmarked script) ----------
+function addScriptHeader(
+  doc: jsPDF,
+  className: string,
+  subject: SubjectResult,
+  student: StudentScript,
+) {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.text(className, 105, 15, { align: "center" });
+
+  doc.setFontSize(13);
+  doc.text(subject.subject, 105, 23, { align: "center" });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.text(`Exam Type: Theory`, 14, 33);
+  doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 39);
+  doc.text(`Student: ${student.studentName}`, 14, 45);
+  doc.text(`Admission No: ${student.admissionNo}`, 14, 51);
+}
+
+function generateTheoryScriptPDF(
+  className: string,
+  subject: SubjectResult,
+  student: StudentScript,
+) {
+  const doc = new jsPDF();
+  addScriptHeader(doc, className, subject, student);
+
+  autoTable(doc, {
+    startY: 58,
+    head: [["Q. No.", "Answer"]],
+    body: (student.answers ?? []).map((a) => [a.questionNo, a.answer]),
+    styles: { fontSize: 10, cellPadding: 3, valign: "top" },
+    headStyles: { fillColor: [26, 58, 92], textColor: 255, fontStyle: "bold" },
+    columnStyles: { 0: { cellWidth: 20 } },
+  });
+
+  doc.save(`${student.admissionNo}_${subject.subject}_Script.pdf`);
+}
+
+function generateAllTheoryScriptsPDF(
+  className: string,
+  subject: SubjectResult,
+  students: StudentScript[],
+) {
+  const doc = new jsPDF();
+
+  students.forEach((student, idx) => {
+    if (idx > 0) doc.addPage();
+    addScriptHeader(doc, className, subject, student);
+
+    autoTable(doc, {
+      startY: 58,
+      head: [["Q. No.", "Answer"]],
+      body: (student.answers ?? []).map((a) => [a.questionNo, a.answer]),
+      styles: { fontSize: 10, cellPadding: 3, valign: "top" },
+      headStyles: { fillColor: [26, 58, 92], textColor: 255, fontStyle: "bold" },
+      columnStyles: { 0: { cellWidth: 20 } },
+    });
+  });
+
+  doc.save(`${className}_${subject.subject}_All_Scripts.pdf`);
+}
+
+/* ============================================================
+   COMPONENT
+   ============================================================ */
 
 const ClassResultsPage: React.FC = () => {
   const params = useParams();
@@ -130,6 +275,8 @@ const ClassResultsPage: React.FC = () => {
     },
   ]);
 
+  // Mock students — note the `answers` array only matters for theory subjects.
+  // In production this would come from the API scoped to the selected subject.
   const [studentScripts] = useState<StudentScript[]>([
     {
       id: 1,
@@ -138,6 +285,18 @@ const ClassResultsPage: React.FC = () => {
       score: 85,
       status: "marked",
       submittedAt: "2025-06-23 10:30 AM",
+      answers: [
+        {
+          questionNo: 1,
+          answer:
+            "Photosynthesis is the process by which green plants convert light energy, usually from the sun, into chemical energy stored in glucose. It occurs mainly in the chloroplasts using chlorophyll.",
+        },
+        {
+          questionNo: 2,
+          answer:
+            "The mitochondria is referred to as the powerhouse of the cell because it generates most of the cell's ATP through cellular respiration.",
+        },
+      ],
     },
     {
       id: 2,
@@ -146,6 +305,18 @@ const ClassResultsPage: React.FC = () => {
       score: 72,
       status: "marked",
       submittedAt: "2025-06-23 10:15 AM",
+      answers: [
+        {
+          questionNo: 1,
+          answer:
+            "Photosynthesis converts sunlight into chemical energy in the form of glucose, releasing oxygen as a by-product.",
+        },
+        {
+          questionNo: 2,
+          answer:
+            "Mitochondria produce energy for the cell through respiration, converting glucose and oxygen into ATP.",
+        },
+      ],
     },
     {
       id: 3,
@@ -154,6 +325,10 @@ const ClassResultsPage: React.FC = () => {
       score: 0,
       status: "pending",
       submittedAt: "2025-06-23 11:00 AM",
+      answers: [
+        { questionNo: 1, answer: "Plants use sunlight to make food using their leaves." },
+        { questionNo: 2, answer: "Mitochondria help the cell breathe and make energy." },
+      ],
     },
     {
       id: 4,
@@ -162,6 +337,18 @@ const ClassResultsPage: React.FC = () => {
       score: 90,
       status: "marked",
       submittedAt: "2025-06-23 09:45 AM",
+      answers: [
+        {
+          questionNo: 1,
+          answer:
+            "Photosynthesis is a biochemical process where plants, algae, and some bacteria synthesize glucose from carbon dioxide and water using light energy captured by chlorophyll.",
+        },
+        {
+          questionNo: 2,
+          answer:
+            "Mitochondria are double-membraned organelles that carry out aerobic respiration, producing ATP that powers cellular activities.",
+        },
+      ],
     },
     {
       id: 5,
@@ -170,6 +357,10 @@ const ClassResultsPage: React.FC = () => {
       score: 0,
       status: "in-progress",
       submittedAt: "2025-06-23 11:30 AM",
+      answers: [
+        { questionNo: 1, answer: "Photosynthesis happens in the leaf using sunlight and water." },
+        { questionNo: 2, answer: "Mitochondria gives the cell power." },
+      ],
     },
   ]);
 
@@ -205,26 +396,44 @@ const ClassResultsPage: React.FC = () => {
     setShowScriptModal(true);
   };
 
+  // Single student -> PDF script (theory only; this button only shows for theory subjects)
   const handleViewStudentScript = (student: StudentScript) => {
-    // TODO (integration): open the real PDF viewer / trigger the actual download.
-    setStatusMessage({
-      type: "success",
-      text: `Downloading script for ${student.studentName} (${student.admissionNo}).`,
-    });
+    if (!selectedSubject) return;
+    try {
+      generateTheoryScriptPDF(className, selectedSubject, student);
+      setStatusMessage({
+        type: "success",
+        text: `Downloaded script for ${student.studentName} (${student.admissionNo}).`,
+      });
+    } catch (err) {
+      setStatusMessage({ type: "error", text: "Could not generate the script PDF." });
+    }
     setTimeout(() => setStatusMessage(null), 4000);
   };
 
-  const handleDownloadClassResult = (subject: SubjectResult) => {
+  // Subject-level download: routes to Excel (objective/mixed) or PDF scripts (theory)
+  const handleDownloadClassResult = async (subject: SubjectResult) => {
     setIsLoading(true);
-    // TODO (integration): trigger the actual PDF generation/download.
-    setTimeout(() => {
+    try {
+      if (subject.examType === "theory") {
+        generateAllTheoryScriptsPDF(className, subject, studentScripts);
+        setStatusMessage({
+          type: "success",
+          text: `Downloaded all student scripts for ${subject.subject}.`,
+        });
+      } else {
+        await generateObjectiveExcel(className, subject, studentScripts);
+        setStatusMessage({
+          type: "success",
+          text: `Downloaded ${subject.subject} results for ${className}.`,
+        });
+      }
+    } catch (err) {
+      setStatusMessage({ type: "error", text: "Something went wrong generating the file." });
+    } finally {
       setIsLoading(false);
-      setStatusMessage({
-        type: "success",
-        text: `Downloading ${subject.subject} results for ${className}.`,
-      });
       setTimeout(() => setStatusMessage(null), 4000);
-    }, 1000);
+    }
   };
 
   const filteredScripts = studentScripts.filter(
@@ -404,9 +613,13 @@ const ClassResultsPage: React.FC = () => {
                         <button
                           onClick={() => handleDownloadClassResult(subject)}
                           disabled={isLoading}
-                          aria-label={`Download PDF results for ${subject.subject}`}
+                          aria-label={
+                            subject.examType === "theory"
+                              ? `Download all student scripts for ${subject.subject}`
+                              : `Download spreadsheet results for ${subject.subject}`
+                          }
                           className="text-sm bg-[#1A3A5C] hover:bg-[#14304D] text-white px-3 py-1 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] disabled:opacity-50">
-                          Download PDF
+                          {subject.examType === "theory" ? "Download Scripts" : "Download Results"}
                         </button>
                         {subject.examType === "theory" && (
                           <button
@@ -426,7 +639,7 @@ const ClassResultsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Student Scripts Modal */}
+      {/* Student Scripts Modal (theory subjects only) */}
       {showScriptModal && selectedSubject && (
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
@@ -488,11 +701,6 @@ const ClassResultsPage: React.FC = () => {
                       <th
                         scope="col"
                         className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                        Score
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
                         Status
                       </th>
                       <th
@@ -514,12 +722,6 @@ const ClassResultsPage: React.FC = () => {
                         <td className="px-4 py-3 text-sm font-medium text-[#1A3A5C]">
                           {student.studentName}
                         </td>
-                        <td className="px-4 py-3 text-sm font-bold">
-                          <span
-                            className={student.score > 0 ? "text-green-600" : "text-yellow-600"}>
-                            {student.score > 0 ? `${student.score}%` : "Not marked"}
-                          </span>
-                        </td>
                         <td className="px-4 py-3">
                           <span
                             className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${getStatusBadgeColor(student.status)}`}>
@@ -530,9 +732,9 @@ const ClassResultsPage: React.FC = () => {
                         <td className="px-4 py-3">
                           <button
                             onClick={() => handleViewStudentScript(student)}
-                            aria-label={`View script for ${student.studentName}, ${student.admissionNo}`}
+                            aria-label={`Download script for ${student.studentName}, ${student.admissionNo}`}
                             className="text-sm bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-purple-500">
-                            View Script
+                            Download Script
                           </button>
                         </td>
                       </tr>
