@@ -10,7 +10,7 @@ import ScoringSection from "@/components/admin/exam-form/ScoringSection";
 import InstructionsSection from "@/components/admin/exam-form/InstructionsSection";
 import QuestionsSection from "@/components/admin/exam-form/QuestionsSection";
 import { useCreateExamWithQuestions } from "@/hooks/useCreateExamWithQuestions";
-import SuccessStateWithQuestions from "@/components/admin/exam-form/SuccessStateWithQuestions";
+import SuccessStateWithQuestions from "@/components/admin/exam-form/uccessStateWithQuestions";
 import ExamDetailsSection from "@/components/admin/exam-form/ExamDetailsSection";
 
 const BackIcon = () => (
