@@ -41,8 +41,6 @@ const studentSchema = new Schema<IStudent>(
     },
     firstName: { type: String, required: [true, "First name is required"], trim: true },
     lastName: { type: String, required: [true, "Last name is required"], trim: true },
-    // Class levels are a fixed, known set (JSS1 -> graduated), so this is a
-    // plain enum rather than a ref to a separate Class collection.
     class: {
       type: String,
       required: [true, "Class is required"],
@@ -84,14 +82,6 @@ const studentSchema = new Schema<IStudent>(
   { timestamps: true },
 );
 
-// Auto-generate the admission number if one wasn't provided, in the format
-// used across the admin frontend (BHS-<year>-<sequence>). Adjust the "BHS"
-// prefix if the school's short code differs.
-//
-// No `next` parameter here on purpose: async pre-save hooks can just
-// return/throw, and Mongoose treats a thrown error the same as calling
-// next(error). This also avoids the "SaveOptions has no call signatures"
-// TS overload issue that turning up when a `next` param is declared.
 studentSchema.pre("save", async function (this: IStudent) {
   if (this.isNew && !this.admissionNumber) {
     const year = new Date().getFullYear();
