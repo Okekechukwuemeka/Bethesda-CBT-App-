@@ -23,9 +23,25 @@ export interface IExam extends Document {
   totalMarks: number;
   status: ExamStatus;
   instructions?: string;
+  // Code students enter to unlock/access this exam's questions.
+  examCode: string;
+  isCodeActive: boolean;
   createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// 8 characters, excluding easily-confused ones (0/O, 1/I/L) so students can
+// read a code off a whiteboard or printout without ambiguity.
+const CODE_CHARSET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const CODE_LENGTH = 6;
+
+function generateExamCode(): string {
+  let code = "";
+  for (let i = 0; i < CODE_LENGTH; i++) {
+    code += CODE_CHARSET[Math.floor(Math.random() * CODE_CHARSET.length)];
+  }
+  return code;
 }
 
 const examSchema = new Schema<IExam>(
@@ -78,6 +94,17 @@ const examSchema = new Schema<IExam>(
       default: "Scheduled",
     },
     instructions: { type: String, trim: true },
+    examCode: {
+      type: String,
+      unique: true,
+      trim: true,
+      uppercase: true,
+      // Not `required` at the schema level since we auto-generate it in
+      // pre-save when left blank — see below.
+    },
+    // Lets an admin disable access (e.g. after the exam window closes)
+    // without deleting or regenerating the code.
+    isCodeActive: { type: Boolean, default: true },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: "Admin",
@@ -86,6 +113,24 @@ const examSchema = new Schema<IExam>(
   },
   { timestamps: true },
 );
+
+// Auto-generate a unique access code when one isn't supplied, retrying on
+// the rare collision. `this.constructor` is used instead of the exported
+// `Exam` binding to sidestep referencing a const before it's initialized.
+examSchema.pre("save", async function (this: IExam) {
+  if (this.examCode) return;
+
+  const ExamModel = this.constructor as mongoose.Model<IExam>;
+  let code = generateExamCode();
+  let attempts = 0;
+  while (await ExamModel.exists({ examCode: code })) {
+    if (++attempts > 10) {
+      throw new Error("Could not generate a unique exam code, please retry");
+    }
+    code = generateExamCode();
+  }
+  this.examCode = code;
+});
 
 // One "row" per subject+class+term+type on the Exams page, so guard against
 // accidental duplicates (e.g. two "Objective" Chemistry exams for JSS1 First
