@@ -1,4 +1,5 @@
 import mongoose, { Schema, models, model, Document } from "mongoose";
+import bcrypt from "bcryptjs";
 import { CLASS_LEVELS, ClassLevel } from "./constants";
 
 export interface ICompletedExam {
@@ -17,6 +18,8 @@ export interface IClassHistoryEntry {
 
 export interface IStudent extends Document {
   admissionNumber: string;
+  password: string;
+  mustChangePassword: boolean;
   firstName: string;
   lastName: string;
   class: ClassLevel;
@@ -29,6 +32,7 @@ export interface IStudent extends Document {
   classHistory: IClassHistoryEntry[];
   createdAt: Date;
   updatedAt: Date;
+  comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
 const studentSchema = new Schema<IStudent>(
@@ -39,8 +43,16 @@ const studentSchema = new Schema<IStudent>(
       unique: true,
       trim: true,
     },
+    password: {
+      type: String,
+      required: [true, "Password is required"],
+      minlength: [6, "Password must be at least 6 characters"],
+      select: false,
+    },
+    mustChangePassword: { type: Boolean, default: true },
     firstName: { type: String, required: [true, "First name is required"], trim: true },
     lastName: { type: String, required: [true, "Last name is required"], trim: true },
+
     class: {
       type: String,
       required: [true, "Class is required"],
@@ -89,6 +101,32 @@ studentSchema.pre("save", async function (this: IStudent) {
     this.admissionNumber = `BHS-${year}-${String(count + 1).padStart(3, "0")}`;
   }
 });
+
+function generateStudentPassword(): string {
+  // 6 digits, zero-padded, e.g. "042817".
+  return String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
+}
+
+studentSchema.pre("validate", function (this: IStudent) {
+  if (this.isNew && !this.password) {
+    const plain = generateStudentPassword();
+    this.password = plain;
+    this.$locals.plainPassword = plain;
+  }
+});
+
+studentSchema.pre("save", async function (this: IStudent) {
+  if (!this.isModified("password")) return;
+  const salt = await bcrypt.genSalt(12);
+  this.password = await bcrypt.hash(this.password, salt);
+});
+
+studentSchema.methods.comparePassword = async function (
+  this: IStudent,
+  candidatePassword: string,
+): Promise<boolean> {
+  return bcrypt.compare(candidatePassword, this.password);
+};
 
 studentSchema.virtual("fullName").get(function (this: IStudent) {
   return `${this.firstName} ${this.lastName}`;
