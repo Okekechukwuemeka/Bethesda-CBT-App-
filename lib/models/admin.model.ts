@@ -37,10 +37,8 @@ const adminSchema = new Schema<IAdmin>(
   { timestamps: true },
 );
 
-// Hash password before saving, only when it's actually changed.
 adminSchema.pre("save", async function (this: IAdmin) {
   if (!this.isModified("password")) return;
-
   const salt = await bcrypt.genSalt(12);
   this.password = await bcrypt.hash(this.password, salt);
 });
