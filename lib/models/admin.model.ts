@@ -15,8 +15,6 @@ export interface IAdmin extends Document {
 
 const adminSchema = new Schema<IAdmin>(
   {
-    // Admins log in with a username, never an email — keep this the single
-    // source of truth for login identity.
     username: {
       type: String,
       required: [true, "Username is required"],
@@ -40,15 +38,11 @@ const adminSchema = new Schema<IAdmin>(
 );
 
 // Hash password before saving, only when it's actually changed.
-adminSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
-  try {
-    const salt = await bcrypt.genSalt(12);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    next(error as Error);
-  }
+adminSchema.pre("save", async function (this: IAdmin) {
+  if (!this.isModified("password")) return;
+
+  const salt = await bcrypt.genSalt(12);
+  this.password = await bcrypt.hash(this.password, salt);
 });
 
 adminSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
