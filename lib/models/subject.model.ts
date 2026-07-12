@@ -17,6 +17,7 @@ const subjectSchema = new Schema<ISubject>(
       trim: true,
       unique: true,
     },
+    // Short code for scripts/exports, e.g. "CHEM", "PHY", "MATH".
     code: {
       type: String,
       required: [true, "Subject code is required"],

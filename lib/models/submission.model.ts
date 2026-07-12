@@ -1,95 +1,100 @@
 import mongoose, { Schema, models, model, Document } from "mongoose";
-import { QUESTION_TYPES, QuestionType } from "./constants";
-import { Exam } from "./exam.model";
+import { SUBMISSION_STATUSES, SubmissionStatus } from "./constants";
 
-export interface IQuestion extends Document {
+export interface IAnswerRecord {
+  question: mongoose.Types.ObjectId;
+  selectedOption?: string; // objective answer
+  textAnswer?: string; // typed theory answer
+  isCorrect?: boolean; // auto-computed for objective
+  marksAwarded?: number;
+  // Client-side timestamp (ms since epoch) of when the student last edited
+  // this answer, sent by the offline-sync client. Lets the sync endpoint
+  // ignore a stale write that arrives after a newer one (e.g. two tabs, or
+  // a queued offline write landing after the student already changed the
+  // answer again once back online).
+  updatedAt?: number;
+}
+
+export interface ISubmission extends Document {
   exam: mongoose.Types.ObjectId;
-  text: string;
-  type: QuestionType;
-  marks: number;
-  options?: string[]; // only used when type === "Objective"
-  correctAnswer?: string; // only used when type === "Objective"
-  order: number;
+  student: mongoose.Types.ObjectId;
+  answers: IAnswerRecord[];
+  // Scanned/uploaded theory script (PDF or image), shown as "Download Script"
+  // in the Student Scripts modal.
+  scriptUrl?: string;
+  status: SubmissionStatus;
+  score: number;
+  totalMarks: number;
+  grade?: string;
+  startedAt?: Date;
+  submittedAt?: Date;
+  markedAt?: Date;
+  markedBy?: mongoose.Types.ObjectId;
+  // Last time the offline-sync endpoint successfully wrote answers for
+  // this submission. Purely informational (e.g. for an admin "last seen"
+  // column) - the timer itself is always derived from startedAt, never
+  // from this.
+  lastSyncedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const questionSchema = new Schema<IQuestion>(
+const submissionSchema = new Schema<ISubmission>(
   {
     exam: {
       type: Schema.Types.ObjectId,
       ref: "Exam",
       required: [true, "Exam is required"],
     },
-    text: {
+    student: {
+      type: Schema.Types.ObjectId,
+      ref: "Student",
+      required: [true, "Student is required"],
+    },
+    answers: [
+      {
+        question: { type: Schema.Types.ObjectId, ref: "Question" },
+        selectedOption: String,
+        textAnswer: String,
+        isCorrect: Boolean,
+        marksAwarded: Number,
+        updatedAt: Number,
+      },
+    ],
+    scriptUrl: { type: String, trim: true },
+    status: {
       type: String,
-      required: [true, "Question text is required"],
-      trim: true,
+      enum: { values: SUBMISSION_STATUSES, message: "{VALUE} is not a valid status" },
+      default: "Not Started",
     },
-    type: {
-      type: String,
-      required: [true, "Question type is required"],
-      enum: { values: QUESTION_TYPES, message: "{VALUE} is not a valid question type" },
-    },
-    marks: {
-      type: Number,
-      required: [true, "Marks is required"],
-      min: [1, "Marks must be at least 1"],
-    },
-    options: {
-      type: [String],
-      default: undefined,
-    },
-    correctAnswer: { type: String, trim: true },
-    order: { type: Number, default: 0 },
+    score: { type: Number, default: 0, min: 0 },
+    totalMarks: { type: Number, default: 0, min: 0 },
+    grade: { type: String, trim: true },
+    startedAt: Date,
+    submittedAt: Date,
+    markedAt: Date,
+    markedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
+    lastSyncedAt: Date,
   },
   { timestamps: true },
 );
 
-// Objective questions need options + a correct answer to be auto-gradable;
-// theory questions are graded manually from the uploaded script, so those
-// fields don't apply. Enforced here instead of relying on the frontend form
-// alone, since the API could be hit directly.
-questionSchema.pre("validate", async function (this: IQuestion) {
-  if (this.type === "Objective") {
-    if (!this.options || this.options.length < 2) {
-      throw new Error("Objective questions require at least 2 options");
-    }
-    if (!this.correctAnswer) {
-      throw new Error("Objective questions require a correct answer");
-    }
-    if (!this.options.includes(this.correctAnswer)) {
-      throw new Error("Correct answer must be one of the provided options");
-    }
+// One submission per student per exam.
+submissionSchema.index({ exam: 1, student: 1 }, { unique: true });
+submissionSchema.index({ exam: 1, status: 1 });
+
+// Auto-grade objective answers and roll the score up whenever answers change.
+// Theory answers are left alone here since those are scored manually via
+// markedBy/markedAt once a human reviews the uploaded script.
+submissionSchema.pre("save", async function (this: ISubmission) {
+  if (!this.isModified("answers") || this.answers.length === 0) return;
+
+  const graded = this.answers.filter((a) => typeof a.isCorrect === "boolean");
+  if (graded.length > 0) {
+    this.score = graded.reduce((sum, a) => sum + (a.marksAwarded ?? 0), 0);
   }
 });
 
-// Keep Exam.questionCount / totalMarks in sync so the Exams list page can
-// read them directly without an aggregation on every load.
-async function syncExamTotals(examId: mongoose.Types.ObjectId) {
-  const stats = await model<IQuestion>("Question").aggregate([
-    { $match: { exam: examId } },
-    { $group: { _id: null, count: { $sum: 1 }, totalMarks: { $sum: "$marks" } } },
-  ]);
-  const { count = 0, totalMarks = 0 } = stats[0] ?? {};
-  await Exam.findByIdAndUpdate(examId, { questionCount: count, totalMarks });
-}
-
-questionSchema.post("save", async function (doc) {
-  await syncExamTotals(doc.exam as mongoose.Types.ObjectId);
-});
-questionSchema.post("findOneAndDelete", async function (doc: IQuestion | null) {
-  if (doc) await syncExamTotals(doc.exam as mongoose.Types.ObjectId);
-});
-questionSchema.post(
-  "deleteOne",
-  { document: true, query: false },
-  async function (this: IQuestion) {
-    await syncExamTotals(this.exam as mongoose.Types.ObjectId);
-  },
-);
-
-questionSchema.index({ exam: 1, order: 1 });
-
-export const Question =
-  (models.Question as mongoose.Model<IQuestion>) || model<IQuestion>("Question", questionSchema);
+export const Submission =
+  (models.Submission as mongoose.Model<ISubmission>) ||
+  model<ISubmission>("Submission", submissionSchema);

@@ -1,26 +1,26 @@
 import mongoose, { Schema, models, model, Document } from "mongoose";
-import { QUESTION_TYPES, QuestionType } from "./constants";
-import { Exam } from "./exam.model";
+import { QUESTION_TYPES, QuestionType, CLASS_LEVELS, ClassLevel } from "./constants";
 
+// Questions live in a reusable bank, independent of any one exam - an exam
+// just references the ones it wants (see Exam.questions). That's why a
+// question needs its own subject/class here: previously that info was
+// borrowed from whichever exam it belonged to, but a bank question isn't
+// scoped to a single exam anymore.
 export interface IQuestion extends Document {
-  exam: mongoose.Types.ObjectId;
   text: string;
   type: QuestionType;
+  subject: mongoose.Types.ObjectId;
+  class: ClassLevel;
   marks: number;
   options?: string[]; // only used when type === "Objective"
   correctAnswer?: string; // only used when type === "Objective"
-  order: number;
+  createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
 
 const questionSchema = new Schema<IQuestion>(
   {
-    exam: {
-      type: Schema.Types.ObjectId,
-      ref: "Exam",
-      required: [true, "Exam is required"],
-    },
     text: {
       type: String,
       required: [true, "Question text is required"],
@@ -30,6 +30,16 @@ const questionSchema = new Schema<IQuestion>(
       type: String,
       required: [true, "Question type is required"],
       enum: { values: QUESTION_TYPES, message: "{VALUE} is not a valid question type" },
+    },
+    subject: {
+      type: Schema.Types.ObjectId,
+      ref: "Subject",
+      required: [true, "Subject is required"],
+    },
+    class: {
+      type: String,
+      required: [true, "Class is required"],
+      enum: { values: CLASS_LEVELS, message: "{VALUE} is not a valid class level" },
     },
     marks: {
       type: Number,
@@ -41,7 +51,11 @@ const questionSchema = new Schema<IQuestion>(
       default: undefined,
     },
     correctAnswer: { type: String, trim: true },
-    order: { type: Number, default: 0 },
+    createdBy: {
+      type: Schema.Types.ObjectId,
+      ref: "Admin",
+      required: [true, "createdBy is required"],
+    },
   },
   { timestamps: true },
 );
@@ -64,32 +78,9 @@ questionSchema.pre("validate", async function (this: IQuestion) {
   }
 });
 
-// Keep Exam.questionCount / totalMarks in sync so the Exams list page can
-// read them directly without an aggregation on every load.
-async function syncExamTotals(examId: mongoose.Types.ObjectId) {
-  const stats = await model<IQuestion>("Question").aggregate([
-    { $match: { exam: examId } },
-    { $group: { _id: null, count: { $sum: 1 }, totalMarks: { $sum: "$marks" } } },
-  ]);
-  const { count = 0, totalMarks = 0 } = stats[0] ?? {};
-  await Exam.findByIdAndUpdate(examId, { questionCount: count, totalMarks });
-}
-
-questionSchema.post("save", async function (doc) {
-  await syncExamTotals(doc.exam as mongoose.Types.ObjectId);
-});
-questionSchema.post("findOneAndDelete", async function (doc: IQuestion | null) {
-  if (doc) await syncExamTotals(doc.exam as mongoose.Types.ObjectId);
-});
-questionSchema.post(
-  "deleteOne",
-  { document: true, query: false },
-  async function (this: IQuestion) {
-    await syncExamTotals(this.exam as mongoose.Types.ObjectId);
-  },
-);
-
-questionSchema.index({ exam: 1, order: 1 });
+// Supports the bank's main filter combinations (by subject+class, by type).
+questionSchema.index({ subject: 1, class: 1 });
+questionSchema.index({ type: 1 });
 
 export const Question =
   (models.Question as mongoose.Model<IQuestion>) || model<IQuestion>("Question", questionSchema);

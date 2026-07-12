@@ -10,6 +10,11 @@ import {
   ExamStatus,
 } from "./constants";
 
+export interface IExamQuestionRef {
+  question: mongoose.Types.ObjectId;
+  order: number;
+}
+
 export interface IExam extends Document {
   title: string;
   subject: mongoose.Types.ObjectId;
@@ -19,6 +24,7 @@ export interface IExam extends Document {
   type: ExamType;
   examDate: Date;
   duration: number; // minutes
+  questions: IExamQuestionRef[];
   questionCount: number;
   totalMarks: number;
   status: ExamStatus;
@@ -34,7 +40,7 @@ export interface IExam extends Document {
 // 8 characters, excluding easily-confused ones (0/O, 1/I/L) so students can
 // read a code off a whiteboard or printout without ambiguity.
 const CODE_CHARSET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-const CODE_LENGTH = 6;
+const CODE_LENGTH = 8;
 
 function generateExamCode(): string {
   let code = "";
@@ -83,9 +89,13 @@ const examSchema = new Schema<IExam>(
       required: [true, "Duration is required"],
       min: [1, "Duration must be at least 1 minute"],
     },
-    // Denormalized so list views (like the Exams page) don't need to
-    // populate + count the Question collection on every render. Kept in
-    // sync by the Question model's post-save/post-remove hooks.
+    questions: [
+      {
+        question: { type: Schema.Types.ObjectId, ref: "Question", required: true },
+        order: { type: Number, default: 0 },
+      },
+    ],
+
     questionCount: { type: Number, default: 0, min: 0 },
     totalMarks: { type: Number, default: 0, min: 0 },
     status: {
@@ -137,5 +147,31 @@ examSchema.pre("save", async function (this: IExam) {
 // Term). Remove this if you'll ever legitimately need more than one.
 examSchema.index({ subject: 1, class: 1, term: 1, academicYear: 1, type: 1 }, { unique: true });
 examSchema.index({ class: 1, status: 1 });
+
+// Recomputes questionCount/totalMarks from whichever bank questions are
+// currently attached. Called explicitly (not via a hook) from the
+// attach/detach question route handlers, since Question is a shared bank
+// entity now - there's no single "this question's exam changed" event to
+// hook into the way there was when questions belonged to one exam.
+export async function recomputeExamTotals(examId: mongoose.Types.ObjectId | string) {
+  // Imported lazily to avoid a circular import at module-load time
+  // (question.model.ts doesn't import this file, but keeping the import
+  // local here makes that non-dependency explicit).
+  const { Question } = await import("./question.model");
+
+  const exam = await Exam.findById(examId);
+  if (!exam) return;
+
+  const questionIds = exam.questions.map((q) => q.question);
+  if (questionIds.length === 0) {
+    exam.questionCount = 0;
+    exam.totalMarks = 0;
+  } else {
+    const questions = await Question.find({ _id: { $in: questionIds } }).select("marks");
+    exam.questionCount = questions.length;
+    exam.totalMarks = questions.reduce((sum, q) => sum + q.marks, 0);
+  }
+  await exam.save();
+}
 
 export const Exam = (models.Exam as mongoose.Model<IExam>) || model<IExam>("Exam", examSchema);

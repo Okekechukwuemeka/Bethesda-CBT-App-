@@ -19,6 +19,9 @@ export interface IClassHistoryEntry {
 export interface IStudent extends Document {
   admissionNumber: string;
   password: string;
+  // Forces a password reset on first login — set true whenever an admin
+  // assigns/resets a student's password, so a shared/guessed initial
+  // password can't be reused indefinitely.
   mustChangePassword: boolean;
   firstName: string;
   lastName: string;
@@ -52,7 +55,8 @@ const studentSchema = new Schema<IStudent>(
     mustChangePassword: { type: Boolean, default: true },
     firstName: { type: String, required: [true, "First name is required"], trim: true },
     lastName: { type: String, required: [true, "Last name is required"], trim: true },
-
+    // Class levels are a fixed, known set (JSS1 -> graduated), so this is a
+    // plain enum rather than a ref to a separate Class collection.
     class: {
       type: String,
       required: [true, "Class is required"],
@@ -94,6 +98,14 @@ const studentSchema = new Schema<IStudent>(
   { timestamps: true },
 );
 
+// Auto-generate the admission number if one wasn't provided, in the format
+// used across the admin frontend (BHS-<year>-<sequence>). Adjust the "BHS"
+// prefix if the school's short code differs.
+//
+// No `next` parameter here on purpose: async pre-save hooks can just
+// return/throw, and Mongoose treats a thrown error the same as calling
+// next(error). This also avoids the "SaveOptions has no call signatures"
+// TS overload issue that turning up when a `next` param is declared.
 studentSchema.pre("save", async function (this: IStudent) {
   if (this.isNew && !this.admissionNumber) {
     const year = new Date().getFullYear();
@@ -107,6 +119,17 @@ function generateStudentPassword(): string {
   return String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
 }
 
+// Auto-generate a 6-digit password when an admin creates a student without
+// setting one. This runs pre-validate (not pre-save) so the plaintext
+// password exists *before* Mongoose checks the `required`/`minlength`
+// rules on the field — pre-save hooks run after validation, which would be
+// too late.
+//
+// The plaintext is stashed on `$locals`, a Mongoose scratch space that is
+// never persisted to the database. Read it immediately after `.save()` in
+// your admin "create student" handler to display/print it — once the
+// process moves on (or the document is re-fetched), it's gone, since only
+// the bcrypt hash is stored.
 studentSchema.pre("validate", function (this: IStudent) {
   if (this.isNew && !this.password) {
     const plain = generateStudentPassword();
@@ -115,6 +138,10 @@ studentSchema.pre("validate", function (this: IStudent) {
   }
 });
 
+// Hash password before saving, only when it's actually changed — same
+// pattern as Admin. Runs as its own pre-save hook so it stays independent
+// of the admission-number generation above (Mongoose runs pre-save hooks
+// in the order they're registered).
 studentSchema.pre("save", async function (this: IStudent) {
   if (!this.isModified("password")) return;
   const salt = await bcrypt.genSalt(12);

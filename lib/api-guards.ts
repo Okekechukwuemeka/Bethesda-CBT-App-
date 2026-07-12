@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { getServerSession, Session } from "next-auth";
 import { authOptions } from "./auth";
 
-type GuardResult = { ok: true; session: Session } | { ok: false; response: NextResponse };
+type GuardResult =
+  | { ok: true; session: Session }
+  | { ok: false; response: NextResponse };
 
 // Wrap the start of any admin-only route handler with:
 //

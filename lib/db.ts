@@ -6,24 +6,24 @@ if (!MONGODB_URI) {
   throw new Error("Missing MONGODB_URI environment variable");
 }
 
+// Next.js reloads modules in dev, which would otherwise open a fresh
+// connection on every request/hot-reload. Cache it on the global object so
+// it survives across those reloads.
 interface MongooseCache {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
 }
 
-// Cache the connection on `global` so hot-reloads in dev and repeated invocations in production reuse it.
 declare global {
   // eslint-disable-next-line no-var
-  var mongooseCache: MongooseCache | undefined;
+  var _mongooseCache: MongooseCache | undefined;
 }
 
-const cached: MongooseCache = global.mongooseCache ?? { conn: null, promise: null };
-global.mongooseCache = cached;
+const cached: MongooseCache = global._mongooseCache ?? { conn: null, promise: null };
+global._mongooseCache = cached;
 
 export async function connectDB(): Promise<typeof mongoose> {
-  if (cached.conn) {
-    return cached.conn;
-  }
+  if (cached.conn) return cached.conn;
 
   if (!cached.promise) {
     cached.promise = mongoose.connect(MONGODB_URI as string, {
@@ -31,12 +31,6 @@ export async function connectDB(): Promise<typeof mongoose> {
     });
   }
 
-  try {
-    cached.conn = await cached.promise;
-  } catch (error) {
-    cached.promise = null;
-    throw error;
-  }
-
+  cached.conn = await cached.promise;
   return cached.conn;
 }
