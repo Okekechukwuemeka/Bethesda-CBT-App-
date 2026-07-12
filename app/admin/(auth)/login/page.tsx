@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import Link from "next/link";
 import Input from "@/components/auth/Input";
 import PasswordInput from "@/components/auth/PasswordInput";
@@ -26,42 +27,50 @@ const AdminLoginPage: React.FC = () => {
     usernameRef.current?.focus();
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatusMessage(null);
+
+    if (!username.trim() || !password.trim()) {
+      setStatusMessage({
+        type: "error",
+        text: "Please enter both username and password.",
+      });
+      return;
+    }
+
     setIsLoading(true);
 
-    // TODO: Replace with NextAuth implementation
-    setTimeout(() => {
-      if (!username.trim() || !password.trim()) {
-        setStatusMessage({
-          type: "error",
-          text: "Please enter both username and password.",
-        });
-        setIsLoading(false);
-        return;
-      }
+    // redirect: false so we control the UX ourselves (show the success
+    // message, then navigate) instead of NextAuth doing a hard redirect.
+    const result = await signIn("admin-login", {
+      username,
+      password,
+      redirect: false,
+    });
 
-      const isValid = username === "admin" && password === "admin123";
+    if (!result || result.error) {
+      setStatusMessage({
+        type: "error",
+        text: "Invalid username or password. Please try again.",
+      });
+      setPassword("");
+      usernameRef.current?.blur();
+      document.getElementById("password")?.focus();
+      setIsLoading(false);
+      return;
+    }
 
-      if (isValid) {
-        setStatusMessage({
-          type: "success",
-          text: "Login successful. Redirecting to dashboard.",
-        });
-        setTimeout(() => {
-          router.push("/admin/dashboard");
-        }, 1500);
-      } else {
-        setStatusMessage({
-          type: "error",
-          text: "Invalid username or password. Please try again.",
-        });
-        setPassword("");
-        document.getElementById("password")?.focus();
-        setIsLoading(false);
-      }
-    }, 800);
+    setStatusMessage({
+      type: "success",
+      text: "Login successful. Redirecting to dashboard.",
+    });
+
+    // router.refresh() forces server components (e.g. anything reading
+    // the session server-side) to pick up the freshly-set cookie before
+    // we navigate, rather than possibly rendering with stale auth state.
+    router.refresh();
+    router.push("/admin");
   };
 
   return (

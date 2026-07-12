@@ -1,0 +1,306 @@
+
+@baseUrl = http://localhost:3000
+
+# --- credentials used throughout this file ---
+@adminUsername = principal
+@adminPassword = TestPassword123
+@adminSetupSecret = eafe19f7a26606744e2616fd14e6ae92baadb5af4c111d9665face943207939d
+
+@subjectName = Chemistry
+@subjectCode = CHEM
+@studentClass = JSS1
+
+
+### ============================================================
+### 1. ADMIN AUTH
+### ============================================================
+
+### 1a. Register the first admin (bootstrap - only works while zero admins exist)
+# @name registerAdmin
+POST {{baseUrl}}/api/admin/register
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{adminPassword}}",
+  "firstName": "Test",
+  "lastName": "Admin",
+  "setupSecret": "{{adminSetupSecret}}"
+}
+
+### 1b. Get a CSRF token (NextAuth requires this before signing in)
+# @name adminCsrf
+GET {{baseUrl}}/api/auth/csrf
+
+### 1c. Sign in as admin - sets the session cookie for every request below
+# @name adminLogin
+POST {{baseUrl}}/api/auth/callback/admin-login?json=true
+Content-Type: application/x-www-form-urlencoded
+
+csrfToken=f3339a23a4ed054ec7980c297cb4149a23061888f1102340cc225acd9116fd4d&username={{adminUsername}}&password={{adminPassword}}&json=true
+
+### 1d. Confirm the session - should show role: "admin"
+# @name adminSession
+GET {{baseUrl}}/api/auth/session
+
+
+### Confirm the session is recognized
+GET {{baseUrl}}/api/auth/session
+Cookie: next-auth.session-token=01cbd7ebcf71c2e0514d56bd4d08e1f2f068482e562ee17b52d56b57017a48ed
+
+### ============================================================
+### 2. SUBJECTS (needed before creating an exam)
+### ============================================================
+
+### 2a. Create a subject
+# @name createSubject
+POST {{baseUrl}}/api/admin/subjects
+Content-Type: application/json
+
+{
+  "name": "{{subjectName}}",
+  "code": "{{subjectCode}}",
+  "description": "Physical and chemical properties of matter"
+}
+
+### 2b. List subjects
+GET {{baseUrl}}/api/admin/subjects
+
+
+### ============================================================
+### 3. STUDENTS
+### ============================================================
+
+### 3a. Create a student - password is auto-generated, capture it below
+# @name createStudent
+POST {{baseUrl}}/api/admin/students
+Content-Type: application/json
+
+{
+  "firstName": "Amaka",
+  "lastName": "Obi",
+  "class": "{{studentClass}}",
+  "gender": "Female"
+}
+
+### 3b. Get all students
+GET {{baseUrl}}/api/admin/students
+
+### 3c. Filter by class
+GET {{baseUrl}}/api/admin/students?class={{studentClass}}
+
+### 3d. Filter by active status
+GET {{baseUrl}}/api/admin/students?status=active
+
+### 3e. Search by name / admission number
+GET {{baseUrl}}/api/admin/students?search=Amaka
+
+
+### ============================================================
+### 4. QUESTION BANK
+### ============================================================
+
+### 4a. Create a single bank question
+# @name createBankQuestion
+POST {{baseUrl}}/api/admin/questions
+Content-Type: application/json
+
+{
+  "text": "What is the pH of a neutral solution?",
+  "type": "Objective",
+  "subject": "6a53e279c715cfd18260d495",
+  "class": "{{studentClass}}",
+  "marks": 5,
+  "options": ["5", "7", "9", "14"],
+  "correctAnswer": "7"
+}
+
+### 4b. Bulk-import into the bank from CSV
+# subject and class apply to the whole batch (see sample-questions.csv)
+# @name bulkImportBank
+POST {{baseUrl}}/api/admin/questions/bulk
+Content-Type: multipart/form-data; boundary=BOUNDARY123
+
+--BOUNDARY123
+Content-Disposition: form-data; name="subject"
+
+{{createSubject.response.parsedBody.subject._id}}
+--BOUNDARY123
+Content-Disposition: form-data; name="class"
+
+{{studentClass}}
+--BOUNDARY123
+Content-Disposition: form-data; name="file"; filename="sample-questions.csv"
+Content-Type: text/csv
+
+< ./sample-questions.csv
+--BOUNDARY123--
+
+### 4c. List all bank questions
+GET {{baseUrl}}/api/admin/questions
+
+### 4d. Filter by type
+GET {{baseUrl}}/api/admin/questions?type=Objective
+
+### 4e. Filter by subject and class
+GET {{baseUrl}}/api/admin/questions?subject={{createSubject.response.parsedBody.subject._id}}&class={{studentClass}}
+
+### 4f. Get a single bank question
+GET {{baseUrl}}/api/admin/questions/{{createBankQuestion.response.parsedBody.question._id}}
+
+### 4g. Edit a bank question
+PATCH {{baseUrl}}/api/admin/questions/{{createBankQuestion.response.parsedBody.question._id}}
+Content-Type: application/json
+
+{
+  "marks": 8
+}
+
+
+### ============================================================
+### 5. EXAMS
+### ============================================================
+
+### 5a. Create an exam
+# @name createExam
+POST {{baseUrl}}/api/admin/exams
+Content-Type: application/json
+
+{
+  "title": "Chemistry First Term Examination",
+  "subject": "6a53e279c715cfd18260d495",
+  "class": "{{studentClass}}",
+  "term": "First Term",
+  "academicYear": "2025/2026",
+  "type": "Objective",
+  "examDate": "2026-08-01T09:00:00.000Z",
+  "duration": 60,
+  "instructions": "Answer all questions."
+}
+
+### 5b. List all exams
+GET {{baseUrl}}/api/admin/exams
+
+### 5c. Filter exams by class/subject/term/type/status
+GET {{baseUrl}}/api/admin/exams?class={{studentClass}}&type=Objective
+
+### 5d. Get a single exam
+GET {{baseUrl}}/api/admin/exams/6a53e76859ae9bf547a06c7d
+
+### 5e. Edit an exam
+PATCH {{baseUrl}}/api/admin/exams/6a53e76859ae9bf547a06c7d
+Content-Type: application/json
+
+{
+  "status": "Scheduled",
+  "instructions": "Answer all questions. No calculators."
+}
+
+
+### ============================================================
+### 6. ATTACHING QUESTIONS TO AN EXAM
+### (both attach-existing and create-new-directly in one call)
+### ============================================================
+
+### 6a. Attach the bank question created in 4a, AND create+attach a brand
+### new question directly on the exam, in the same request
+# @name addQuestionsToExam
+POST {{baseUrl}}/api/admin/exams/6a53e76859ae9bf547a06c7d/questions
+Content-Type: application/json
+
+{
+  "questionIds": ["6a53e5e159ae9bf547a06c7c"],
+  "newQuestions": [
+    {
+      "text": "What gas do plants absorb during photosynthesis?",
+      "type": "Objective",
+      "marks": 5,
+      "options": ["Oxygen", "Carbon dioxide", "Nitrogen", "Hydrogen"],
+      "correctAnswer": "Carbon dioxide"
+    }
+  ]
+}
+
+### 6b. Bulk-import questions straight into the exam (CSV) - inherits the
+### exam's own subject/class automatically, no form fields needed for that
+# @name bulkImportExam
+POST {{baseUrl}}/api/admin/exams/{{createExam.response.parsedBody.exam._id}}/questions/bulk
+Content-Type: multipart/form-data; boundary=BOUNDARY456
+
+--BOUNDARY456
+Content-Disposition: form-data; name="file"; filename="sample-questions.csv"
+Content-Type: text/csv
+
+< ./sample-questions.csv
+--BOUNDARY456--
+
+### 6c. List this exam's attached questions, in order
+# @name examQuestions
+GET {{baseUrl}}/api/admin/exams/6a53e76859ae9bf547a06c7d/questions
+
+### 6d. Detach a question from the exam (does not delete it from the bank)
+DELETE {{baseUrl}}/api/admin/exams/{{createExam.response.parsedBody.exam._id}}/questions/{{createBankQuestion.response.parsedBody.question._id}}
+
+
+### ============================================================
+### 7. RESULTS
+### ============================================================
+
+### 7a. All results (one row per exam)
+GET {{baseUrl}}/api/admin/results
+
+### 7b. Filter by class
+GET {{baseUrl}}/api/admin/results?class={{studentClass}}
+
+### 7c. Filter by exam type
+GET {{baseUrl}}/api/admin/results?type=Objective
+
+
+### ============================================================
+### 8. STUDENT AUTH + THE OFFLINE-RESILIENT EXAM FLOW
+### ============================================================
+
+### 8a. Get a CSRF token for the student login
+# @name studentCsrf
+GET {{baseUrl}}/api/auth/csrf
+
+### 8b. Sign in as the student created in 3a, using the auto-generated
+### tempPassword captured from that response
+# @name studentLogin
+POST {{baseUrl}}/api/auth/callback/student-login
+Content-Type: application/x-www-form-urlencoded
+
+csrfToken=01cbd7ebcf71c2e0514d56bd4d08e1f2f068482e562ee17b52d56b57017a48ed&admissionNumber=BHS-2026-001&password=170189&json=true
+
+### 8c. Confirm the student session
+GET {{baseUrl}}/api/auth/session
+
+### 8d. Enter the exam code to start the exam
+# (this is the moment the client would normally start writing to
+# IndexedDB - see hooks/useExamSession.ts for that side of the flow)
+# @name startExam
+GET {{baseUrl}}/api/student/exams/7Q6SWUBQ
+
+### 8e. Sync an answer mid-exam (this is what fires every ~15s / on
+### reconnect from the offline client)
+PATCH {{baseUrl}}/api/student/exams/7Q6SWUBQ/sync
+Content-Type: application/json
+
+{
+  "submissionId": "6a53eade59ae9bf547a06c87",
+  "answers": [
+    {
+      "questionId": "6a53e5e159ae9bf547a06c7c",
+      "selectedOption": "7",
+      "updatedAt": {{$timestamp}}
+    }
+  ]
+}
+
+### 8f. Submit the exam
+POST {{baseUrl}}/api/student/exams/7Q6SWUBQ/submit
+Content-Type: application/json
+
+{
+  "submissionId": "6a53eade59ae9bf547a06c87"
+}

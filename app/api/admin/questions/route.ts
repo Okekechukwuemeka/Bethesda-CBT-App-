@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
+import "@/lib/models/subject.model";
 import { requireAdmin } from "@/lib/api-guards";
 import { Question } from "@/lib/models/question.model";
 import { ClassLevel, QuestionType } from "@/lib/models/constants";

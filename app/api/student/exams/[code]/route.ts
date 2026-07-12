@@ -22,9 +22,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ code: s
   if (exam.class !== session.user.class) {
     return NextResponse.json(
       { error: "This exam is not available for your class" },
-      {
-        status: 403,
-      },
+      { status: 403 },
     );
   }
 
@@ -51,9 +49,19 @@ export async function GET(req: NextRequest, context: { params: Promise<{ code: s
     path: "questions.question",
     select: "-correctAnswer",
   });
+
+  // .populate() returns Mongoose Document instances, not plain objects -
+  // spreading a Document directly pulls in its internal machinery ($__,
+  // _doc, isNew, etc.) instead of its actual fields. .toObject() converts
+  // it to a clean plain object first, so the response only contains real
+  // question data (_id, text, options, marks, ...) plus the exam-specific
+  // `order` field.
   const questions = [...populatedExam.questions]
     .sort((a, b) => a.order - b.order)
-    .map((q) => ({ ...(q.question as unknown as Record<string, unknown>), order: q.order }));
+    .map((q) => {
+      const question = q.question as unknown as { toObject: () => Record<string, unknown> };
+      return { ...question.toObject(), order: q.order };
+    });
 
   return NextResponse.json({
     exam: {

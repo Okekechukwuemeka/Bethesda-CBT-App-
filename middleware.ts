@@ -6,6 +6,7 @@ import { getToken } from "next-auth/jwt";
 // must NOT be protected, or visiting them while logged out would redirect
 // to themselves and loop forever.
 const ADMIN_PUBLIC_PATHS = ["/admin/login"];
+const ADMIN_PUBLIC_API_PATHS = ["/api/admin/register"];
 const STUDENT_PUBLIC_PATHS = ["/student/login"];
 
 export async function middleware(req: NextRequest) {
@@ -18,7 +19,8 @@ export async function middleware(req: NextRequest) {
 
   const isAdminRoute =
     (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) &&
-    !ADMIN_PUBLIC_PATHS.includes(pathname);
+    !ADMIN_PUBLIC_PATHS.includes(pathname) &&
+    !ADMIN_PUBLIC_API_PATHS.includes(pathname);
 
   const isStudentRoute =
     (pathname.startsWith("/student") || pathname.startsWith("/api/student")) &&
@@ -52,3 +54,6 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico).*)"],
 };
+// 01cbd7ebcf71c2e0514d56bd4d08e1f2f068482e562ee17b52d56b57017a48ed
+// BHS-2026-001
+// 170189
