@@ -7,44 +7,86 @@ import QuestionBankFilters from "@/components/admin/questions/QuestionBankFilter
 import QuestionBankTable from "@/components/admin/questions/QuestionBankTable";
 import QuestionFormModal from "@/components/admin/questions/QuestionFormModal";
 import BulkImportModal from "@/components/admin/questions/BulkImportModal";
+import ConfirmDeleteModal from "@/components/admin/questions/ConfirmDeleteModal";
+import SubjectFormModal from "@/components/admin/questions/SubjectFormModal";
 
 const QuestionsPage: React.FC = () => {
   const {
-    filteredQuestions,
+    questions,
+    isLoadingQuestions,
+    questionsError,
+    subjects,
+    isLoadingSubjects,
+    filteredCount,
+
+    searchTerm,
+    filterSubject,
+    filterType,
+    filterClass,
+    setSearchTerm,
+    setFilterSubject,
+    setFilterType,
+    setFilterClass,
+
+    statusMessage,
+
     isModalOpen,
     isEditing,
     formData,
     formError,
     isSubmitting,
-    statusMessage,
-    searchTerm,
-    filterSubject,
-    filterType,
-    isImportModalOpen,
-    isImporting,
-    importPreview,
-    selectedFileName,
     formTriggerRef,
-    importTriggerRef,
-    setSearchTerm,
-    setFilterSubject,
-    setFilterType,
     handleInputChange,
     handleOptionChange,
     handleAddQuestion,
     handleEditQuestion,
-    handleDeleteQuestion,
     handleSubmit,
     closeFormModal,
+
+    pendingDelete,
+    isDeleting,
+    deleteError,
+    deleteBlockedExams,
+    deleteTriggerRef,
+    handleDeleteQuestion,
+    closeDeleteModal,
+    confirmDelete,
+    forceConfirmDelete,
+
+    isImportModalOpen,
+    isImporting,
+    selectedFileName,
+    previewRowCount,
+    importSubject,
+    importClass,
+    importError,
+    importRowErrors,
+    importTriggerRef,
+    setImportSubject,
+    setImportClass,
     handleOpenImportModal,
     closeImportModal,
     handleFileUpload,
     confirmImport,
     downloadTemplate,
+
+    isSubjectModalOpen,
+    subjectName,
+    subjectCode,
+    subjectFormError,
+    isSubmittingSubject,
+    subjectTriggerRef,
+    setSubjectName,
+    setSubjectCode,
+    handleOpenSubjectModal,
+    closeSubjectModal,
+    handleSubjectSubmit,
   } = useQuestionBank();
 
   const formModalRef = React.useRef<HTMLDivElement>(null);
   const importModalRef = React.useRef<HTMLDivElement>(null);
+  const deleteModalRef = React.useRef<HTMLDivElement>(null);
+  const subjectModalRef = React.useRef<HTMLDivElement>(null);
 
   useModalFocusTrap(isModalOpen, formModalRef, formTriggerRef, closeFormModal, !isSubmitting);
   useModalFocusTrap(
@@ -54,12 +96,26 @@ const QuestionsPage: React.FC = () => {
     closeImportModal,
     !isImporting,
   );
+  useModalFocusTrap(
+    !!pendingDelete,
+    deleteModalRef,
+    deleteTriggerRef,
+    closeDeleteModal,
+    !isDeleting,
+  );
+  useModalFocusTrap(
+    isSubjectModalOpen,
+    subjectModalRef,
+    subjectTriggerRef,
+    closeSubjectModal,
+    !isSubmittingSubject,
+  );
 
-  const anyModalOpen = isModalOpen || isImportModalOpen;
+  const anyModalOpen = isModalOpen || isImportModalOpen || !!pendingDelete || isSubjectModalOpen;
 
   return (
     <>
-      <div className="space-y-6" inert={anyModalOpen ? ("" as unknown as true) : undefined}>
+      <div className="space-y-6" inert={anyModalOpen}>
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -106,7 +162,7 @@ const QuestionsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Status Message */}
+        {/* Status Message (live region — not a blocking alert()) */}
         {statusMessage && (
           <div
             role={statusMessage.type === "error" ? "alert" : "status"}
@@ -122,20 +178,35 @@ const QuestionsPage: React.FC = () => {
           </div>
         )}
 
+        {questionsError && (
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="p-4 rounded-lg text-sm font-medium bg-red-100 text-red-800 border border-red-300">
+            {questionsError}
+          </div>
+        )}
+
         {/* Filters */}
         <QuestionBankFilters
           searchTerm={searchTerm}
           filterSubject={filterSubject}
           filterType={filterType}
-          filteredCount={filteredQuestions.length}
+          filterClass={filterClass}
+          filteredCount={filteredCount}
+          subjects={subjects}
+          isLoadingSubjects={isLoadingSubjects}
           onSearchChange={setSearchTerm}
           onSubjectChange={setFilterSubject}
           onTypeChange={setFilterType}
+          onClassChange={setFilterClass}
+          onAddSubject={handleOpenSubjectModal}
         />
 
         {/* Questions Table */}
         <QuestionBankTable
-          questions={filteredQuestions}
+          questions={questions}
+          isLoading={isLoadingQuestions}
           onEdit={handleEditQuestion}
           onDelete={handleDeleteQuestion}
         />
@@ -148,6 +219,8 @@ const QuestionsPage: React.FC = () => {
         formData={formData}
         formError={formError}
         isSubmitting={isSubmitting}
+        subjects={subjects}
+        isLoadingSubjects={isLoadingSubjects}
         onChange={handleInputChange}
         onOptionChange={handleOptionChange}
         onSubmit={handleSubmit}
@@ -158,12 +231,45 @@ const QuestionsPage: React.FC = () => {
       <BulkImportModal
         isOpen={isImportModalOpen}
         isImporting={isImporting}
-        importPreview={importPreview}
         selectedFileName={selectedFileName}
+        previewRowCount={previewRowCount}
+        subjects={subjects}
+        isLoadingSubjects={isLoadingSubjects}
+        importSubject={importSubject}
+        importClass={importClass}
+        importError={importError}
+        importRowErrors={importRowErrors}
+        onSubjectChange={setImportSubject}
+        onClassChange={setImportClass}
         onFileUpload={handleFileUpload}
         onConfirmImport={confirmImport}
         onDownloadTemplate={downloadTemplate}
         onCancel={closeImportModal}
+      />
+
+      {/* Delete Confirmation Modal (replaces window.confirm) */}
+      <ConfirmDeleteModal
+        isOpen={!!pendingDelete}
+        questionText={pendingDelete?.text ?? null}
+        isProcessing={isDeleting}
+        error={deleteError}
+        blockedByExams={deleteBlockedExams}
+        onConfirm={confirmDelete}
+        onForceConfirm={forceConfirmDelete}
+        onCancel={closeDeleteModal}
+      />
+
+      {/* Add Subject Modal */}
+      <SubjectFormModal
+        isOpen={isSubjectModalOpen}
+        name={subjectName}
+        code={subjectCode}
+        formError={subjectFormError}
+        isSubmitting={isSubmittingSubject}
+        onNameChange={setSubjectName}
+        onCodeChange={setSubjectCode}
+        onSubmit={handleSubjectSubmit}
+        onCancel={closeSubjectModal}
       />
     </>
   );

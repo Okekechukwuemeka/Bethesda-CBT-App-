@@ -1,20 +1,15 @@
 import React, { useEffect, useRef } from "react";
-
-interface Question {
-  id: number;
-  text: string;
-  type: "objective" | "theory";
-  options: string[];
-  correctAnswer: string;
-  marks: number;
-}
+import type { QuestionInput, Subject } from "@/types/question";
+import { CLASS_LEVELS } from "@/lib/models/constants";
 
 interface QuestionFormModalProps {
   isOpen: boolean;
   isEditing: boolean;
-  formData: Partial<Question>;
+  formData: QuestionInput;
   formError: string | null;
   isSubmitting: boolean;
+  subjects: Subject[];
+  isLoadingSubjects: boolean;
   onChange: (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => void;
@@ -29,6 +24,8 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
   formData,
   formError,
   isSubmitting,
+  subjects,
+  isLoadingSubjects,
   onChange,
   onOptionChange,
   onSubmit,
@@ -97,7 +94,7 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
         className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-[#B8D0E8]">
         <div className="bg-[#1A3A5C] px-6 py-4 rounded-t-2xl sticky top-0 z-10">
           <h2 id="modal-title" className="text-xl font-bold text-white">
-            {isEditing ? "Edit Question" : "Add Question to Exam"}
+            {isEditing ? "Edit Question" : "Add Question to Bank"}
           </h2>
         </div>
 
@@ -142,11 +139,11 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
                 <select
                   id="type"
                   name="type"
-                  value={formData.type || "objective"}
+                  value={formData.type || "Objective"}
                   onChange={onChange}
                   className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE]">
-                  <option value="objective">Objective (MCQ)</option>
-                  <option value="theory">Theory (Essay)</option>
+                  <option value="Objective">Objective (MCQ)</option>
+                  <option value="Theory">Theory (Essay)</option>
                 </select>
               </div>
 
@@ -170,12 +167,66 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
                 />
               </div>
 
+              <div>
+                <label htmlFor="subject" className="block text-sm font-medium text-[#1A3A5C] mb-1">
+                  Subject{" "}
+                  <span className="text-red-500" aria-hidden="true">
+                    *
+                  </span>
+                </label>
+                <select
+                  id="subject"
+                  name="subject"
+                  value={formData.subject || ""}
+                  onChange={onChange}
+                  disabled={isLoadingSubjects}
+                  aria-required="true"
+                  className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE] disabled:opacity-60">
+                  <option value="">
+                    {isLoadingSubjects ? "Loading subjects…" : "Select a subject"}
+                  </option>
+                  {subjects.map((subject) => (
+                    <option key={subject._id} value={subject._id}>
+                      {subject.name}
+                    </option>
+                  ))}
+                </select>
+                {subjects.length === 0 && !isLoadingSubjects && (
+                  <p className="text-xs text-[#8A9CAE] mt-1">
+                    No subjects yet — use “Add Subject” above the table first.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="class" className="block text-sm font-medium text-[#1A3A5C] mb-1">
+                  Class{" "}
+                  <span className="text-red-500" aria-hidden="true">
+                    *
+                  </span>
+                </label>
+                <select
+                  id="class"
+                  name="class"
+                  value={formData.class || ""}
+                  onChange={onChange}
+                  aria-required="true"
+                  className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE]">
+                  <option value="">Select a class</option>
+                  {CLASS_LEVELS.map((level) => (
+                    <option key={level} value={level}>
+                      {level}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="md:col-span-2">
                 <label
                   htmlFor="correctAnswer"
                   className="block text-sm font-medium text-[#1A3A5C] mb-1">
                   Correct Answer{" "}
-                  {formData.type === "objective" && (
+                  {formData.type === "Objective" && (
                     <span className="text-red-500" aria-hidden="true">
                       *
                     </span>
@@ -187,9 +238,9 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
                   name="correctAnswer"
                   value={formData.correctAnswer || ""}
                   onChange={onChange}
-                  aria-required={formData.type === "objective"}
+                  aria-required={formData.type === "Objective"}
                   placeholder={
-                    formData.type === "objective"
+                    formData.type === "Objective"
                       ? "Enter the correct option (e.g., H2O)"
                       : "Optional for theory"
                   }
@@ -198,7 +249,7 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
               </div>
             </div>
 
-            {formData.type === "objective" && (
+            {formData.type === "Objective" && (
               <div>
                 <label className="block text-sm font-medium text-[#1A3A5C] mb-1">
                   Options{" "}

@@ -1,22 +1,20 @@
 import React, { useRef, useEffect } from "react";
-
-interface Question {
-  id: number;
-  text: string;
-  type: "objective" | "theory";
-  options: string[];
-  correctAnswer: string;
-  marks: number;
-  subject: string;
-  class: string;
-  difficulty: "easy" | "medium" | "hard";
-}
+import type { RowError, Subject } from "@/types/question";
+import { CLASS_LEVELS } from "@/lib/models/constants";
 
 interface BulkImportModalProps {
   isOpen: boolean;
   isImporting: boolean;
-  importPreview: Partial<Question>[];
   selectedFileName: string | null;
+  previewRowCount: number | null;
+  subjects: Subject[];
+  isLoadingSubjects: boolean;
+  importSubject: string;
+  importClass: string;
+  importError: string | null;
+  importRowErrors: RowError[] | null;
+  onSubjectChange: (value: string) => void;
+  onClassChange: (value: string) => void;
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onConfirmImport: () => void;
   onDownloadTemplate: () => void;
@@ -26,8 +24,16 @@ interface BulkImportModalProps {
 const BulkImportModal: React.FC<BulkImportModalProps> = ({
   isOpen,
   isImporting,
-  importPreview,
   selectedFileName,
+  previewRowCount,
+  subjects,
+  isLoadingSubjects,
+  importSubject,
+  importClass,
+  importError,
+  importRowErrors,
+  onSubjectChange,
+  onClassChange,
   onFileUpload,
   onConfirmImport,
   onDownloadTemplate,
@@ -42,6 +48,9 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const canImport =
+    !!selectedFileName && !!importSubject && !!importClass && !isImporting && previewRowCount !== 0;
 
   return (
     <div
@@ -68,18 +77,47 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
             </h3>
             <ul className="text-sm text-[#4A6A8A] space-y-1 list-disc list-inside">
               <li>
-                Upload a <strong>CSV</strong> or <strong>Word/Text</strong> file with questions
-              </li>
-              <li>For CSV: Use the format from the template (download below)</li>
-              <li>
-                For Word/Text: Questions can be numbered (1., 2., etc.) with options (A., B., etc.)
+                Choose the subject and class the whole file applies to, then upload a{" "}
+                <strong>CSV</strong> file
               </li>
               <li>
-                Include fields: question, type, options, correctAnswer, marks, subject, class,
-                difficulty
+                CSV columns:{" "}
+                <code>text, type, marks, optionA, optionB, optionC, optionD, correctAnswer</code>
+              </li>
+              <li>
+                <code>type</code> must be exactly “Objective” or “Theory”; leave the option and
+                correctAnswer columns blank for Theory rows
               </li>
             </ul>
           </div>
+
+          {importError && (
+            <div
+              role="alert"
+              aria-live="assertive"
+              className="p-3 mb-4 rounded-lg text-sm font-medium bg-red-100 text-red-800 border border-red-300">
+              {importError}
+            </div>
+          )}
+
+          {importRowErrors && importRowErrors.length > 0 && (
+            <div
+              role="alert"
+              aria-live="assertive"
+              className="p-3 mb-4 rounded-lg text-sm bg-red-100 text-red-800 border border-red-300">
+              <p className="font-medium mb-1">
+                {importRowErrors.length} row{importRowErrors.length !== 1 ? "s" : ""} need fixing
+                before anything can be imported:
+              </p>
+              <ul className="list-disc list-inside space-y-0.5">
+                {importRowErrors.map((rowError) => (
+                  <li key={rowError.row}>
+                    Row {rowError.row}: {rowError.error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <button
             onClick={onDownloadTemplate}
@@ -100,15 +138,67 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
             Download CSV Template
           </button>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label
+                htmlFor="import-subject"
+                className="block text-sm font-medium text-[#1A3A5C] mb-1">
+                Subject{" "}
+                <span className="text-red-500" aria-hidden="true">
+                  *
+                </span>
+              </label>
+              <select
+                id="import-subject"
+                value={importSubject}
+                onChange={(e) => onSubjectChange(e.target.value)}
+                disabled={isLoadingSubjects}
+                aria-required="true"
+                className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE] disabled:opacity-60">
+                <option value="">
+                  {isLoadingSubjects ? "Loading subjects…" : "Select a subject"}
+                </option>
+                {subjects.map((subject) => (
+                  <option key={subject._id} value={subject._id}>
+                    {subject.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor="import-class"
+                className="block text-sm font-medium text-[#1A3A5C] mb-1">
+                Class{" "}
+                <span className="text-red-500" aria-hidden="true">
+                  *
+                </span>
+              </label>
+              <select
+                id="import-class"
+                value={importClass}
+                onChange={(e) => onClassChange(e.target.value)}
+                aria-required="true"
+                className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE]">
+                <option value="">Select a class</option>
+                {CLASS_LEVELS.map((level) => (
+                  <option key={level} value={level}>
+                    {level}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           <div className="relative border-2 border-dashed border-[#C5D8EC] rounded-lg p-6 text-center hover:border-[#2B6CB0] transition">
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,.txt,.doc,.docx"
+              accept=".csv"
               onChange={onFileUpload}
               className="peer sr-only"
               id="file-upload"
-              aria-label="Upload questions file (CSV, Word, or Text)"
+              aria-label="Upload questions CSV file"
               aria-describedby="import-instructions"
             />
             <label
@@ -128,67 +218,16 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
                 />
               </svg>
               <span className="text-[#1A3A5C] font-medium">
-                Click or press Enter to choose a file
+                Click or press Enter to choose a CSV file
               </span>
-              <span className="text-[#8A9CAE] text-sm">CSV, Word, or Text files supported</span>
               {selectedFileName && (
                 <span className="text-[#1A3A5C] text-sm font-medium mt-1">
                   Selected: {selectedFileName}
+                  {previewRowCount !== null && ` (${previewRowCount} rows detected)`}
                 </span>
               )}
             </label>
           </div>
-
-          {importPreview.length > 0 && (
-            <div className="mt-6">
-              <h3 className="font-medium text-[#1A3A5C] mb-2">
-                Preview ({importPreview.length} questions found)
-              </h3>
-              <div className="max-h-60 overflow-y-auto border border-[#C5D8EC] rounded-lg">
-                <table className="w-full text-sm">
-                  <caption className="sr-only">Import preview</caption>
-                  <thead className="bg-[#F8FAFE] sticky top-0">
-                    <tr>
-                      <th scope="col" className="px-3 py-2 text-left text-[#5A7A9A]">
-                        #
-                      </th>
-                      <th scope="col" className="px-3 py-2 text-left text-[#5A7A9A]">
-                        Question
-                      </th>
-                      <th scope="col" className="px-3 py-2 text-left text-[#5A7A9A]">
-                        Type
-                      </th>
-                      <th scope="col" className="px-3 py-2 text-left text-[#5A7A9A]">
-                        Subject
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#E8EEF5]">
-                    {importPreview.slice(0, 10).map((q, index) => (
-                      <tr key={index}>
-                        <td className="px-3 py-2 text-[#4A6A8A]">{index + 1}</td>
-                        <td className="px-3 py-2 text-[#4A6A8A] truncate max-w-xs">{q.text}</td>
-                        <td className="px-3 py-2">
-                          <span
-                            className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${q.type === "theory" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"}`}>
-                            {q.type || "objective"}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-[#4A6A8A]">{q.subject || "-"}</td>
-                      </tr>
-                    ))}
-                    {importPreview.length > 10 && (
-                      <tr>
-                        <td colSpan={4} className="px-3 py-2 text-center text-[#8A9CAE]">
-                          + {importPreview.length - 10} more questions
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
 
           <div className="flex gap-3 mt-6 pt-4 border-t border-[#E8EEF5]">
             <button
@@ -200,13 +239,9 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
             </button>
             <button
               onClick={onConfirmImport}
-              disabled={importPreview.length === 0 || isImporting}
+              disabled={!canImport}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 px-4 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-green-500/50 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label={
-                isImporting
-                  ? "Importing questions, please wait"
-                  : `Import ${importPreview.length} questions`
-              }>
+              aria-label={isImporting ? "Importing questions, please wait" : "Import questions"}>
               {isImporting ? (
                 <span className="flex items-center justify-center gap-2">
                   <svg
@@ -232,7 +267,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
                   Importing...
                 </span>
               ) : (
-                `Import ${importPreview.length} Questions`
+                "Import Questions"
               )}
             </button>
           </div>

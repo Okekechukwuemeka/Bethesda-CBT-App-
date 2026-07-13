@@ -1,110 +1,166 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
-
-interface Question {
-  id: number;
-  text: string;
-  type: "objective" | "theory";
-  options: string[];
-  correctAnswer: string;
-  marks: number;
-  subject: string;
-  class: string;
-  difficulty: "easy" | "medium" | "hard";
-  createdAt: string;
-}
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import type { BlockingExam, Question, QuestionInput, RowError, Subject } from "@/types/question";
 
 interface StatusMessage {
   type: "success" | "error" | "warning";
   text: string;
 }
 
-const initialQuestions: Question[] = [
-  {
-    id: 1,
-    text: "What is the chemical symbol for water?",
-    type: "objective",
-    options: ["H2O", "CO2", "NaCl", "HCl"],
-    correctAnswer: "H2O",
-    marks: 5,
-    subject: "Chemistry",
-    class: "JSS3",
-    difficulty: "easy",
-    createdAt: "2025-06-01",
-  },
-  {
-    id: 2,
-    text: "What is the atomic number of Carbon?",
-    type: "objective",
-    options: ["6", "12", "14", "8"],
-    correctAnswer: "6",
-    marks: 5,
-    subject: "Chemistry",
-    class: "JSS3",
-    difficulty: "easy",
-    createdAt: "2025-06-01",
-  },
-  {
-    id: 3,
-    text: "Define an acid and give two examples with their chemical formulas.",
-    type: "theory",
-    options: [],
-    correctAnswer: "",
-    marks: 10,
-    subject: "Chemistry",
-    class: "JSS3",
-    difficulty: "medium",
-    createdAt: "2025-06-02",
-  },
-  {
-    id: 4,
-    text: "Explain the process of photosynthesis and write the chemical equation.",
-    type: "theory",
-    options: [],
-    correctAnswer: "",
-    marks: 15,
-    subject: "Chemistry",
-    class: "JSS3",
-    difficulty: "hard",
-    createdAt: "2025-06-02",
-  },
-];
+interface ApiErrorPayload {
+  error?: string;
+  rowErrors?: RowError[];
+  exams?: BlockingExam[];
+}
+
+const emptyFormData: QuestionInput = {
+  text: "",
+  type: "Objective",
+  options: ["", "", "", ""],
+  correctAnswer: "",
+  marks: 5,
+  subject: "",
+  class: "",
+};
+
+// Mirrors the parseErrorMessage helper used by useStudents - reads the
+// JSON error body a route returns instead of just falling back to the
+// generic status text.
+async function parseErrorMessage(res: Response, fallback: string): Promise<string> {
+  const data: ApiErrorPayload = await res.json().catch(() => ({}));
+  return data.error || fallback;
+}
+
+async function parseErrorPayload(
+  res: Response,
+  fallback: string,
+): Promise<Error & ApiErrorPayload> {
+  const data: ApiErrorPayload = await res.json().catch(() => ({}));
+  const error = new Error(data.error || fallback) as Error & ApiErrorPayload;
+  error.rowErrors = data.rowErrors;
+  error.exams = data.exams;
+  return error;
+}
 
 export const useQuestionBank = () => {
-  const [questions, setQuestions] = useState<Question[]>(initialQuestions);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
+  // --- data ---
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
+  const [questionsError, setQuestionsError] = useState<string | null>(null);
+
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
+
+  // --- filters (sent to the server as query params) ---
   const [searchTerm, setSearchTerm] = useState("");
   const [filterSubject, setFilterSubject] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
+  const [filterClass, setFilterClass] = useState<string>("all");
+
   const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
+
+  // --- question form modal ---
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
+  const [formData, setFormData] = useState<QuestionInput>(emptyFormData);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const formTriggerRef = useRef<HTMLElement | null>(null);
+
+  // --- delete confirmation modal ---
+  const [pendingDelete, setPendingDelete] = useState<Question | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteBlockedExams, setDeleteBlockedExams] = useState<BlockingExam[] | null>(null);
+  const deleteTriggerRef = useRef<HTMLElement | null>(null);
+
+  // --- bulk import modal ---
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [importPreview, setImportPreview] = useState<Partial<Question>[]>([]);
-  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
-
-  const formTriggerRef = useRef<HTMLElement | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewRowCount, setPreviewRowCount] = useState<number | null>(null);
+  const [importSubject, setImportSubject] = useState("");
+  const [importClass, setImportClass] = useState("");
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importRowErrors, setImportRowErrors] = useState<RowError[] | null>(null);
   const importTriggerRef = useRef<HTMLElement | null>(null);
 
-  const [formData, setFormData] = useState<Partial<Question>>({
-    text: "",
-    type: "objective",
-    options: ["", "", "", ""],
-    correctAnswer: "",
-    marks: 5,
-    subject: "",
-    class: "",
-    difficulty: "easy",
-  });
+  // --- subject creation modal ---
+  const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
+  const [subjectName, setSubjectName] = useState("");
+  const [subjectCode, setSubjectCode] = useState("");
+  const [subjectFormError, setSubjectFormError] = useState<string | null>(null);
+  const [isSubmittingSubject, setIsSubmittingSubject] = useState(false);
+  const subjectTriggerRef = useRef<HTMLElement | null>(null);
 
+  const showStatus = useCallback((message: StatusMessage, durationMs = 4000) => {
+    setStatusMessage(message);
+    setTimeout(() => setStatusMessage(null), durationMs);
+  }, []);
+
+  // --- fetch subjects ---
+  const fetchSubjectsList = useCallback(async () => {
+    setIsLoadingSubjects(true);
+    try {
+      const res = await fetch("/api/admin/subjects");
+      if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to load subjects"));
+      const { subjects: apiSubjects } = await res.json();
+      setSubjects(apiSubjects);
+    } catch (err) {
+      showStatus({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to load subjects.",
+      });
+    } finally {
+      setIsLoadingSubjects(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    fetchSubjectsList();
+  }, [fetchSubjectsList]);
+
+  // --- fetch questions, filtered server-side via query params ---
+  // Debounced 300ms so typing in the search box doesn't fire a request per
+  // keystroke - class/subject/type filters go straight through since
+  // they're discrete select changes, not typed input.
+  const fetchQuestionsList = useCallback(async () => {
+    setIsLoadingQuestions(true);
+    setQuestionsError(null);
+    try {
+      const params = new URLSearchParams();
+      if (filterType !== "all") params.set("type", filterType);
+      if (filterSubject !== "all") params.set("subject", filterSubject);
+      if (filterClass !== "all") params.set("class", filterClass);
+      if (searchTerm.trim()) params.set("search", searchTerm.trim());
+
+      const res = await fetch(`/api/admin/questions?${params.toString()}`);
+      if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to load questions"));
+      const { questions: apiQuestions } = await res.json();
+      setQuestions(apiQuestions);
+    } catch (err) {
+      setQuestionsError(err instanceof Error ? err.message : "Failed to load questions.");
+    } finally {
+      setIsLoadingQuestions(false);
+    }
+  }, [filterType, filterSubject, filterClass, searchTerm]);
+
+  useEffect(() => {
+    const timer = setTimeout(fetchQuestionsList, 300);
+    return () => clearTimeout(timer);
+  }, [fetchQuestionsList]);
+
+  // --- question form handlers ---
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       const { name, value } = e.target;
-      setFormData((prev) => ({ ...prev, [name]: value }));
+      setFormData((prev) => ({
+        ...prev,
+        [name]: name === "marks" ? Number(value) : value,
+      }));
     },
     [],
   );
@@ -120,17 +176,9 @@ export const useQuestionBank = () => {
   const handleAddQuestion = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
     formTriggerRef.current = e.currentTarget;
     setIsEditing(false);
+    setSelectedQuestion(null);
     setFormError(null);
-    setFormData({
-      text: "",
-      type: "objective",
-      options: ["", "", "", ""],
-      correctAnswer: "",
-      marks: 5,
-      subject: "",
-      class: "",
-      difficulty: "easy",
-    });
+    setFormData(emptyFormData);
     setIsModalOpen(true);
   }, []);
 
@@ -140,23 +188,19 @@ export const useQuestionBank = () => {
       setIsEditing(true);
       setSelectedQuestion(question);
       setFormError(null);
-      setFormData(question);
+      setFormData({
+        text: question.text,
+        type: question.type,
+        options: question.options?.length ? question.options : ["", "", "", ""],
+        correctAnswer: question.correctAnswer || "",
+        marks: question.marks,
+        subject: typeof question.subject === "string" ? question.subject : question.subject._id,
+        class: question.class,
+      });
       setIsModalOpen(true);
     },
     [],
   );
-
-  const handleDeleteQuestion = useCallback((question: Question) => {
-    if (
-      confirm(
-        `Are you sure you want to delete this question: "${question.text.substring(0, 50)}..."?`,
-      )
-    ) {
-      setQuestions((prev) => prev.filter((q) => q.id !== question.id));
-      setStatusMessage({ type: "warning", text: "Question deleted successfully." });
-      setTimeout(() => setStatusMessage(null), 3000);
-    }
-  }, []);
 
   const closeFormModal = useCallback(() => {
     if (isSubmitting) return;
@@ -165,278 +209,218 @@ export const useQuestionBank = () => {
   }, [isSubmitting]);
 
   const handleSubmit = useCallback(
-    (e: React.FormEvent) => {
+    async (e: React.FormEvent) => {
       e.preventDefault();
       setFormError(null);
 
-      if (!formData.text?.trim()) {
-        setFormError("Please enter the question text.");
-        return;
-      }
-      if (!formData.subject?.trim()) {
-        setFormError("Please enter a subject.");
-        return;
-      }
-      if (!formData.class) {
-        setFormError("Please select a class.");
-        return;
-      }
-      if (
-        formData.type === "objective" &&
-        (!formData.options || formData.options.some((opt) => !opt))
-      ) {
-        setFormError("Please provide all four options for objective questions.");
-        return;
+      if (!formData.text?.trim()) return setFormError("Please enter the question text.");
+      if (!formData.subject) return setFormError("Please select a subject.");
+      if (!formData.class) return setFormError("Please select a class.");
+      if (formData.type === "Objective") {
+        const filledOptions = (formData.options || []).filter((opt) => opt.trim());
+        if (filledOptions.length < 2) {
+          return setFormError("Please provide at least 2 options for objective questions.");
+        }
+        if (!formData.correctAnswer?.trim()) {
+          return setFormError("Please provide the correct answer for objective questions.");
+        }
+        if (!filledOptions.includes(formData.correctAnswer.trim())) {
+          return setFormError("The correct answer must match one of the options exactly.");
+        }
       }
 
       setIsSubmitting(true);
+      try {
+        const payload =
+          formData.type === "Objective"
+            ? { ...formData, options: formData.options?.filter((opt) => opt.trim()) }
+            : { ...formData, options: undefined, correctAnswer: undefined };
 
-      setTimeout(() => {
-        if (isEditing && selectedQuestion) {
-          setQuestions((prev) =>
-            prev.map((q) =>
-              q.id === selectedQuestion.id ? ({ ...q, ...formData } as Question) : q,
-            ),
-          );
-          setStatusMessage({ type: "success", text: "Question updated successfully." });
-        } else {
-          const newQuestion: Question = {
-            id: questions.length + 1,
-            text: formData.text || "",
-            type: (formData.type as "objective" | "theory") || "objective",
-            options: formData.options || [],
-            correctAnswer: formData.correctAnswer || "",
-            marks: formData.marks || 5,
-            subject: formData.subject || "",
-            class: formData.class || "",
-            difficulty: (formData.difficulty as "easy" | "medium" | "hard") || "easy",
-            createdAt: new Date().toISOString().split("T")[0],
-          };
-          setQuestions((prev) => [...prev, newQuestion]);
-          setStatusMessage({ type: "success", text: "Question added to bank successfully." });
-        }
-        setIsSubmitting(false);
+        const url =
+          isEditing && selectedQuestion
+            ? `/api/admin/questions/${selectedQuestion._id}`
+            : "/api/admin/questions";
+        const res = await fetch(url, {
+          method: isEditing ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to save question"));
+
+        showStatus({
+          type: "success",
+          text: isEditing
+            ? "Question updated successfully."
+            : "Question added to bank successfully.",
+        });
         setIsModalOpen(false);
-        setTimeout(() => setStatusMessage(null), 3000);
-      }, 800);
+        fetchQuestionsList();
+      } catch (err) {
+        setFormError(err instanceof Error ? err.message : "Something went wrong.");
+      } finally {
+        setIsSubmitting(false);
+      }
     },
-    [formData, isEditing, selectedQuestion, questions.length],
+    [formData, isEditing, selectedQuestion, showStatus, fetchQuestionsList],
   );
 
-  // Bulk import functions
+  // --- delete confirmation flow (replaces window.confirm) ---
+  const handleDeleteQuestion = useCallback(
+    (question: Question, e: React.MouseEvent<HTMLButtonElement>) => {
+      deleteTriggerRef.current = e.currentTarget;
+      setPendingDelete(question);
+      setDeleteError(null);
+      setDeleteBlockedExams(null);
+    },
+    [],
+  );
+
+  const closeDeleteModal = useCallback(() => {
+    if (isDeleting) return;
+    setPendingDelete(null);
+    setDeleteError(null);
+    setDeleteBlockedExams(null);
+  }, [isDeleting]);
+
+  const runDelete = useCallback(
+    async (force: boolean) => {
+      if (!pendingDelete) return;
+      setIsDeleting(true);
+      setDeleteError(null);
+      try {
+        const res = await fetch(
+          `/api/admin/questions/${pendingDelete._id}${force ? "?force=true" : ""}`,
+          { method: "DELETE" },
+        );
+        if (!res.ok) {
+          const error = await parseErrorPayload(res, "Failed to delete question");
+          if (res.status === 409 && error.exams) {
+            setDeleteBlockedExams(error.exams);
+            return;
+          }
+          throw error;
+        }
+        showStatus({ type: "warning", text: "Question deleted successfully." });
+        setPendingDelete(null);
+        setDeleteBlockedExams(null);
+        fetchQuestionsList();
+      } catch (err) {
+        setDeleteError(err instanceof Error ? err.message : "Failed to delete question.");
+      } finally {
+        setIsDeleting(false);
+      }
+    },
+    [pendingDelete, showStatus, fetchQuestionsList],
+  );
+
+  const confirmDelete = useCallback(() => runDelete(false), [runDelete]);
+  const forceConfirmDelete = useCallback(() => runDelete(true), [runDelete]);
+
+  // --- bulk import ---
   const handleOpenImportModal = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
     importTriggerRef.current = e.currentTarget;
     setIsImportModalOpen(true);
-    setImportPreview([]);
-    setStatusMessage(null);
+    setSelectedFile(null);
+    setPreviewRowCount(null);
+    setImportSubject("");
+    setImportClass("");
+    setImportError(null);
+    setImportRowErrors(null);
   }, []);
 
   const closeImportModal = useCallback(() => {
     if (isImporting) return;
     setIsImportModalOpen(false);
-    setImportPreview([]);
-    setSelectedFileName(null);
+    setSelectedFile(null);
+    setPreviewRowCount(null);
+    setImportError(null);
+    setImportRowErrors(null);
   }, [isImporting]);
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setSelectedFileName(file.name);
+    setSelectedFile(file);
+    setImportError(null);
+    setImportRowErrors(null);
 
+    // Client-side row count is just a courtesy preview - the server does
+    // the real CSV parsing and validation in questions/bulk/route.ts.
     const reader = new FileReader();
     reader.onload = (event) => {
-      try {
-        const content = event.target?.result as string;
-        const parsedQuestions = parseFileContent(content, file.name);
-        setImportPreview(parsedQuestions);
-        if (parsedQuestions.length === 0) {
-          setStatusMessage({
-            type: "error",
-            text: "No valid questions found in the file. Please check the format.",
-          });
-        } else {
-          setStatusMessage({
-            type: "success",
-            text: `Found ${parsedQuestions.length} questions ready to import.`,
-          });
-        }
-      } catch {
-        setStatusMessage({ type: "error", text: "Error parsing file. Please check the format." });
-      }
+      const content = (event.target?.result as string) || "";
+      const dataRows = content.split("\n").filter((line) => line.trim()).length - 1;
+      setPreviewRowCount(Math.max(dataRows, 0));
     };
     reader.readAsText(file);
   }, []);
 
-  const parseFileContent = (content: string, fileName: string): Partial<Question>[] => {
-    const questions: Partial<Question>[] = [];
-    const lines = content.split("\n").filter((line) => line.trim());
-    const isCSV = fileName.endsWith(".csv");
-
-    if (isCSV) {
-      const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
-      for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(",").map((v) => v.trim());
-        if (values.length < 3) continue;
-        const question: Partial<Question> = {
-          type: "objective",
-          options: [],
-          marks: 5,
-          difficulty: "easy",
-        };
-        headers.forEach((header, index) => {
-          const value = values[index] || "";
-          switch (header) {
-            case "question":
-            case "text":
-              question.text = value;
-              break;
-            case "type":
-              question.type = value.toLowerCase().includes("theory") ? "theory" : "objective";
-              break;
-            case "options":
-              question.options = value.split("|").map((o) => o.trim());
-              break;
-            case "correctanswer":
-            case "correct":
-              question.correctAnswer = value;
-              break;
-            case "marks":
-            case "score":
-              question.marks = parseInt(value) || 5;
-              break;
-            case "subject":
-              question.subject = value;
-              break;
-            case "class":
-              question.class = value;
-              break;
-            case "difficulty":
-              question.difficulty = (value.toLowerCase() as "easy" | "medium" | "hard") || "easy";
-              break;
-          }
-        });
-        if (question.text) questions.push(question);
-      }
-    } else {
-      let currentQuestion: Partial<Question> = {};
-      let isParsingOptions = false;
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.match(/^(\d+\.|Q\d+\.|Question\s+\d+:)/i)) {
-          if (currentQuestion.text) {
-            if (!currentQuestion.type) currentQuestion.type = "objective";
-            if (!currentQuestion.options) currentQuestion.options = [];
-            if (!currentQuestion.marks) currentQuestion.marks = 5;
-            if (!currentQuestion.difficulty) currentQuestion.difficulty = "easy";
-            questions.push(currentQuestion);
-          }
-          currentQuestion = { type: "objective", options: [], marks: 5, difficulty: "easy" };
-          currentQuestion.text = trimmed.replace(/^(\d+\.|Q\d+\.|Question\s+\d+:)/i, "").trim();
-          isParsingOptions = false;
-        } else if (trimmed.match(/^[A-Da-d][\.\)]\s*/)) {
-          if (!currentQuestion.options) currentQuestion.options = [];
-          currentQuestion.options.push(trimmed.replace(/^[A-Da-d][\.\)]\s*/, "").trim());
-          isParsingOptions = true;
-        } else if (
-          trimmed.toLowerCase().startsWith("answer:") ||
-          trimmed.toLowerCase().startsWith("correct:")
-        ) {
-          currentQuestion.correctAnswer = trimmed.replace(/^(answer:|correct:)/i, "").trim();
-        } else if (
-          trimmed.toLowerCase().startsWith("marks:") ||
-          trimmed.toLowerCase().startsWith("score:")
-        ) {
-          const marks = parseInt(trimmed.replace(/^(marks:|score:)/i, "").trim());
-          if (!isNaN(marks)) currentQuestion.marks = marks;
-        } else if (trimmed.toLowerCase().startsWith("subject:")) {
-          currentQuestion.subject = trimmed.replace(/^subject:/i, "").trim();
-        } else if (trimmed.toLowerCase().startsWith("class:")) {
-          currentQuestion.class = trimmed.replace(/^class:/i, "").trim();
-        } else if (trimmed.toLowerCase().startsWith("type:")) {
-          const type = trimmed
-            .replace(/^type:/i, "")
-            .trim()
-            .toLowerCase();
-          currentQuestion.type = type.includes("theory") ? "theory" : "objective";
-        } else if (currentQuestion.text && trimmed && !trimmed.match(/^[A-Da-d][\.\)]/)) {
-          if (!isParsingOptions) currentQuestion.text += " " + trimmed;
-        }
-      }
-      if (currentQuestion.text) {
-        if (!currentQuestion.type) currentQuestion.type = "objective";
-        if (!currentQuestion.options) currentQuestion.options = [];
-        if (!currentQuestion.marks) currentQuestion.marks = 5;
-        if (!currentQuestion.difficulty) currentQuestion.difficulty = "easy";
-        questions.push(currentQuestion);
-      }
-    }
-    return questions;
-  };
-
-  const confirmImport = useCallback(() => {
-    if (importPreview.length === 0) {
-      setStatusMessage({ type: "error", text: "No questions to import." });
-      return;
-    }
+  const confirmImport = useCallback(async () => {
+    if (!selectedFile || !importSubject || !importClass) return;
     setIsImporting(true);
-    setTimeout(() => {
-      let importedCount = 0;
-      const newQuestions: Question[] = [];
-      importPreview.forEach((q) => {
-        if (q.text) {
-          newQuestions.push({
-            id: questions.length + newQuestions.length + 1,
-            text: q.text || "",
-            type: (q.type as "objective" | "theory") || "objective",
-            options: q.options || [],
-            correctAnswer: q.correctAnswer || "",
-            marks: q.marks || 5,
-            subject: q.subject || "",
-            class: q.class || "",
-            difficulty: (q.difficulty as "easy" | "medium" | "hard") || "easy",
-            createdAt: new Date().toISOString().split("T")[0],
-          });
-          importedCount++;
+    setImportError(null);
+    setImportRowErrors(null);
+    try {
+      const body = new FormData();
+      body.append("file", selectedFile);
+      body.append("subject", importSubject);
+      body.append("class", importClass);
+
+      const res = await fetch("/api/admin/questions/bulk", { method: "POST", body });
+      if (!res.ok) {
+        const error = await parseErrorPayload(res, "Failed to import questions");
+        if (error.rowErrors?.length) {
+          setImportRowErrors(error.rowErrors);
+          return;
         }
-      });
-      setQuestions((prev) => [...prev, ...newQuestions]);
-      setStatusMessage({
-        type: "success",
-        text: `Successfully imported ${importedCount} questions.`,
-      });
-      setIsImporting(false);
+        throw error;
+      }
+      const { imported } = await res.json();
+      showStatus({ type: "success", text: `Successfully imported ${imported} questions.` });
       setIsImportModalOpen(false);
-      setImportPreview([]);
-      setTimeout(() => setStatusMessage(null), 5000);
-    }, 1000);
-  }, [importPreview, questions.length]);
+      setSelectedFile(null);
+      setPreviewRowCount(null);
+      fetchQuestionsList();
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Failed to import questions.");
+    } finally {
+      setIsImporting(false);
+    }
+  }, [selectedFile, importSubject, importClass, showStatus, fetchQuestionsList]);
 
   const downloadTemplate = useCallback(() => {
     const headers = [
-      "question",
+      "text",
       "type",
-      "options",
-      "correctAnswer",
       "marks",
-      "subject",
-      "class",
-      "difficulty",
+      "optionA",
+      "optionB",
+      "optionC",
+      "optionD",
+      "correctAnswer",
     ];
-    const sampleRow = [
+    const objectiveRow = [
       "What is the chemical symbol for water?",
-      "objective",
-      "H2O|CO2|NaCl|HCl",
-      "H2O",
+      "Objective",
       "5",
-      "Chemistry",
-      "JSS3",
-      "easy",
+      "H2O",
+      "CO2",
+      "NaCl",
+      "HCl",
+      "H2O",
     ];
-    const csvContent = [
-      headers.join(","),
-      sampleRow.join(","),
-      "Define an acid and give examples.|theory|||10|Chemistry|JSS3|medium",
-    ].join("\n");
+    const theoryRow = [
+      "Define an acid and give two examples with their chemical formulas.",
+      "Theory",
+      "10",
+      "",
+      "",
+      "",
+      "",
+      "",
+    ];
+    const csvContent = [headers.join(","), objectiveRow.join(","), theoryRow.join(",")].join("\n");
+
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -446,53 +430,133 @@ export const useQuestionBank = () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    setStatusMessage({ type: "success", text: "Template downloaded successfully." });
-    setTimeout(() => setStatusMessage(null), 3000);
+    showStatus({ type: "success", text: "Template downloaded successfully." }, 3000);
+  }, [showStatus]);
+
+  // --- subject creation ---
+  const handleOpenSubjectModal = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    subjectTriggerRef.current = e.currentTarget;
+    setSubjectName("");
+    setSubjectCode("");
+    setSubjectFormError(null);
+    setIsSubjectModalOpen(true);
   }, []);
 
-  const filteredQuestions = useMemo(() => {
-    return questions.filter((q) => {
-      const matchesSearch =
-        q.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.subject.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesSubject = filterSubject === "all" || q.subject === filterSubject;
-      const matchesType = filterType === "all" || q.type === filterType;
-      return matchesSearch && matchesSubject && matchesType;
-    });
-  }, [questions, searchTerm, filterSubject, filterType]);
+  const closeSubjectModal = useCallback(() => {
+    if (isSubmittingSubject) return;
+    setIsSubjectModalOpen(false);
+    setSubjectFormError(null);
+  }, [isSubmittingSubject]);
+
+  const handleSubjectSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setSubjectFormError(null);
+
+      if (!subjectName.trim() || !subjectCode.trim()) {
+        setSubjectFormError("Please enter both a subject name and a code.");
+        return;
+      }
+
+      setIsSubmittingSubject(true);
+      try {
+        const res = await fetch("/api/admin/subjects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: subjectName.trim(), code: subjectCode.trim() }),
+        });
+        if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to add subject"));
+        const { subject: newSubject } = await res.json();
+
+        setSubjects((prev) => [...prev, newSubject].sort((a, b) => a.name.localeCompare(b.name)));
+        showStatus({ type: "success", text: `Subject "${newSubject.name}" added.` });
+        setIsSubjectModalOpen(false);
+      } catch (err) {
+        setSubjectFormError(err instanceof Error ? err.message : "Failed to add subject.");
+      } finally {
+        setIsSubmittingSubject(false);
+      }
+    },
+    [subjectName, subjectCode, showStatus],
+  );
+
+  const filteredCount = useMemo(() => questions.length, [questions]);
 
   return {
+    // data
     questions,
-    filteredQuestions,
+    isLoadingQuestions,
+    questionsError,
+    subjects,
+    isLoadingSubjects,
+    filteredCount,
+
+    // filters
+    searchTerm,
+    filterSubject,
+    filterType,
+    filterClass,
+    setSearchTerm,
+    setFilterSubject,
+    setFilterType,
+    setFilterClass,
+
+    statusMessage,
+
+    // question form modal
     isModalOpen,
     isEditing,
     formData,
     formError,
     isSubmitting,
-    statusMessage,
-    searchTerm,
-    filterSubject,
-    filterType,
-    isImportModalOpen,
-    isImporting,
-    importPreview,
-    selectedFileName,
     formTriggerRef,
-    importTriggerRef,
-    setSearchTerm,
-    setFilterSubject,
-    setFilterType,
     handleInputChange,
     handleOptionChange,
     handleAddQuestion,
     handleEditQuestion,
-    handleDeleteQuestion,
     handleSubmit,
     closeFormModal,
+
+    // delete confirm modal
+    pendingDelete,
+    isDeleting,
+    deleteError,
+    deleteBlockedExams,
+    deleteTriggerRef,
+    handleDeleteQuestion,
+    closeDeleteModal,
+    confirmDelete,
+    forceConfirmDelete,
+
+    // bulk import modal
+    isImportModalOpen,
+    isImporting,
+    selectedFileName: selectedFile?.name || null,
+    previewRowCount,
+    importSubject,
+    importClass,
+    importError,
+    importRowErrors,
+    importTriggerRef,
+    setImportSubject,
+    setImportClass,
     handleOpenImportModal,
     closeImportModal,
     handleFileUpload,
     confirmImport,
     downloadTemplate,
+
+    // subject modal
+    isSubjectModalOpen,
+    subjectName,
+    subjectCode,
+    subjectFormError,
+    isSubmittingSubject,
+    subjectTriggerRef,
+    setSubjectName,
+    setSubjectCode,
+    handleOpenSubjectModal,
+    closeSubjectModal,
+    handleSubjectSubmit,
   };
 };
