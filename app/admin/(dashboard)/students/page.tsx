@@ -156,7 +156,6 @@ const StudentsPage: React.FC = () => {
           onClassChange={setFilterClass}
           onStatusChange={setFilterStatus}
         />
-
         <StudentsTable
           students={currentStudents}
           onEdit={handleEditStudent}

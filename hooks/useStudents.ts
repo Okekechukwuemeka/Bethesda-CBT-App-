@@ -2,29 +2,25 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
-interface Student {
-  id: number;
+export interface Student {
+  id: string;
   admissionNo: string;
   firstName: string;
   lastName: string;
-  email: string;
   class: string;
   gender: "Male" | "Female" | "Other";
   dateOfBirth: string;
-  phone: string;
   address: string;
   status: "active" | "inactive" | "graduated";
-  enrollmentDate: string;
+  enrollmentDate: string; // read-only, sourced from the backend's createdAt
 }
 
 interface ImportPreviewStudent {
   firstName: string;
   lastName: string;
-  email: string;
   class: string;
   gender: string;
   dateOfBirth: string;
-  phone: string;
   address: string;
   status: string;
 }
@@ -34,123 +30,36 @@ interface StatusMessage {
   text: string;
 }
 
-type RequiredField = "firstName" | "lastName" | "admissionNo" | "class";
+type RequiredField = "firstName" | "lastName" | "class";
 type FieldErrors = Partial<Record<RequiredField, string>>;
 
-const mockStudents: Student[] = [
-  {
-    id: 1,
-    admissionNo: "BHS-2024-001",
-    firstName: "John",
-    lastName: "Doe",
-    email: "john.doe@example.com",
-    class: "JSS1",
-    gender: "Male",
-    dateOfBirth: "2010-05-15",
-    phone: "08012345678",
-    address: "123 Main Street, Lagos",
-    status: "active",
-    enrollmentDate: "2024-01-15",
-  },
-  {
-    id: 2,
-    admissionNo: "BHS-2024-002",
-    firstName: "Jane",
-    lastName: "Smith",
-    email: "jane.smith@example.com",
-    class: "JSS2",
-    gender: "Female",
-    dateOfBirth: "2009-08-22",
-    phone: "08087654321",
-    address: "456 Oak Avenue, Abuja",
-    status: "active",
-    enrollmentDate: "2024-01-15",
-  },
-  {
-    id: 3,
-    admissionNo: "BHS-2024-003",
-    firstName: "Michael",
-    lastName: "Johnson",
-    email: "michael.j@example.com",
-    class: "JSS3",
-    gender: "Male",
-    dateOfBirth: "2008-11-10",
-    phone: "08098765432",
-    address: "789 Pine Road, Port Harcourt",
-    status: "active",
-    enrollmentDate: "2024-01-20",
-  },
-  {
-    id: 4,
-    admissionNo: "BHS-2024-004",
-    firstName: "Sarah",
-    lastName: "Williams",
-    email: "sarah.w@example.com",
-    class: "JSS1",
-    gender: "Female",
-    dateOfBirth: "2010-03-25",
-    phone: "08054321678",
-    address: "321 Cedar Lane, Ibadan",
-    status: "inactive",
-    enrollmentDate: "2024-02-01",
-  },
-  {
-    id: 5,
-    admissionNo: "BHS-2024-005",
-    firstName: "David",
-    lastName: "Brown",
-    email: "david.b@example.com",
-    class: "JSS2",
-    gender: "Male",
-    dateOfBirth: "2009-06-30",
-    phone: "08076543210",
-    address: "654 Maple Drive, Kano",
-    status: "active",
-    enrollmentDate: "2024-02-10",
-  },
-  {
-    id: 6,
-    admissionNo: "BHS-2024-006",
-    firstName: "Elizabeth",
-    lastName: "Taylor",
-    email: "elizabeth.t@example.com",
-    class: "JSS3",
-    gender: "Female",
-    dateOfBirth: "2008-09-05",
-    phone: "08043218765",
-    address: "987 Birch Boulevard, Enugu",
-    status: "graduated",
-    enrollmentDate: "2024-01-10",
-  },
-  {
-    id: 7,
-    admissionNo: "BHS-2024-007",
-    firstName: "James",
-    lastName: "Wilson",
-    email: "james.w@example.com",
-    class: "JSS1",
-    gender: "Male",
-    dateOfBirth: "2010-12-18",
-    phone: "08065432198",
-    address: "147 Willow Way, Benin City",
-    status: "active",
-    enrollmentDate: "2024-03-01",
-  },
-  {
-    id: 8,
-    admissionNo: "BHS-2024-008",
-    firstName: "Mary",
-    lastName: "Davis",
-    email: "mary.d@example.com",
-    class: "JSS2",
-    gender: "Female",
-    dateOfBirth: "2009-04-12",
-    phone: "08087651234",
-    address: "258 Ash Court, Kaduna",
-    status: "active",
-    enrollmentDate: "2024-03-05",
-  },
-];
+// Maps a raw API student document onto the shape this hook/UI works with.
+// admissionNumber/isActive/createdAt are the backend's real field names;
+// admissionNo/status/enrollmentDate are what the existing UI expects -
+// kept as-is here rather than renaming everything downstream.
+function fromApiStudent(s: any): Student {
+  return {
+    id: s._id ?? s.id,
+    admissionNo: s.admissionNumber,
+    firstName: s.firstName,
+    lastName: s.lastName,
+    class: s.class,
+    gender: s.gender ?? "Male",
+    dateOfBirth: s.dateOfBirth ? s.dateOfBirth.split("T")[0] : "",
+    address: s.address ?? "",
+    status: s.class === "graduated" ? "graduated" : s.isActive ? "active" : "inactive",
+    enrollmentDate: s.createdAt ? s.createdAt.split("T")[0] : "",
+  };
+}
+
+async function parseErrorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const body = await res.json();
+    return body.error ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 export const useStudents = () => {
   const [students, setStudents] = useState<Student[]>([]);
@@ -180,30 +89,46 @@ export const useStudents = () => {
   const [formData, setFormData] = useState<Partial<Student>>({
     firstName: "",
     lastName: "",
-    admissionNo: "",
-    email: "",
     class: "",
     gender: "Male",
     dateOfBirth: "",
-    phone: "",
     address: "",
     status: "active",
-    enrollmentDate: "",
   });
 
-  useEffect(() => {
-    setStudents(mockStudents);
-    setIsLoading(false);
+  const fetchStudents = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/admin/students");
+      if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to load students"));
+      const { students: apiStudents } = await res.json();
+      setStudents(apiStudents.map(fromApiStudent));
+    } catch (err) {
+      setStatusMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to load students.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    fetchStudents();
+  }, [fetchStudents]);
+
+  // Client-side search/class/status filtering is kept exactly as before -
+  // the backend also supports these as query params (GET
+  // /api/admin/students?class=&status=&search=) if you'd rather push this
+  // down to the server as the student list grows large enough that
+  // fetching everyone up front stops making sense.
   const filteredStudents = useMemo(
     () =>
       students.filter((student) => {
         const matchesSearch =
           student.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
           student.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          student.admissionNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          student.email.toLowerCase().includes(searchTerm.toLowerCase());
+          student.admissionNo.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesClass = filterClass === "all" || student.class === filterClass;
         const matchesStatus = filterStatus === "all" || student.status === filterStatus;
         return matchesSearch && matchesClass && matchesStatus;
@@ -215,12 +140,6 @@ export const useStudents = () => {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentStudents = filteredStudents.slice(indexOfFirstItem, indexOfLastItem);
-
-  const generateAdmissionNo = useCallback(() => {
-    const year = new Date().getFullYear();
-    const count = students.length + 1;
-    return `BHS-${year}-${String(count).padStart(3, "0")}`;
-  }, [students.length]);
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -252,33 +171,30 @@ export const useStudents = () => {
     }
   }, [isImporting]);
 
-  const handleAddStudent = useCallback(
-    (e: React.MouseEvent<HTMLButtonElement>) => {
-      formTriggerRef.current = e.currentTarget;
-      setIsEditing(false);
-      setFieldErrors({});
-      setFormData({
-        firstName: "",
-        lastName: "",
-        admissionNo: generateAdmissionNo(),
-        email: "",
-        class: "",
-        gender: "Male",
-        dateOfBirth: "",
-        phone: "",
-        address: "",
-        status: "active",
-        enrollmentDate: new Date().toISOString().split("T")[0],
-      });
-      setIsModalOpen(true);
-    },
-    [generateAdmissionNo],
-  );
+  const handleAddStudent = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    formTriggerRef.current = e.currentTarget;
+    setIsEditing(false);
+    setFieldErrors({});
+    // No admissionNo field here - the backend generates it on save, and a
+    // client-guessed placeholder could collide or just be wrong the moment
+    // two admins create students around the same time.
+    setFormData({
+      firstName: "",
+      lastName: "",
+      class: "",
+      gender: "Male",
+      dateOfBirth: "",
+      address: "",
+      status: "active",
+    });
+    setIsModalOpen(true);
+  }, []);
 
   const handleEditStudent = useCallback(
     (student: Student, e: React.MouseEvent<HTMLButtonElement>) => {
       formTriggerRef.current = e.currentTarget;
       setIsEditing(true);
+      setSelectedStudent(student);
       setFieldErrors({});
       setFormData(student);
       setIsModalOpen(true);
@@ -299,13 +215,12 @@ export const useStudents = () => {
     const errors: FieldErrors = {};
     if (!formData.firstName?.trim()) errors.firstName = "First name is required.";
     if (!formData.lastName?.trim()) errors.lastName = "Last name is required.";
-    if (!formData.admissionNo?.trim()) errors.admissionNo = "Admission number is required.";
     if (!formData.class) errors.class = "Please select a class.";
     return errors;
   }, [formData]);
 
   const handleSubmit = useCallback(
-    (e: React.FormEvent) => {
+    async (e: React.FormEvent) => {
       e.preventDefault();
       const errors = validate();
       setFieldErrors(errors);
@@ -319,41 +234,87 @@ export const useStudents = () => {
       }
       setStatusMessage(null);
       setIsSubmitting(true);
-      setTimeout(() => {
+
+      // "status" in the UI is really two backend concepts: `class` already
+      // has its own "graduated" value, and everything else is just
+      // isActive true/false. Translate rather than sending "status" as-is.
+      const isGraduated = formData.status === "graduated";
+      const payload = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        class: isGraduated ? "graduated" : formData.class,
+        gender: formData.gender,
+        dateOfBirth: formData.dateOfBirth || undefined,
+        address: formData.address,
+        isActive: formData.status === "active",
+      };
+
+      try {
         if (isEditing && selectedStudent) {
+          const res = await fetch(`/api/admin/students/${selectedStudent.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to update student"));
+          const { student } = await res.json();
+
           setStudents((prev) =>
-            prev.map((s) => (s.id === selectedStudent.id ? ({ ...s, ...formData } as Student) : s)),
+            prev.map((s) => (s.id === selectedStudent.id ? fromApiStudent(student) : s)),
           );
           setStatusMessage({
             type: "success",
             text: `Student ${formData.firstName} ${formData.lastName} updated successfully.`,
           });
         } else {
-          const newStudent: Student = { id: students.length + 1, ...(formData as Student) };
-          setStudents((prev) => [...prev, newStudent]);
+          const res = await fetch("/api/admin/students", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to create student"));
+          const { student, tempPassword } = await res.json();
+
+          setStudents((prev) => [fromApiStudent(student), ...prev]);
+          // tempPassword only exists in THIS response - if it's not shown
+          // now, it's gone (only the bcrypt hash is ever stored).
           setStatusMessage({
             type: "success",
-            text: `Student ${formData.firstName} ${formData.lastName} added successfully.`,
+            text: `Student ${formData.firstName} ${formData.lastName} added successfully. Admission No: ${student.admissionNumber} — Temporary password: ${tempPassword}. Save this now, it will not be shown again.`,
           });
         }
         setIsSubmitting(false);
         setIsModalOpen(false);
-        setTimeout(() => setStatusMessage(null), 5000);
-      }, 1000);
+      } catch (err) {
+        setIsSubmitting(false);
+        setStatusMessage({
+          type: "error",
+          text: err instanceof Error ? err.message : "Something went wrong.",
+        });
+      }
     },
-    [validate, isEditing, selectedStudent, formData, students.length],
+    [validate, isEditing, selectedStudent, formData],
   );
 
-  const confirmDelete = useCallback(() => {
-    if (selectedStudent) {
+  const confirmDelete = useCallback(async () => {
+    if (!selectedStudent) return;
+    try {
+      const res = await fetch(`/api/admin/students/${selectedStudent.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to delete student"));
+
       setStudents((prev) => prev.filter((s) => s.id !== selectedStudent.id));
       setStatusMessage({
         type: "warning",
         text: `Student ${selectedStudent.firstName} ${selectedStudent.lastName} has been deleted.`,
       });
+    } catch (err) {
+      setStatusMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to delete student.",
+      });
+    } finally {
       setIsDeleteModalOpen(false);
       setSelectedStudent(null);
-      setTimeout(() => setStatusMessage(null), 5000);
     }
   }, [selectedStudent]);
 
@@ -364,6 +325,58 @@ export const useStudents = () => {
     setSelectedFileName(null);
     setStatusMessage(null);
   }, []);
+
+  const parseFileContent = (content: string, fileName: string): ImportPreviewStudent[] => {
+    const parsed: ImportPreviewStudent[] = [];
+    const lines = content.split("\n").filter((line) => line.trim());
+    if (!fileName.endsWith(".csv")) return parsed;
+
+    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(",").map((v) => v.trim());
+      if (values.length < 2) continue;
+      const student: ImportPreviewStudent = {
+        firstName: "",
+        lastName: "",
+        class: "",
+        gender: "Male",
+        dateOfBirth: "",
+        address: "",
+        status: "active",
+      };
+      headers.forEach((header, index) => {
+        const value = values[index] || "";
+        switch (header) {
+          case "firstname":
+          case "first_name":
+            student.firstName = value;
+            break;
+          case "lastname":
+          case "last_name":
+            student.lastName = value;
+            break;
+          case "class":
+            student.class = value;
+            break;
+          case "gender":
+            student.gender = value || "Male";
+            break;
+          case "dateofbirth":
+          case "dob":
+            student.dateOfBirth = value;
+            break;
+          case "address":
+            student.address = value;
+            break;
+          case "status":
+            student.status = value || "active";
+            break;
+        }
+      });
+      if (student.firstName && student.lastName && student.class) parsed.push(student);
+    }
+    return parsed;
+  };
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -377,7 +390,10 @@ export const useStudents = () => {
         setImportPreview(parsedStudents);
         setStatusMessage(
           parsedStudents.length === 0
-            ? { type: "error", text: "No valid students found." }
+            ? {
+                type: "error",
+                text: "No valid students found (need at least firstName, lastName, and class).",
+              }
             : { type: "success", text: `Found ${parsedStudents.length} students ready to import.` },
         );
       } catch {
@@ -387,118 +403,90 @@ export const useStudents = () => {
     reader.readAsText(file);
   }, []);
 
-  const parseFileContent = (content: string, fileName: string): ImportPreviewStudent[] => {
-    const students: ImportPreviewStudent[] = [];
-    const lines = content.split("\n").filter((line) => line.trim());
-    const isCSV = fileName.endsWith(".csv");
-    if (isCSV) {
-      const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
-      for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(",").map((v) => v.trim());
-        if (values.length < 2) continue;
-        const student: ImportPreviewStudent = {
-          firstName: "",
-          lastName: "",
-          email: "",
-          class: "",
-          gender: "Male",
-          dateOfBirth: "",
-          phone: "",
-          address: "",
-          status: "active",
-        };
-        headers.forEach((header, index) => {
-          const value = values[index] || "";
-          switch (header) {
-            case "firstname":
-            case "first_name":
-              student.firstName = value;
-              break;
-            case "lastname":
-            case "last_name":
-              student.lastName = value;
-              break;
-            case "email":
-              student.email = value;
-              break;
-            case "class":
-              student.class = value;
-              break;
-            case "gender":
-              student.gender = value || "Male";
-              break;
-            case "dateofbirth":
-            case "dob":
-              student.dateOfBirth = value;
-              break;
-            case "phone":
-            case "phonenumber":
-              student.phone = value;
-              break;
-            case "address":
-              student.address = value;
-              break;
-            case "status":
-              student.status = value || "active";
-              break;
-          }
-        });
-        if (student.firstName && student.lastName) students.push(student);
-      }
-    }
-    return students;
-  };
-
-  const confirmImport = useCallback(() => {
+  // No bulk-import endpoint exists for students (unlike the question
+  // bank), so this creates them one at a time via the same POST used by
+  // the single "Add Student" form. Each row gets its own generated
+  // password - collected here so they can all be shown/exported at once,
+  // since none of them can be recovered after this call finishes.
+  const confirmImport = useCallback(async () => {
     if (importPreview.length === 0) {
       setStatusMessage({ type: "error", text: "No students to import." });
       return;
     }
     setIsImporting(true);
-    setTimeout(() => {
-      const newStudents: Student[] = importPreview.map((student, i) => ({
-        id: students.length + i + 1,
-        firstName: student.firstName,
-        lastName: student.lastName,
-        admissionNo: `BHS-${new Date().getFullYear()}-${String(students.length + i + 1).padStart(3, "0")}`,
-        email: student.email || "",
-        class: student.class || "JSS1",
-        gender: (student.gender as "Male" | "Female" | "Other") || "Male",
-        dateOfBirth: student.dateOfBirth || "",
-        phone: student.phone || "",
-        address: student.address || "",
-        status: (student.status as "active" | "inactive" | "graduated") || "active",
-        enrollmentDate: new Date().toISOString().split("T")[0],
-      }));
-      setStudents((prev) => [...prev, ...newStudents]);
+
+    const created: Student[] = [];
+    const credentials: { name: string; admissionNo: string; password: string }[] = [];
+    const failures: { row: number; error: string }[] = [];
+
+    for (let i = 0; i < importPreview.length; i++) {
+      const row = importPreview[i];
+      try {
+        const res = await fetch("/api/admin/students", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            firstName: row.firstName,
+            lastName: row.lastName,
+            class: row.class,
+            gender: row.gender,
+            dateOfBirth: row.dateOfBirth || undefined,
+            address: row.address,
+            isActive: row.status !== "inactive",
+          }),
+        });
+        if (!res.ok) {
+          failures.push({ row: i + 2, error: await parseErrorMessage(res, "Failed") });
+          continue;
+        }
+        const { student, tempPassword } = await res.json();
+        created.push(fromApiStudent(student));
+        credentials.push({
+          name: `${student.firstName} ${student.lastName}`,
+          admissionNo: student.admissionNumber,
+          password: tempPassword,
+        });
+      } catch {
+        failures.push({ row: i + 2, error: "Network error" });
+      }
+    }
+
+    setStudents((prev) => [...created, ...prev]);
+
+    if (created.length > 0) {
+      // Same "shown once, then gone" constraint as the single-add flow -
+      // export these somewhere durable (a downloaded CSV, printed sheet)
+      // rather than just leaving them in this in-memory status message.
+      const credentialsList = credentials
+        .map((c) => `${c.name}: ${c.admissionNo} / ${c.password}`)
+        .join("; ");
       setStatusMessage({
-        type: "success",
-        text: `Successfully imported ${newStudents.length} students.`,
+        type: failures.length > 0 ? "warning" : "success",
+        text: `Imported ${created.length} student(s).${failures.length > 0 ? ` ${failures.length} row(s) failed.` : ""} Credentials — ${credentialsList}`,
       });
-      setIsImporting(false);
-      setIsImportModalOpen(false);
-      setImportPreview([]);
-      setSelectedFileName(null);
-      setTimeout(() => setStatusMessage(null), 5000);
-    }, 1000);
-  }, [importPreview, students.length]);
+    } else {
+      setStatusMessage({ type: "error", text: "No students were imported." });
+    }
+
+    setIsImporting(false);
+    setIsImportModalOpen(false);
+    setImportPreview([]);
+    setSelectedFileName(null);
+  }, [importPreview]);
 
   const downloadTemplate = useCallback(() => {
     const headers = [
       "firstName",
       "lastName",
-      "email",
       "class",
       "gender",
       "dateOfBirth",
-      "phone",
       "address",
       "status",
     ];
-    const csvContent = [
-      headers.join(","),
-      "John,Doe,john@example.com,JSS1,Male,2010-05-15,08012345678,123 Main St,active",
-    ].join("\n");
+    const csvContent = [headers.join(","), "John,Doe,JSS1,Male,2010-05-15,123 Main St,active"].join(
+      "\n",
+    );
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -507,7 +495,6 @@ export const useStudents = () => {
     a.click();
     URL.revokeObjectURL(url);
     setStatusMessage({ type: "success", text: "Template downloaded successfully." });
-    setTimeout(() => setStatusMessage(null), 3000);
   }, []);
 
   return {

@@ -6,11 +6,9 @@ interface Student {
   admissionNo: string;
   firstName: string;
   lastName: string;
-  email: string;
   class: string;
   gender: "Male" | "Female" | "Other";
   dateOfBirth: string;
-  phone: string;
   address: string;
   status: "active" | "inactive" | "graduated";
   enrollmentDate: string;
