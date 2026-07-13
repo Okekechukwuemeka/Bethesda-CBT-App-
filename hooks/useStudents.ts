@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import type { CreatedStudentInfo } from "@/components/admin/students/StudentCreatedModal";
+import type { BulkImportResults } from "@/components/admin/students/BulkImportResultsModal";
 
 export interface Student {
   id: string;
@@ -79,6 +81,10 @@ export const useStudents = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [createdStudentInfo, setCreatedStudentInfo] = useState<CreatedStudentInfo | null>(null);
+  const [isCreatedModalOpen, setIsCreatedModalOpen] = useState(false);
+  const [bulkImportResults, setBulkImportResults] = useState<BulkImportResults | null>(null);
+  const [isBulkResultsModalOpen, setIsBulkResultsModalOpen] = useState(false);
 
   const formTriggerRef = useRef<HTMLElement | null>(null);
   const deleteTriggerRef = useRef<HTMLElement | null>(null);
@@ -163,6 +169,14 @@ export const useStudents = () => {
     }
   }, [isSubmitting]);
   const closeDeleteModal = useCallback(() => setIsDeleteModalOpen(false), []);
+  const closeCreatedModal = useCallback(() => {
+    setIsCreatedModalOpen(false);
+    setCreatedStudentInfo(null);
+  }, []);
+  const closeBulkResultsModal = useCallback(() => {
+    setIsBulkResultsModalOpen(false);
+    setBulkImportResults(null);
+  }, []);
   const closeImportModal = useCallback(() => {
     if (!isImporting) {
       setIsImportModalOpen(false);
@@ -277,11 +291,19 @@ export const useStudents = () => {
 
           setStudents((prev) => [fromApiStudent(student), ...prev]);
           // tempPassword only exists in THIS response - if it's not shown
-          // now, it's gone (only the bcrypt hash is ever stored).
+          // now, it's gone (only the bcrypt hash is ever stored). The
+          // modal (not just this status message) is what actually
+          // guarantees a screen reader user sees/hears it.
           setStatusMessage({
             type: "success",
-            text: `Student ${formData.firstName} ${formData.lastName} added successfully. Admission No: ${student.admissionNumber} — Temporary password: ${tempPassword}. Save this now, it will not be shown again.`,
+            text: `Student ${formData.firstName} ${formData.lastName} added successfully.`,
           });
+          setCreatedStudentInfo({
+            name: `${student.firstName} ${student.lastName}`,
+            admissionNo: student.admissionNumber,
+            tempPassword,
+          });
+          setIsCreatedModalOpen(true);
         }
         setIsSubmitting(false);
         setIsModalOpen(false);
@@ -453,20 +475,18 @@ export const useStudents = () => {
 
     setStudents((prev) => [...created, ...prev]);
 
-    if (created.length > 0) {
-      // Same "shown once, then gone" constraint as the single-add flow -
-      // export these somewhere durable (a downloaded CSV, printed sheet)
-      // rather than just leaving them in this in-memory status message.
-      const credentialsList = credentials
-        .map((c) => `${c.name}: ${c.admissionNo} / ${c.password}`)
-        .join("; ");
-      setStatusMessage({
-        type: failures.length > 0 ? "warning" : "success",
-        text: `Imported ${created.length} student(s).${failures.length > 0 ? ` ${failures.length} row(s) failed.` : ""} Credentials — ${credentialsList}`,
-      });
-    } else {
-      setStatusMessage({ type: "error", text: "No students were imported." });
-    }
+    setBulkImportResults({ created: credentials, failures });
+    setIsBulkResultsModalOpen(true);
+    // A short, credential-free summary for the toast - the modal is what
+    // actually carries the sensitive data now.
+    setStatusMessage(
+      created.length > 0
+        ? {
+            type: failures.length > 0 ? "warning" : "success",
+            text: `Imported ${created.length} student(s).${failures.length > 0 ? ` ${failures.length} row(s) failed.` : ""}`,
+          }
+        : { type: "error", text: "No students were imported." },
+    );
 
     setIsImporting(false);
     setIsImportModalOpen(false);
@@ -516,6 +536,12 @@ export const useStudents = () => {
     isImporting,
     isSubmitting,
     isEditing,
+    createdStudentInfo,
+    isCreatedModalOpen,
+    closeCreatedModal,
+    bulkImportResults,
+    isBulkResultsModalOpen,
+    closeBulkResultsModal,
     formData,
     formTriggerRef,
     deleteTriggerRef,

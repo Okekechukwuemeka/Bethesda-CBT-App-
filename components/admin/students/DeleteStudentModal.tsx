@@ -1,15 +1,13 @@
 import React, { useEffect, useRef } from "react";
 
 interface Student {
-  id: number;
+  id: string;
   admissionNo: string;
   firstName: string;
   lastName: string;
-  email: string;
   class: string;
   gender: "Male" | "Female" | "Other";
   dateOfBirth: string;
-  phone: string;
   address: string;
   status: "active" | "inactive" | "graduated";
   enrollmentDate: string;

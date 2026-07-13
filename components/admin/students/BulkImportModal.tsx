@@ -3,11 +3,9 @@ import React, { useEffect, useRef } from "react";
 interface ImportPreviewStudent {
   firstName: string;
   lastName: string;
-  email: string;
   class: string;
   gender: string;
   dateOfBirth: string;
-  phone: string;
   address: string;
   status: string;
 }

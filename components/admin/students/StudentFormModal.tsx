@@ -1,21 +1,7 @@
 import React, { useRef, useEffect } from "react";
+import type { Student } from "@/hooks/useStudents";
 
-interface Student {
-  id: number;
-  admissionNo: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  class: string;
-  gender: "Male" | "Female" | "Other";
-  dateOfBirth: string;
-  phone: string;
-  address: string;
-  status: "active" | "inactive" | "graduated";
-  enrollmentDate: string;
-}
-
-type RequiredField = "firstName" | "lastName" | "admissionNo" | "class";
+type RequiredField = "firstName" | "lastName" | "class";
 type FieldErrors = Partial<Record<RequiredField, string>>;
 
 interface StudentFormModalProps {
@@ -42,9 +28,6 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
   onCancel,
 }) => {
   const firstInputRef = useRef<HTMLInputElement>(null);
-  const lastNameRef = useRef<HTMLInputElement>(null);
-  const admissionNoRef = useRef<HTMLInputElement>(null);
-  const classRef = useRef<HTMLSelectElement>(null);
 
   const errorId = (field: RequiredField) => `${field}-error`;
   const describedBy = (field: RequiredField) => (fieldErrors[field] ? errorId(field) : undefined);
@@ -114,7 +97,6 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
                   </span>
                 </label>
                 <input
-                  ref={lastNameRef}
                   type="text"
                   id="lastName"
                   name="lastName"
@@ -131,54 +113,29 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
                   </p>
                 )}
               </div>
-              <div>
-                <label
-                  htmlFor="admissionNo"
-                  className="block text-sm font-medium text-[#1A3A5C] mb-1">
-                  Admission Number{" "}
-                  <span className="text-red-500" aria-hidden="true">
-                    *
+
+              {/* Admission number is never entered by an admin - the backend
+                  always generates it and ignores anything submitted for
+                  this field. Shown read-only once it exists (edit mode
+                  only); on the create form there's nothing to show yet. */}
+              {isEditing && (
+                <div>
+                  <span
+                    id="admissionNo-label"
+                    className="block text-sm font-medium text-[#1A3A5C] mb-1">
+                    Admission Number
                   </span>
-                </label>
-                <input
-                  ref={admissionNoRef}
-                  type="text"
-                  id="admissionNo"
-                  name="admissionNo"
-                  value={formData.admissionNo || ""}
-                  onChange={onChange}
-                  aria-required="true"
-                  aria-invalid={!!fieldErrors.admissionNo}
-                  aria-describedby={
-                    fieldErrors.admissionNo ? errorId("admissionNo") : "admissionNo-hint"
-                  }
-                  disabled={isEditing}
-                  className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE] disabled:bg-gray-100 disabled:cursor-not-allowed"
-                />
-                <p id="admissionNo-hint" className="text-xs text-[#8A9CAE] mt-1">
-                  {isEditing
-                    ? "Cannot be changed after creation."
-                    : "Auto-generated admission number."}
-                </p>
-                {fieldErrors.admissionNo && (
-                  <p id={errorId("admissionNo")} className="mt-1 text-sm text-red-600">
-                    {fieldErrors.admissionNo}
+                  <p
+                    aria-labelledby="admissionNo-label"
+                    className="w-full px-3 py-2 border border-[#E8EEF5] rounded-lg bg-gray-100 text-[#4A6A8A]">
+                    {formData.admissionNo}
                   </p>
-                )}
-              </div>
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-[#1A3A5C] mb-1">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email || ""}
-                  onChange={onChange}
-                  className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE]"
-                />
-              </div>
+                  <p className="text-xs text-[#8A9CAE] mt-1">
+                    Assigned automatically, cannot be changed.
+                  </p>
+                </div>
+              )}
+
               <div>
                 <label htmlFor="gender" className="block text-sm font-medium text-[#1A3A5C] mb-1">
                   Gender
@@ -209,19 +166,6 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
                   className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE]"
                 />
               </div>
-              <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-[#1A3A5C] mb-1">
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  id="phone"
-                  name="phone"
-                  value={formData.phone || ""}
-                  onChange={onChange}
-                  className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE]"
-                />
-              </div>
             </div>
           </fieldset>
 
@@ -238,7 +182,6 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
                   </span>
                 </label>
                 <select
-                  ref={classRef}
                   id="class"
                   name="class"
                   value={formData.class || ""}
@@ -251,6 +194,9 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
                   <option value="JSS1">JSS1</option>
                   <option value="JSS2">JSS2</option>
                   <option value="JSS3">JSS3</option>
+                  <option value="SSS1">SSS1</option>
+                  <option value="SSS2">SSS2</option>
+                  <option value="SSS3">SSS3</option>
                 </select>
                 {fieldErrors.class && (
                   <p id={errorId("class")} className="mt-1 text-sm text-red-600">
@@ -272,22 +218,30 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
                   <option value="inactive">Inactive</option>
                   <option value="graduated">Graduated</option>
                 </select>
+                <p className="text-xs text-[#8A9CAE] mt-1">
+                  &quot;Graduated&quot; replaces the student&apos;s class rather than being tracked
+                  separately.
+                </p>
               </div>
-              <div>
-                <label
-                  htmlFor="enrollmentDate"
-                  className="block text-sm font-medium text-[#1A3A5C] mb-1">
-                  Enrollment Date
-                </label>
-                <input
-                  type="date"
-                  id="enrollmentDate"
-                  name="enrollmentDate"
-                  value={formData.enrollmentDate || ""}
-                  onChange={onChange}
-                  className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE]"
-                />
-              </div>
+
+              {/* Enrollment date is the backend's own createdAt timestamp -
+                  read-only, and only exists once the student has actually
+                  been created. */}
+              {isEditing && (
+                <div>
+                  <span
+                    id="enrollmentDate-label"
+                    className="block text-sm font-medium text-[#1A3A5C] mb-1">
+                    Enrolled
+                  </span>
+                  <p
+                    aria-labelledby="enrollmentDate-label"
+                    className="w-full px-3 py-2 border border-[#E8EEF5] rounded-lg bg-gray-100 text-[#4A6A8A]">
+                    {formData.enrollmentDate}
+                  </p>
+                </div>
+              )}
+
               <div className="md:col-span-2">
                 <label htmlFor="address" className="block text-sm font-medium text-[#1A3A5C] mb-1">
                   Address

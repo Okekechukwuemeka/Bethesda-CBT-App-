@@ -1,4 +1,6 @@
 import mongoose, { Schema, models, model, Document } from "mongoose";
+
+import "./subject.model";
 import {
   CLASS_LEVELS,
   ClassLevel,
@@ -12,6 +14,9 @@ import {
 
 export interface IExamQuestionRef {
   question: mongoose.Types.ObjectId;
+  // Position within THIS exam specifically - the same bank question could
+  // sit at a different position in another exam, so ordering can't live on
+  // Question itself.
   order: number;
 }
 
@@ -24,6 +29,9 @@ export interface IExam extends Document {
   type: ExamType;
   examDate: Date;
   duration: number; // minutes
+  // Questions attached from the bank. questionCount/totalMarks below are
+  // denormalized from this for cheap list-page reads, kept in sync by
+  // recomputeExamTotals() - see below.
   questions: IExamQuestionRef[];
   questionCount: number;
   totalMarks: number;
@@ -95,7 +103,10 @@ const examSchema = new Schema<IExam>(
         order: { type: Number, default: 0 },
       },
     ],
-
+    // Denormalized so list views (like the Exams page) don't need to
+    // populate + sum the attached questions on every render. Kept in sync
+    // by recomputeExamTotals(), called explicitly whenever `questions`
+    // changes (see the attach/detach route handlers).
     questionCount: { type: Number, default: 0, min: 0 },
     totalMarks: { type: Number, default: 0, min: 0 },
     status: {

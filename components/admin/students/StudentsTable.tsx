@@ -1,18 +1,6 @@
 import React from "react";
 import StudentStatusBadge from "./StudentStatusBadge";
-
-interface Student {
-  id: number;
-  admissionNo: string;
-  firstName: string;
-  lastName: string;
-  class: string;
-  gender: "Male" | "Female" | "Other";
-  dateOfBirth: string;
-  address: string;
-  status: "active" | "inactive" | "graduated";
-  enrollmentDate: string;
-}
+import type { Student } from "@/hooks/useStudents";
 
 interface StudentsTableProps {
   students: Student[];
@@ -179,4 +167,3 @@ const StudentsTable: React.FC<StudentsTableProps> = ({ students, onEdit, onDelet
 };
 
 export default StudentsTable;
-1;

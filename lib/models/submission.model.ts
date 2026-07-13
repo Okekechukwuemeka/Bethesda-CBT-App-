@@ -1,4 +1,12 @@
 import mongoose, { Schema, models, model, Document } from "mongoose";
+// Side-effect imports: this schema references all four of these via ref
+// below (question, exam, student, markedBy->admin). Registering them here
+// means any route that imports Submission and populates one of these
+// fields works without needing to separately remember each dependency.
+import "./question.model";
+import "./exam.model";
+import "./student.model";
+import "./admin.model";
 import { SUBMISSION_STATUSES, SubmissionStatus } from "./constants";
 
 export interface IAnswerRecord {

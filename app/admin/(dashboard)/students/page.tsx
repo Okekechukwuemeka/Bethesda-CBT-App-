@@ -8,6 +8,8 @@ import Pagination from "@/components/admin/students/Pagination";
 import StudentFormModal from "@/components/admin/students/StudentFormModal";
 import DeleteStudentModal from "@/components/admin/students/DeleteStudentModal";
 import BulkImportModal from "@/components/admin/students/BulkImportModal";
+import StudentCreatedModal from "@/components/admin/students/StudentCreatedModal";
+import BulkImportResultsModal from "@/components/admin/students/BulkImportResultsModal";
 import { useStudents } from "@/hooks/useStudents";
 
 const StudentsPage: React.FC = () => {
@@ -26,6 +28,12 @@ const StudentsPage: React.FC = () => {
     itemsPerPage,
     isSubmitting,
     isEditing,
+    createdStudentInfo,
+    isCreatedModalOpen,
+    closeCreatedModal,
+    bulkImportResults,
+    isBulkResultsModalOpen,
+    closeBulkResultsModal,
     formData,
     formTriggerRef,
     deleteTriggerRef,
@@ -58,6 +66,8 @@ const StudentsPage: React.FC = () => {
   const formModalRef = React.useRef<HTMLDivElement>(null);
   const deleteModalRef = React.useRef<HTMLDivElement>(null);
   const importModalRef = React.useRef<HTMLDivElement>(null);
+  const createdModalRef = React.useRef<HTMLDivElement>(null);
+  const bulkResultsModalRef = React.useRef<HTMLDivElement>(null);
 
   useModalFocusTrap(isModalOpen, formModalRef, formTriggerRef, closeFormModal, !isSubmitting);
   useModalFocusTrap(isDeleteModalOpen, deleteModalRef, deleteTriggerRef, closeDeleteModal, true);
@@ -68,8 +78,27 @@ const StudentsPage: React.FC = () => {
     closeImportModal,
     !isImporting,
   );
+  // Returns focus to the "Add Student" button once this closes - there's
+  // no dedicated trigger element for a dialog that opens as a *result* of
+  // another action completing, so reusing formTriggerRef is the most
+  // sensible fallback.
+  useModalFocusTrap(isCreatedModalOpen, createdModalRef, formTriggerRef, closeCreatedModal, true);
+  // Returns focus to the "Import Bulk" button - this dialog is the final
+  // step of that same flow (upload -> preview -> confirm -> results).
+  useModalFocusTrap(
+    isBulkResultsModalOpen,
+    bulkResultsModalRef,
+    importTriggerRef,
+    closeBulkResultsModal,
+    true,
+  );
 
-  const anyModalOpen = isModalOpen || isDeleteModalOpen || isImportModalOpen;
+  const anyModalOpen =
+    isModalOpen ||
+    isDeleteModalOpen ||
+    isImportModalOpen ||
+    isCreatedModalOpen ||
+    isBulkResultsModalOpen;
 
   if (isLoading) {
     return (
@@ -156,6 +185,7 @@ const StudentsPage: React.FC = () => {
           onClassChange={setFilterClass}
           onStatusChange={setFilterStatus}
         />
+
         <StudentsTable
           students={currentStudents}
           onEdit={handleEditStudent}
@@ -202,6 +232,18 @@ const StudentsPage: React.FC = () => {
         onConfirmImport={confirmImport}
         onDownloadTemplate={downloadTemplate}
         onCancel={closeImportModal}
+      />
+
+      <StudentCreatedModal
+        isOpen={isCreatedModalOpen}
+        student={createdStudentInfo}
+        onClose={closeCreatedModal}
+      />
+
+      <BulkImportResultsModal
+        isOpen={isBulkResultsModalOpen}
+        results={bulkImportResults}
+        onClose={closeBulkResultsModal}
       />
     </>
   );

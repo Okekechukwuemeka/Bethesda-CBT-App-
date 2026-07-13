@@ -19,3 +19,5 @@ export type QuestionType = (typeof QUESTION_TYPES)[number];
 // and "Marked / Pending / In-Progress" on the Student Scripts modal.
 export const SUBMISSION_STATUSES = ["Not Started", "In Progress", "Submitted", "Marked"] as const;
 export type SubmissionStatus = (typeof SUBMISSION_STATUSES)[number];
+export const GENDERS = ["male", "female"] as const;
+export type Gender = (typeof GENDERS)[number];
