@@ -1,372 +1,26 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useRef } from "react";
 import Link from "next/link";
-
-interface DashboardStats {
-  totalStudents: number;
-  totalExams: number;
-  activeExams: number;
-  pendingSubmissions: number;
-  completionRate: number;
-}
-
-interface RecentActivity {
-  id: number;
-  student: string;
-  exam: string;
-  action: string;
-  time: string;
-  status: "completed" | "in-progress" | "pending";
-}
-
-interface UpcomingExam {
-  id: number;
-  subject: string;
-  class: string;
-  date: string;
-  time: string;
-  status: "upcoming" | "today" | "ongoing";
-}
-
-// Mock data interfaces for other tabs
-interface ExamData {
-  id: number;
-  subject: string;
-  class: string;
-  term: string;
-  totalQuestions: number;
-  duration: string;
-  status: "active" | "scheduled" | "completed";
-  date: string;
-  participants: number;
-}
-
-interface StudentData {
-  id: number;
-  name: string;
-  class: string;
-  email: string;
-  examsTaken: number;
-  avgScore: number;
-  status: "active" | "inactive";
-  lastActive: string;
-}
-
-interface SubmissionData {
-  id: number;
-  student: string;
-  exam: string;
-  subject: string;
-  submittedDate: string;
-  score: number | null;
-  status: "graded" | "pending" | "in-review";
-  timeTaken: string;
-}
+import { useDashboard } from "@/hooks/useDashboard";
 
 const TAB_IDS = ["overview", "exams", "students", "submissions"] as const;
 type TabId = (typeof TAB_IDS)[number];
 
 const DashboardPage: React.FC = () => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [stats, setStats] = useState<DashboardStats>({
-    totalStudents: 0,
-    totalExams: 0,
-    activeExams: 0,
-    pendingSubmissions: 0,
-    completionRate: 0,
-  });
-  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
-  const [upcomingExams, setUpcomingExams] = useState<UpcomingExam[]>([]);
-  const [selectedTab, setSelectedTab] = useState<TabId>("overview");
+  const {
+    isLoading,
+    error,
+    stats,
+    recentActivities,
+    upcomingExams,
+    examsData,
+    studentsData,
+    submissionsData,
+  } = useDashboard();
 
-  // Mock data for other tabs
-  const [examsData, setExamsData] = useState<ExamData[]>([]);
-  const [studentsData, setStudentsData] = useState<StudentData[]>([]);
-  const [submissionsData, setSubmissionsData] = useState<SubmissionData[]>([]);
-
+  const [selectedTab, setSelectedTab] = React.useState<TabId>("overview");
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
-
-  // Mock data - in production, this would come from an API
-  useEffect(() => {
-    setTimeout(() => {
-      setStats({
-        totalStudents: 245,
-        totalExams: 28,
-        activeExams: 6,
-        pendingSubmissions: 12,
-        completionRate: 78,
-      });
-
-      setRecentActivities([
-        {
-          id: 1,
-          student: "John Doe",
-          exam: "Chemistry First Term",
-          action: "submitted",
-          time: "2 minutes ago",
-          status: "completed",
-        },
-        {
-          id: 2,
-          student: "Jane Smith",
-          exam: "Mathematics First Term",
-          action: "started",
-          time: "15 minutes ago",
-          status: "in-progress",
-        },
-        {
-          id: 3,
-          student: "Mike Johnson",
-          exam: "Physics First Term",
-          action: "submitted",
-          time: "1 hour ago",
-          status: "completed",
-        },
-        {
-          id: 4,
-          student: "Sarah Williams",
-          exam: "Biology First Term",
-          action: "pending review",
-          time: "2 hours ago",
-          status: "pending",
-        },
-        {
-          id: 5,
-          student: "David Brown",
-          exam: "English First Term",
-          action: "started",
-          time: "3 hours ago",
-          status: "in-progress",
-        },
-      ]);
-
-      setUpcomingExams([
-        {
-          id: 1,
-          subject: "Chemistry",
-          class: "JSS3",
-          date: "2025-07-15",
-          time: "7:00 AM",
-          status: "today",
-        },
-        {
-          id: 2,
-          subject: "Mathematics",
-          class: "JSS3",
-          date: "2025-07-16",
-          time: "9:00 AM",
-          status: "upcoming",
-        },
-        {
-          id: 3,
-          subject: "Physics",
-          class: "JSS3",
-          date: "2025-07-17",
-          time: "7:00 AM",
-          status: "upcoming",
-        },
-        {
-          id: 4,
-          subject: "English Language",
-          class: "JSS3",
-          date: "2025-07-18",
-          time: "10:00 AM",
-          status: "upcoming",
-        },
-      ]);
-
-      // Mock data for Exams tab
-      setExamsData([
-        {
-          id: 1,
-          subject: "Chemistry",
-          class: "JSS3",
-          term: "First Term",
-          totalQuestions: 50,
-          duration: "2 hours",
-          status: "active",
-          date: "2025-07-15",
-          participants: 45,
-        },
-        {
-          id: 2,
-          subject: "Mathematics",
-          class: "JSS3",
-          term: "First Term",
-          totalQuestions: 40,
-          duration: "2.5 hours",
-          status: "scheduled",
-          date: "2025-07-16",
-          participants: 52,
-        },
-        {
-          id: 3,
-          subject: "Physics",
-          class: "JSS3",
-          term: "First Term",
-          totalQuestions: 35,
-          duration: "2 hours",
-          status: "scheduled",
-          date: "2025-07-17",
-          participants: 48,
-        },
-        {
-          id: 4,
-          subject: "English Language",
-          class: "JSS3",
-          term: "First Term",
-          totalQuestions: 60,
-          duration: "2 hours",
-          status: "scheduled",
-          date: "2025-07-18",
-          participants: 55,
-        },
-        {
-          id: 5,
-          subject: "Biology",
-          class: "JSS2",
-          term: "Second Term",
-          totalQuestions: 45,
-          duration: "1.5 hours",
-          status: "completed",
-          date: "2025-06-20",
-          participants: 38,
-        },
-        {
-          id: 6,
-          subject: "History",
-          class: "JSS1",
-          term: "Second Term",
-          totalQuestions: 30,
-          duration: "1 hour",
-          status: "completed",
-          date: "2025-06-18",
-          participants: 42,
-        },
-      ]);
-
-      // Mock data for Students tab
-      setStudentsData([
-        {
-          id: 1,
-          name: "John Doe",
-          class: "JSS3",
-          email: "john.doe@school.edu",
-          examsTaken: 8,
-          avgScore: 85,
-          status: "active",
-          lastActive: "2 hours ago",
-        },
-        {
-          id: 2,
-          name: "Jane Smith",
-          class: "JSS3",
-          email: "jane.smith@school.edu",
-          examsTaken: 10,
-          avgScore: 92,
-          status: "active",
-          lastActive: "15 minutes ago",
-        },
-        {
-          id: 3,
-          name: "Mike Johnson",
-          class: "JSS2",
-          email: "mike.johnson@school.edu",
-          examsTaken: 7,
-          avgScore: 78,
-          status: "active",
-          lastActive: "1 day ago",
-        },
-        {
-          id: 4,
-          name: "Sarah Williams",
-          class: "JSS3",
-          email: "sarah.williams@school.edu",
-          examsTaken: 9,
-          avgScore: 88,
-          status: "inactive",
-          lastActive: "3 days ago",
-        },
-        {
-          id: 5,
-          name: "David Brown",
-          class: "JSS1",
-          email: "david.brown@school.edu",
-          examsTaken: 6,
-          avgScore: 71,
-          status: "active",
-          lastActive: "5 hours ago",
-        },
-      ]);
-
-      // Mock data for Submissions tab
-      setSubmissionsData([
-        {
-          id: 1,
-          student: "John Doe",
-          exam: "Chemistry First Term",
-          subject: "Chemistry",
-          submittedDate: "2025-07-15",
-          score: 85,
-          status: "graded",
-          timeTaken: "1h 45m",
-        },
-        {
-          id: 2,
-          student: "Jane Smith",
-          exam: "Mathematics First Term",
-          subject: "Mathematics",
-          submittedDate: "2025-07-14",
-          score: 92,
-          status: "graded",
-          timeTaken: "2h 10m",
-        },
-        {
-          id: 3,
-          student: "Mike Johnson",
-          exam: "Physics First Term",
-          subject: "Physics",
-          submittedDate: "2025-07-15",
-          score: null,
-          status: "in-review",
-          timeTaken: "1h 30m",
-        },
-        {
-          id: 4,
-          student: "Sarah Williams",
-          exam: "Biology First Term",
-          subject: "Biology",
-          submittedDate: "2025-07-13",
-          score: null,
-          status: "pending",
-          timeTaken: "1h 15m",
-        },
-        {
-          id: 5,
-          student: "David Brown",
-          exam: "English First Term",
-          subject: "English",
-          submittedDate: "2025-07-12",
-          score: 78,
-          status: "graded",
-          timeTaken: "2h 5m",
-        },
-        {
-          id: 6,
-          student: "Emily Davis",
-          exam: "History Second Term",
-          subject: "History",
-          submittedDate: "2025-07-11",
-          score: 88,
-          status: "graded",
-          timeTaken: "1h 20m",
-        },
-      ]);
-
-      setIsLoading(false);
-    }, 1000);
-  }, []);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -382,7 +36,6 @@ const DashboardPage: React.FC = () => {
       case "in-progress":
       case "scheduled":
       case "upcoming":
-      case "in-review":
         return "bg-blue-100 text-blue-800";
       case "pending":
         return "bg-yellow-100 text-yellow-800";
@@ -390,6 +43,7 @@ const DashboardPage: React.FC = () => {
       case "active":
         return "bg-red-100 text-red-800";
       case "inactive":
+      case "graduated":
         return "bg-gray-100 text-gray-800";
       default:
         return "bg-gray-100 text-gray-800";
@@ -415,10 +69,10 @@ const DashboardPage: React.FC = () => {
         return "Active";
       case "inactive":
         return "Inactive";
+      case "graduated":
+        return "Graduated";
       case "scheduled":
         return "Scheduled";
-      case "in-review":
-        return "In Review";
       default:
         return status;
     }
@@ -519,6 +173,17 @@ const DashboardPage: React.FC = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]" role="alert">
+        <div className="text-center">
+          <p className="text-red-600 font-medium">Couldn&apos;t load the dashboard.</p>
+          <p className="text-[#5A7A9A] text-sm mt-1">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -542,8 +207,6 @@ const DashboardPage: React.FC = () => {
               />
             </svg>
           }
-          change="Up 12 this month"
-          changeType="positive"
         />
         <StatCard
           title="Total Exams"
@@ -558,8 +221,6 @@ const DashboardPage: React.FC = () => {
               />
             </svg>
           }
-          change="Up 3 this week"
-          changeType="positive"
         />
         <StatCard
           title="Active Exams"
@@ -574,8 +235,6 @@ const DashboardPage: React.FC = () => {
               />
             </svg>
           }
-          change="2 ending today"
-          changeType="neutral"
         />
         <StatCard
           title="Pending Submissions"
@@ -590,8 +249,6 @@ const DashboardPage: React.FC = () => {
               />
             </svg>
           }
-          change="5 need immediate attention"
-          changeType="negative"
         />
         <StatCard
           title="Completion Rate"
@@ -606,8 +263,6 @@ const DashboardPage: React.FC = () => {
               />
             </svg>
           }
-          change="Up 5% from last week"
-          changeType="positive"
         />
       </div>
 
@@ -675,28 +330,34 @@ const DashboardPage: React.FC = () => {
                     View All <span aria-hidden="true">→</span>
                   </Link>
                 </div>
-                <div className="space-y-3">
-                  {recentActivities.map((activity) => (
-                    <div
-                      key={activity.id}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-[#C5D8EC] rounded-lg hover:bg-[#F8FAFE] transition"
-                      role="article"
-                      aria-label={`${activity.student} ${activity.action} ${activity.exam}`}>
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                        <span className="font-medium text-[#1A3A5C]">{activity.student}</span>
-                        <span className="text-[#4A6A8A] text-sm">{activity.action}</span>
-                        <span className="text-[#4A6A8A] text-sm font-medium">{activity.exam}</span>
+                {recentActivities.length === 0 ? (
+                  <p className="text-sm text-[#8A9CAE]">No activity yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {recentActivities.map((activity) => (
+                      <div
+                        key={activity.id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-[#C5D8EC] rounded-lg hover:bg-[#F8FAFE] transition"
+                        role="article"
+                        aria-label={`${activity.student} ${activity.action} ${activity.exam}`}>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                          <span className="font-medium text-[#1A3A5C]">{activity.student}</span>
+                          <span className="text-[#4A6A8A] text-sm">{activity.action}</span>
+                          <span className="text-[#4A6A8A] text-sm font-medium">
+                            {activity.exam}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 mt-2 sm:mt-0">
+                          <span
+                            className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(activity.status)}`}>
+                            {getStatusLabel(activity.status)}
+                          </span>
+                          <span className="text-xs text-[#8A9CAE]">{activity.time}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3 mt-2 sm:mt-0">
-                        <span
-                          className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(activity.status)}`}>
-                          {getStatusLabel(activity.status)}
-                        </span>
-                        <span className="text-xs text-[#8A9CAE]">{activity.time}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </section>
 
               {/* Upcoming Exams */}
@@ -713,30 +374,34 @@ const DashboardPage: React.FC = () => {
                     Manage Exams <span aria-hidden="true">→</span>
                   </Link>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {upcomingExams.map((exam) => (
-                    <div
-                      key={exam.id}
-                      className="border border-[#C5D8EC] rounded-lg p-4 hover:shadow-md transition"
-                      role="article"
-                      aria-label={`${exam.subject} exam for ${exam.class}`}>
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h3 className="font-semibold text-[#1A3A5C]">{exam.subject}</h3>
-                          <p className="text-sm text-[#4A6A8A]">{exam.class}</p>
+                {upcomingExams.length === 0 ? (
+                  <p className="text-sm text-[#8A9CAE]">No upcoming exams scheduled.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {upcomingExams.map((exam) => (
+                      <div
+                        key={exam.id}
+                        className="border border-[#C5D8EC] rounded-lg p-4 hover:shadow-md transition"
+                        role="article"
+                        aria-label={`${exam.subject} exam for ${exam.class}`}>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h3 className="font-semibold text-[#1A3A5C]">{exam.subject}</h3>
+                            <p className="text-sm text-[#4A6A8A]">{exam.class}</p>
+                          </div>
+                          <span
+                            className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(exam.status)}`}>
+                            {getStatusLabel(exam.status)}
+                          </span>
                         </div>
-                        <span
-                          className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(exam.status)}`}>
-                          {getStatusLabel(exam.status)}
-                        </span>
+                        <div className="mt-3 text-sm text-[#5A7A9A]">
+                          <p>Date: {formatDate(exam.date)}</p>
+                          <p>Time: {exam.time}</p>
+                        </div>
                       </div>
-                      <div className="mt-3 text-sm text-[#5A7A9A]">
-                        <p>Date: {formatDate(exam.date)}</p>
-                        <p>Time: {exam.time}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </section>
             </div>
           )}
@@ -815,15 +480,15 @@ const DashboardPage: React.FC = () => {
                     <tr className="border-b border-[#E8EEF5]">
                       <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Name</th>
                       <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Class</th>
-                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Email</th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">
+                        Admission No.
+                      </th>
                       <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">
                         Exams Taken
                       </th>
                       <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Avg Score</th>
                       <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Status</th>
-                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">
-                        Last Active
-                      </th>
+                      <th className="text-left py-3 px-4 text-[#5A7A9A] font-medium">Joined</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -833,7 +498,7 @@ const DashboardPage: React.FC = () => {
                         className="border-b border-[#F0F4F9] hover:bg-[#F8FAFE] transition">
                         <td className="py-3 px-4 font-medium text-[#1A3A5C]">{student.name}</td>
                         <td className="py-3 px-4 text-[#4A6A8A]">{student.class}</td>
-                        <td className="py-3 px-4 text-[#4A6A8A]">{student.email}</td>
+                        <td className="py-3 px-4 text-[#4A6A8A]">{student.admissionNumber}</td>
                         <td className="py-3 px-4 text-[#4A6A8A]">{student.examsTaken}</td>
                         <td className="py-3 px-4">
                           <span
@@ -844,7 +509,7 @@ const DashboardPage: React.FC = () => {
                                   ? "text-yellow-600"
                                   : "text-red-600"
                             }`}>
-                            {student.avgScore}%
+                            {student.examsTaken > 0 ? `${student.avgScore}%` : "—"}
                           </span>
                         </td>
                         <td className="py-3 px-4">
@@ -853,7 +518,9 @@ const DashboardPage: React.FC = () => {
                             {getStatusLabel(student.status)}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-[#4A6A8A]">{student.lastActive}</td>
+                        <td className="py-3 px-4 text-[#4A6A8A]">
+                          {formatDate(student.createdAt)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
