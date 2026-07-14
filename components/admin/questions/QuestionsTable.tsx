@@ -1,62 +1,81 @@
 import React from "react";
-
-interface Question {
-  id: number;
-  text: string;
-  type: "objective" | "theory";
-  options: string[];
-  correctAnswer: string;
-  marks: number;
-}
+import type { ExamQuestion } from "@/hooks/useExamQuestions";
 
 interface QuestionsTableProps {
-  questions: Question[];
-  onEdit: (question: Question, e: React.MouseEvent<HTMLButtonElement>) => void;
-  onDelete: (question: Question) => void;
+  questions: ExamQuestion[];
+  isLoading: boolean;
+  onEdit: (question: ExamQuestion, e: React.MouseEvent<HTMLButtonElement>) => void;
+  onDelete: (question: ExamQuestion) => void;
 }
 
 const getTypeBadgeColor = (type: string) =>
-  type === "objective" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800";
+  type === "Objective" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800";
 
 const truncate = (text: string, len: number) =>
   text.length > len ? `${text.slice(0, len)}…` : text;
 
-const QuestionsTable: React.FC<QuestionsTableProps> = ({ questions, onEdit, onDelete }) => {
+const TableHead = () => (
+  <thead className="bg-[#F8FAFE] border-b border-[#E8EEF5]">
+    <tr>
+      <th
+        scope="col"
+        className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
+        #
+      </th>
+      <th
+        scope="col"
+        className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
+        Question
+      </th>
+      <th
+        scope="col"
+        className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
+        Type
+      </th>
+      <th
+        scope="col"
+        className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
+        Marks
+      </th>
+      <th
+        scope="col"
+        className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
+        Actions
+      </th>
+    </tr>
+  </thead>
+);
+
+const QuestionsTable: React.FC<QuestionsTableProps> = ({
+  questions,
+  isLoading,
+  onEdit,
+  onDelete,
+}) => {
   const totalMarks = questions.reduce((sum, q) => sum + q.marks, 0);
+
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-xl border border-[#C5D8EC] overflow-hidden shadow-sm">
+        <table className="w-full" aria-label="Questions list">
+          <TableHead />
+          <tbody>
+            <tr>
+              <td colSpan={5} className="px-4 py-12 text-center text-[#8A9CAE]">
+                Loading questions…
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    );
+  }
 
   if (questions.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-[#C5D8EC] overflow-hidden shadow-sm">
         <table className="w-full" aria-label="Questions list">
-          <thead className="bg-[#F8FAFE] border-b border-[#E8EEF5]">
-            <tr>
-              <th
-                scope="col"
-                className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                #
-              </th>
-              <th
-                scope="col"
-                className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                Question
-              </th>
-              <th
-                scope="col"
-                className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                Type
-              </th>
-              <th
-                scope="col"
-                className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                Marks
-              </th>
-              <th
-                scope="col"
-                className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
+          <TableHead />
           <tbody>
             <tr>
               <td colSpan={5} className="px-4 py-12 text-center text-[#8A9CAE]">
@@ -77,47 +96,19 @@ const QuestionsTable: React.FC<QuestionsTableProps> = ({ questions, onEdit, onDe
     <div className="bg-white rounded-xl border border-[#C5D8EC] overflow-hidden shadow-sm">
       <div className="overflow-x-auto">
         <table className="w-full" aria-label="Questions list">
-          <thead className="bg-[#F8FAFE] border-b border-[#E8EEF5]">
-            <tr>
-              <th
-                scope="col"
-                className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                #
-              </th>
-              <th
-                scope="col"
-                className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                Question
-              </th>
-              <th
-                scope="col"
-                className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                Type
-              </th>
-              <th
-                scope="col"
-                className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                Marks
-              </th>
-              <th
-                scope="col"
-                className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
+          <TableHead />
           <tbody className="divide-y divide-[#E8EEF5]">
             {questions.map((question, index) => (
-              <tr key={question.id} className="hover:bg-[#F8FAFE] transition">
+              <tr key={question._id} className="hover:bg-[#F8FAFE] transition">
                 <td className="px-4 py-3 text-sm text-[#4A6A8A]">{index + 1}</td>
                 <td className="px-4 py-3 text-sm text-[#4A6A8A] max-w-md">
                   {question.text}
-                  {question.type === "objective" && question.options.length > 0 && (
+                  {question.type === "Objective" && (question.options?.length ?? 0) > 0 && (
                     <div className="text-xs text-[#8A9CAE] mt-1">
-                      Options: {question.options.join(", ")}
+                      Options: {question.options?.join(", ")}
                     </div>
                   )}
-                  {question.type === "objective" && question.correctAnswer && (
+                  {question.type === "Objective" && question.correctAnswer && (
                     <div className="text-xs text-green-600 mt-1">
                       Answer: {question.correctAnswer}
                     </div>

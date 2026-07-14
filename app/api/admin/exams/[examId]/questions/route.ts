@@ -19,8 +19,13 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ examId
   if (!exam) return NextResponse.json({ error: "Exam not found" }, { status: 404 });
 
   const questions = [...exam.questions]
+    .filter((q) => q.question) // guards against a deleted/orphaned question ref
     .sort((a, b) => a.order - b.order)
-    .map((q) => ({ ...(q.question as unknown as Record<string, unknown>), order: q.order }));
+    .map((q) => {
+      const question = q.question as unknown as { toObject?: () => Record<string, unknown> };
+      const plain = typeof question.toObject === "function" ? question.toObject() : question;
+      return { ...plain, order: q.order };
+    });
 
   return NextResponse.json({ questions });
 }

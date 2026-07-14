@@ -6,6 +6,7 @@ import Link from "next/link";
 import QuestionFilters from "@/components/admin/questions/QuestionFilters";
 import QuestionsTable from "@/components/admin/questions/QuestionsTable";
 import QuestionFormModal from "@/components/admin/questions/QuestionFormModal";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useExamQuestions } from "@/hooks/useExamQuestions";
 
 const ExamQuestionsPage: React.FC = () => {
@@ -13,7 +14,11 @@ const ExamQuestionsPage: React.FC = () => {
   const examId = params?.id as string;
 
   const {
+    exam,
     filteredQuestions,
+    isLoadingQuestions,
+    subjects,
+    isLoadingSubjects,
     isModalOpen,
     isEditing,
     formData,
@@ -23,26 +28,41 @@ const ExamQuestionsPage: React.FC = () => {
     searchTerm,
     filterType,
     totalMarks,
+    questionPendingDelete,
+    isDeleting,
     setSearchTerm,
     setFilterType,
     handleInputChange,
     handleOptionChange,
     handleAddQuestion,
     handleEditQuestion,
-    handleDeleteQuestion,
+    requestDeleteQuestion,
+    cancelDeleteQuestion,
+    confirmDeleteQuestion,
     handleSubmit,
     closeModal,
-  } = useExamQuestions();
+  } = useExamQuestions(examId);
+
+  const subjectName =
+    exam?.subject && typeof exam.subject === "object" ? exam.subject.name : exam?.subject;
 
   return (
     <>
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-[#1A3A5C]">Exam Questions</h1>
             <p className="text-[#5A7A9A] text-sm">
-              Manage questions for Exam #{examId} &bull; Total Marks: {totalMarks}
+              {exam ? (
+                <>
+                  Managing questions for <strong>{exam.title}</strong>
+                  {subjectName && ` • ${subjectName}`}
+                  {exam.class && ` • ${exam.class}`}
+                </>
+              ) : (
+                "Loading exam details…"
+              )}{" "}
+              &bull; Total Marks: {totalMarks}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -85,7 +105,6 @@ const ExamQuestionsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Status Message */}
         {statusMessage && (
           <div
             role={statusMessage.type === "error" ? "alert" : "status"}
@@ -101,7 +120,6 @@ const ExamQuestionsPage: React.FC = () => {
           </div>
         )}
 
-        {/* Filters */}
         <QuestionFilters
           searchTerm={searchTerm}
           filterType={filterType}
@@ -109,25 +127,43 @@ const ExamQuestionsPage: React.FC = () => {
           onTypeChange={setFilterType}
         />
 
-        {/* Questions Table */}
         <QuestionsTable
           questions={filteredQuestions}
+          isLoading={isLoadingQuestions}
           onEdit={handleEditQuestion}
-          onDelete={handleDeleteQuestion}
+          onDelete={requestDeleteQuestion}
         />
       </div>
 
-      {/* Question Form Modal */}
       <QuestionFormModal
         isOpen={isModalOpen}
-        isEditing={isEditing}
+        idatesEditing={isEditing}
         formData={formData}
         formError={formError}
         isSubmitting={isSubmitting}
+        subjects={subjects}
+        isLoadingSubjects={isLoadingSubjects}
         onChange={handleInputChange}
         onOptionChange={handleOptionChange}
         onSubmit={handleSubmit}
         onCancel={closeModal}
+      />
+
+      <ConfirmDialog
+        isOpen={!!questionPendingDelete}
+        title="Remove this question?"
+        description={
+          questionPendingDelete
+            ? `This removes "${questionPendingDelete.text.substring(0, 60)}${
+                questionPendingDelete.text.length > 60 ? "…" : ""
+              }" from this exam only. It stays in the question bank and can be re-added later.`
+            : ""
+        }
+        confirmLabel="Remove"
+        isDangerous
+        isProcessing={isDeleting}
+        onConfirm={confirmDeleteQuestion}
+        onCancel={cancelDeleteQuestion}
       />
     </>
   );
