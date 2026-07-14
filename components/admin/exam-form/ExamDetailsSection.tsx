@@ -5,12 +5,18 @@ import SelectField from "@/components/ui/form/SelectField";
 import Fieldset from "@/components/ui/form/Fieldset";
 import { ExamFormData, FieldErrors, RequiredField } from "@/types/exam-form";
 import { CLASS_OPTIONS, TERM_OPTIONS, EXAM_TYPE_OPTIONS } from "@/config/exam-form-options";
-
+interface SubjectOption {
+  id: string;
+  name: string;
+  code: string;
+}
 interface ExamDetailsSectionProps {
   formData: ExamFormData;
   fieldErrors: FieldErrors;
   fieldRefs: React.MutableRefObject<Partial<Record<RequiredField, HTMLElement | null>>>;
   titleInputRef: React.RefObject<HTMLInputElement | null>;
+  subjects: SubjectOption[];
+  isLoadingSubjects: boolean;
   onChange: (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => void;
@@ -21,6 +27,8 @@ const ExamDetailsSection: React.FC<ExamDetailsSectionProps> = ({
   fieldErrors,
   fieldRefs,
   titleInputRef,
+  subjects,
+  isLoadingSubjects,
   onChange,
 }) => {
   return (
@@ -49,16 +57,19 @@ const ExamDetailsSection: React.FC<ExamDetailsSectionProps> = ({
 
         {/* Subject */}
         <FormField label="Subject" htmlFor="subject" required error={fieldErrors.subject}>
-          <TextField
+          <SelectField
             ref={(el) => {
               fieldRefs.current.subject = el;
             }}
-            type="text"
             name="subject"
             value={formData.subject}
             onChange={onChange}
             error={!!fieldErrors.subject}
-            placeholder="e.g., Chemistry"
+            disabled={isLoadingSubjects}
+            options={[
+              { value: "", label: isLoadingSubjects ? "Loading subjects..." : "Select a subject" },
+              ...subjects.map((s) => ({ value: s.id, label: s.name })),
+            ]}
           />
         </FormField>
 

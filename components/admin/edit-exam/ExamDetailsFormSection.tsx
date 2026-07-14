@@ -1,5 +1,11 @@
 import React from "react";
 
+interface SubjectOption {
+  id: string;
+  name: string;
+  code: string;
+}
+
 interface ExamDetailsFormSectionProps {
   formData: any;
   fieldErrors: any;
@@ -8,6 +14,8 @@ interface ExamDetailsFormSectionProps {
   onChange: (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => void;
+  subjects: SubjectOption[]; // ← added
+  isLoadingSubjects?: boolean; // ← added (optional, edit form doesn't pass one currently)
 }
 
 const ExamDetailsFormSection: React.FC<ExamDetailsFormSectionProps> = ({
@@ -16,6 +24,8 @@ const ExamDetailsFormSection: React.FC<ExamDetailsFormSectionProps> = ({
   titleInputRef,
   fieldRefs,
   onChange,
+  subjects,
+  isLoadingSubjects,
 }) => {
   const errorId = (field: string) => `${field}-error`;
   const describedBy = (field: string) => (fieldErrors[field] ? errorId(field) : undefined);
@@ -54,6 +64,7 @@ const ExamDetailsFormSection: React.FC<ExamDetailsFormSectionProps> = ({
           )}
         </div>
 
+        {/* Subject — was a free-text <input>, now a <select> bound to subjects */}
         <div>
           <label htmlFor="subject" className="block text-sm font-medium text-[#1A3A5C] mb-1">
             Subject{" "}
@@ -61,21 +72,26 @@ const ExamDetailsFormSection: React.FC<ExamDetailsFormSectionProps> = ({
               *
             </span>
           </label>
-          <input
+          <select
             ref={(el) => {
               fieldRefs.current.subject = el;
             }}
-            type="text"
             id="subject"
             name="subject"
             value={formData.subject}
             onChange={onChange}
+            disabled={isLoadingSubjects}
             aria-required="true"
             aria-invalid={!!fieldErrors.subject}
             aria-describedby={describedBy("subject")}
-            placeholder="e.g., Chemistry"
-            className="w-full px-4 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE]"
-          />
+            className="w-full px-4 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE] disabled:opacity-60">
+            <option value="">{isLoadingSubjects ? "Loading subjects…" : "Select Subject"}</option>
+            {subjects.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
           {fieldErrors.subject && (
             <p id={errorId("subject")} className="mt-1 text-sm text-red-600">
               {fieldErrors.subject}

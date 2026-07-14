@@ -1,4 +1,3 @@
-// components/admin/exam-form/ScoringSection.tsx
 import React from "react";
 import FormField from "@/components/ui/form/FormField";
 import TextField from "@/components/ui/form/TextField";

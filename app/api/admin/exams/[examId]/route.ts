@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "../../../../../lib/db";
-import { requireAdmin } from "../../../../../lib/api-guards";
+import { connectDB } from "@/lib/db";
+import { requireAdmin } from "@/lib/api-guards";
 import { Exam } from "@/lib/models/exam.model";
-const { Submission } = await import("@/lib/models/submission.model");
 
 // GET /api/admin/exams/[examId]
 export async function GET(_req: NextRequest, context: { params: Promise<{ examId: string }> }) {
@@ -36,6 +35,8 @@ const EDITABLE_FIELDS = [
   "examDate",
   "duration",
   "instructions",
+  "passingScore",
+  "shuffleQuestions",
   "status",
   "isCodeActive",
 ] as const;
@@ -52,6 +53,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ exam
   const force = req.nextUrl.searchParams.get("force") === "true";
   await connectDB();
 
+  const { Submission } = await import("@/lib/models/submission.model");
   const submissionCount = await Submission.countDocuments({ exam: examId });
 
   if (submissionCount > 0 && !force) {

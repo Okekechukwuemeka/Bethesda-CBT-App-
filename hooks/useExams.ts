@@ -1,80 +1,130 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Exam } from "@/types/exam";
+import { useState, useEffect, useCallback } from "react";
+import { Exam } from "../types/exam.types";
 
-const initialExams: Exam[] = [
-  {
-    id: 1,
-    title: "Chemistry First Term Examination",
-    subject: "Chemistry",
-    class: "JSS3",
-    term: "First Term",
-    date: "2025-06-23",
-    time: "7:00 AM",
-    duration: 120,
-    type: "objective",
-    questionCount: 50,
-    status: "scheduled",
-  },
-  {
-    id: 2,
-    title: "Physics First Term Examination",
-    subject: "Physics",
-    class: "JSS3",
-    term: "First Term",
-    date: "2025-06-27",
-    time: "7:00 AM",
-    duration: 120,
-    type: "theory",
-    questionCount: 5,
-    status: "scheduled",
-  },
-  {
-    id: 3,
-    title: "Mathematics First Term Examination",
-    subject: "Mathematics",
-    class: "JSS3",
-    term: "First Term",
-    date: "2025-06-25",
-    time: "9:00 AM",
-    duration: 150,
-    type: "mixed",
-    questionCount: 40,
-    status: "ongoing",
-  },
-];
+interface StatusMessage {
+  type: "success" | "error" | "warning";
+  text: string;
+}
 
 export const useExams = () => {
-  const [exams, setExams] = useState<Exam[]>(initialExams);
-  const [isLoading, setIsLoading] = useState(false);
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
 
-  // TODO: Replace with API calls
+  // Delete confirmation lives in the hook (not the page/list component) so
+  // any component rendering the exams list can trigger it the same way,
+  // without each one re-implementing its own confirm dialog.
+  const [examPendingDelete, setExamPendingDelete] = useState<Exam | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [forceDeleteWarning, setForceDeleteWarning] = useState<string | null>(null);
+
   const fetchExams = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      // const response = await fetch('/api/admin/exams');
-      // const data = await response.json();
-      // setExams(data);
-    } catch (err) {
+      const res = await fetch("/api/admin/exams");
+      if (!res.ok) throw new Error("Failed to load exams");
+      const { exams: apiExams } = await res.json();
+      setExams(
+        apiExams.map((e: any) => ({
+          id: e._id,
+          title: e.title,
+          subject: {
+            id: e.subject?._id,
+            name: e.subject?.name ?? "Unknown",
+            code: e.subject?.code ?? "",
+          },
+          class: e.class,
+          term: e.term,
+          academicYear: e.academicYear,
+          examDate: e.examDate,
+          duration: e.duration,
+          type: e.type,
+          questionCount: e.questionCount,
+          totalMarks: e.totalMarks,
+          status: e.status,
+          examCode: e.examCode,
+          isCodeActive: e.isCodeActive,
+          instructions: e.instructions,
+          passingScore: e.passingScore,
+          shuffleQuestions: e.shuffleQuestions,
+        })),
+      );
+    } catch {
       setError("Failed to fetch exams");
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  const deleteExam = useCallback(async (examId: number) => {
-    // TODO: Implement API call
-    setExams((prev) => prev.filter((exam) => exam.id !== examId));
+  useEffect(() => {
+    fetchExams();
+  }, [fetchExams]);
+
+  const requestDelete = useCallback((exam: Exam) => {
+    setExamPendingDelete(exam);
+    setForceDeleteWarning(null);
   }, []);
+
+  const cancelDelete = useCallback(() => {
+    setExamPendingDelete(null);
+    setForceDeleteWarning(null);
+  }, []);
+
+  // force=true is only ever sent as a deliberate second step, after the
+  // admin has already seen and acknowledged the "N submissions exist"
+  // warning below - never sent on the first attempt.
+  const performDelete = useCallback(
+    async (force = false) => {
+      if (!examPendingDelete) return;
+      setIsDeleting(true);
+      try {
+        const res = await fetch(
+          `/api/admin/exams/${examPendingDelete.id}${force ? "?force=true" : ""}`,
+          { method: "DELETE" },
+        );
+        const body = await res.json().catch(() => ({}));
+
+        if (res.status === 409 && !force) {
+          // Backend refused because submissions exist - surface that as an
+          // explicit second confirmation rather than silently failing.
+          setForceDeleteWarning(body.error ?? "This exam has student submissions attached to it.");
+          setIsDeleting(false);
+          return;
+        }
+
+        if (!res.ok) throw new Error(body.error ?? "Failed to delete exam");
+
+        setExams((prev) => prev.filter((e) => e.id !== examPendingDelete.id));
+        setStatusMessage({ type: "success", text: `"${examPendingDelete.title}" was deleted.` });
+        setExamPendingDelete(null);
+        setForceDeleteWarning(null);
+      } catch (err) {
+        setStatusMessage({
+          type: "error",
+          text: err instanceof Error ? err.message : "Failed to delete exam.",
+        });
+      } finally {
+        setIsDeleting(false);
+      }
+    },
+    [examPendingDelete],
+  );
 
   return {
     exams,
     isLoading,
     error,
+    statusMessage,
     fetchExams,
-    deleteExam,
+    examPendingDelete,
+    isDeleting,
+    forceDeleteWarning,
+    requestDelete,
+    cancelDelete,
+    performDelete,
   };
 };

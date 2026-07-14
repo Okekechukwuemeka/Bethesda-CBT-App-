@@ -1,20 +1,25 @@
 import React, { useState, useEffect } from "react";
-import type { Subject } from "@/types/question";
 import { CLASS_LEVELS } from "@/lib/models/constants";
+
+interface SubjectOption {
+  id: string;
+  name: string;
+  code: string;
+}
 
 interface QuestionBankFiltersProps {
   searchTerm: string;
   filterSubject: string;
   filterType: string;
   filterClass: string;
-  filteredCount: number;
-  subjects: Subject[];
-  isLoadingSubjects: boolean;
+  filteredCount?: number; // was required
+  subjects?: SubjectOption[]; // was Subject[] with _id — now optional + matches the rest of the app
+  isLoadingSubjects?: boolean; // was required
   onSearchChange: (value: string) => void;
   onSubjectChange: (value: string) => void;
   onTypeChange: (value: string) => void;
   onClassChange: (value: string) => void;
-  onAddSubject: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  onAddSubject?: (e: React.MouseEvent<HTMLButtonElement>) => void; // was required
 }
 
 const QuestionBankFilters: React.FC<QuestionBankFiltersProps> = ({
@@ -23,8 +28,8 @@ const QuestionBankFilters: React.FC<QuestionBankFiltersProps> = ({
   filterType,
   filterClass,
   filteredCount,
-  subjects,
-  isLoadingSubjects,
+  subjects = [],
+  isLoadingSubjects = false,
   onSearchChange,
   onSubjectChange,
   onTypeChange,
@@ -67,7 +72,7 @@ const QuestionBankFilters: React.FC<QuestionBankFiltersProps> = ({
               className="px-4 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE] disabled:opacity-60">
               <option value="all">All Subjects</option>
               {subjects.map((subject) => (
-                <option key={subject._id} value={subject._id}>
+                <option key={subject.id} value={subject.id}>
                   {subject.name}
                 </option>
               ))}
@@ -104,30 +109,34 @@ const QuestionBankFilters: React.FC<QuestionBankFiltersProps> = ({
               <option value="Theory">Theory</option>
             </select>
           </div>
-          <button
-            type="button"
-            onClick={onAddSubject}
-            className="px-4 py-2 border border-[#2B6CB0] text-[#2B6CB0] hover:bg-[#F0F6FC] font-medium rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/30 flex items-center gap-2">
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            Add Subject
-          </button>
+          {onAddSubject && (
+            <button
+              type="button"
+              onClick={onAddSubject}
+              className="px-4 py-2 border border-[#2B6CB0] text-[#2B6CB0] hover:bg-[#F0F6FC] font-medium rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/30 flex items-center gap-2">
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+              Add Subject
+            </button>
+          )}
         </div>
       </div>
-      <p className="sr-only" role="status" aria-live="polite">
-        {announcedCount} question{announcedCount !== 1 ? "s" : ""} found
-      </p>
+      {filteredCount !== undefined && (
+        <p className="sr-only" role="status" aria-live="polite">
+          {announcedCount} question{announcedCount !== 1 ? "s" : ""} found
+        </p>
+      )}
     </div>
   );
 };

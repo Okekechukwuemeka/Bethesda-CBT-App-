@@ -1,7 +1,6 @@
-// app/admin/exams/[id]/edit/page.tsx
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import DeleteConfirmModal from "@/components/admin/edit-exam/DeleteConfirmModal";
@@ -11,140 +10,32 @@ import ExamDetailsFormSection from "@/components/admin/edit-exam/ExamDetailsForm
 import ScheduleStatusFormSection from "@/components/admin/edit-exam/ScheduleStatusFormSection";
 import ScoringBehaviorFormSection from "@/components/admin/edit-exam/ScoringBehaviorFormSection";
 import InstructionsFormSection from "@/components/admin/edit-exam/InstructionsFormSection";
-
-interface StatusMessage {
-  type: "success" | "error" | "warning";
-  text: string;
-}
-
-type RequiredField = "title" | "subject" | "class" | "term" | "date" | "time";
-type FieldErrors = Partial<Record<RequiredField, string>>;
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useEditExam } from "@/hooks/useEditExam";
 
 const EditExamPage: React.FC = () => {
   const params = useParams();
   const examId = params?.id as string;
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDeleted, setIsDeleted] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
-  const titleInputRef = useRef<HTMLInputElement>(null);
-  const fieldRefs = useRef<Partial<Record<RequiredField, HTMLElement | null>>>({});
-
-  const [formData, setFormData] = useState({
-    title: "",
-    subject: "",
-    class: "",
-    term: "",
-    date: "",
-    time: "",
-    duration: 60,
-    type: "objective" as "objective" | "theory" | "mixed",
-    instructions: "",
-    passingScore: 40,
-    shuffleQuestions: false,
-    status: "scheduled" as "scheduled" | "ongoing" | "completed",
-  });
-
-  // Load exam data
-  useEffect(() => {
-    setTimeout(() => {
-      const mockExam = {
-        title: "Chemistry First Term Examination",
-        subject: "Chemistry",
-        class: "JSS3",
-        term: "First Term",
-        date: "2025-06-23",
-        time: "07:00",
-        duration: 120,
-        type: "objective" as const,
-        instructions: "Read all questions carefully.",
-        passingScore: 40,
-        shuffleQuestions: false,
-        status: "scheduled" as const,
-      };
-      setFormData(mockExam);
-      setIsLoading(false);
-    }, 800);
-  }, [examId]);
-
-  useEffect(() => {
-    if (!isLoading) {
-      titleInputRef.current?.focus();
-    }
-  }, [isLoading]);
-
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
-  ) => {
-    const { name, value, type } = e.target;
-    const checked = (e.target as HTMLInputElement).checked;
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : type === "number" ? parseInt(value) || 0 : value,
-    }));
-
-    if (name in fieldErrors) {
-      setFieldErrors((prev) => {
-        const next = { ...prev };
-        delete next[name as RequiredField];
-        return next;
-      });
-    }
-  };
-
-  const validate = (): FieldErrors => {
-    const errors: FieldErrors = {};
-    if (!formData.title.trim()) errors.title = "Exam title is required.";
-    if (!formData.subject.trim()) errors.subject = "Subject is required.";
-    if (!formData.class) errors.class = "Please select a class.";
-    if (!formData.term) errors.term = "Please select a term.";
-    if (!formData.date) errors.date = "Exam date is required.";
-    if (!formData.time) errors.time = "Exam time is required.";
-    return errors;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const errors = validate();
-    setFieldErrors(errors);
-
-    const errorFields = Object.keys(errors) as RequiredField[];
-    if (errorFields.length > 0) {
-      setStatusMessage({
-        type: "error",
-        text: `Please fix ${errorFields.length} field${errorFields.length > 1 ? "s" : ""} before submitting.`,
-      });
-      fieldRefs.current[errorFields[0]]?.focus();
-      return;
-    }
-
-    setStatusMessage(null);
-    setIsSubmitting(true);
-
-    setTimeout(() => {
-      setStatusMessage({ type: "success", text: "Exam updated successfully." });
-      setIsSubmitting(false);
-    }, 1000);
-  };
-
-  const handleDelete = () => {
-    setShowDeleteConfirm(true);
-  };
-
-  const confirmDelete = () => {
-    setShowDeleteConfirm(false);
-    setIsSubmitting(true);
-
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setIsDeleted(true);
-    }, 1000);
-  };
+  const {
+    isLoading,
+    isSubmitting,
+    isDeleted,
+    statusMessage,
+    fieldErrors,
+    showDeleteConfirm,
+    forceDeleteWarning,
+    subjects,
+    loadError,
+    formData,
+    titleInputRef,
+    fieldRefs,
+    handleInputChange,
+    handleSubmit,
+    handleDelete,
+    cancelDeleteConfirm,
+    performDelete,
+  } = useEditExam(examId);
 
   if (isDeleted) {
     return <ExamDeletedState examTitle={formData.title} />;
@@ -152,6 +43,12 @@ const EditExamPage: React.FC = () => {
 
   if (isLoading) {
     return <LoadingExamState />;
+  }
+
+  if (loadError) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">{loadError}</div>
+    );
   }
 
   return (
@@ -222,12 +119,18 @@ const EditExamPage: React.FC = () => {
         {/* Form */}
         <div className="bg-white rounded-xl border border-[#C5D8EC] p-6 shadow-sm">
           <form onSubmit={handleSubmit} noValidate className="space-y-8">
+            {/*
+              NOTE for ExamDetailsFormSection: same as the create form -
+              `subject` should render as a <select> from the `subjects`
+              prop (value = subject.id), not free text.
+            */}
             <ExamDetailsFormSection
               formData={formData}
               fieldErrors={fieldErrors}
               titleInputRef={titleInputRef}
               fieldRefs={fieldRefs}
               onChange={handleInputChange}
+              subjects={subjects}
             />
 
             <ScheduleStatusFormSection
@@ -260,12 +163,29 @@ const EditExamPage: React.FC = () => {
       </div>
 
       <DeleteConfirmModal
-        isOpen={showDeleteConfirm}
+        isOpen={showDeleteConfirm && !forceDeleteWarning}
         examTitle={formData.title}
         examSubject={formData.subject}
         examClass={formData.class}
-        onConfirm={confirmDelete}
-        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={() => performDelete(false)}
+        onCancel={cancelDeleteConfirm}
+      />
+
+      {/* Second step - only when the backend reports existing submissions */}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm && !!forceDeleteWarning}
+        title="Students have already started this exam"
+        description={
+          <>
+            {forceDeleteWarning} Deleting anyway will also permanently delete all of those student
+            submissions. This cannot be undone.
+          </>
+        }
+        confirmLabel="Delete Exam and All Submissions"
+        isDangerous
+        isProcessing={isSubmitting}
+        onConfirm={() => performDelete(true)}
+        onCancel={cancelDeleteConfirm}
       />
     </>
   );

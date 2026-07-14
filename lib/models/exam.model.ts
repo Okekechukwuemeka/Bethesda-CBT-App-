@@ -14,9 +14,6 @@ import {
 
 export interface IExamQuestionRef {
   question: mongoose.Types.ObjectId;
-  // Position within THIS exam specifically - the same bank question could
-  // sit at a different position in another exam, so ordering can't live on
-  // Question itself.
   order: number;
 }
 
@@ -37,6 +34,10 @@ export interface IExam extends Document {
   totalMarks: number;
   status: ExamStatus;
   instructions?: string;
+
+  passingScore: number;
+
+  shuffleQuestions: boolean;
   // Code students enter to unlock/access this exam's questions.
   examCode: string;
   isCodeActive: boolean;
@@ -115,6 +116,13 @@ const examSchema = new Schema<IExam>(
       default: "Scheduled",
     },
     instructions: { type: String, trim: true },
+    passingScore: {
+      type: Number,
+      default: 40,
+      min: [0, "Passing score cannot be negative"],
+      max: [100, "Passing score cannot exceed 100"],
+    },
+    shuffleQuestions: { type: Boolean, default: false },
     examCode: {
       type: String,
       unique: true,

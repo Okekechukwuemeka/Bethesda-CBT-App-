@@ -4,6 +4,43 @@ import { requireStudent } from "@/lib/api-guards";
 import { Exam } from "@/lib/models/exam.model";
 import { Submission } from "@/lib/models/submission.model";
 
+// Deterministic string hash -> 32-bit seed, then a small seeded PRNG
+// (mulberry32). Deliberately NOT Math.random(): the shuffle needs to be
+// stable for a given (exam, student) pair - re-fetching the exam (tab
+// reopened, offline client resyncing) must return questions in the exact
+// same order every time, or the student's IndexedDB-cached order and the
+// server's order would drift apart. Seeding from examId+studentId gives
+// each student their own fixed shuffle without storing anything extra.
+function hashToSeed(str: string): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(31, h) + str.charCodeAt(i);
+    h |= 0;
+  }
+  return h >>> 0;
+}
+
+function mulberry32(seed: number): () => number {
+  let a = seed;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function seededShuffle<T>(items: T[], seed: number): T[] {
+  const rng = mulberry32(seed);
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
 // GET /api/student/exams/[code]
 export async function GET(req: NextRequest, context: { params: Promise<{ code: string }> }) {
   const guard = await requireStudent();
@@ -22,7 +59,9 @@ export async function GET(req: NextRequest, context: { params: Promise<{ code: s
   if (exam.class !== session.user.class) {
     return NextResponse.json(
       { error: "This exam is not available for your class" },
-      { status: 403 },
+      {
+        status: 403,
+      },
     );
   }
 
@@ -49,19 +88,20 @@ export async function GET(req: NextRequest, context: { params: Promise<{ code: s
     path: "questions.question",
     select: "-correctAnswer",
   });
+  let orderedRefs = [...populatedExam.questions].sort((a, b) => a.order - b.order);
 
-  // .populate() returns Mongoose Document instances, not plain objects -
-  // spreading a Document directly pulls in its internal machinery ($__,
-  // _doc, isNew, etc.) instead of its actual fields. .toObject() converts
-  // it to a clean plain object first, so the response only contains real
-  // question data (_id, text, options, marks, ...) plus the exam-specific
-  // `order` field.
-  const questions = [...populatedExam.questions]
-    .sort((a, b) => a.order - b.order)
-    .map((q) => {
-      const question = q.question as unknown as { toObject: () => Record<string, unknown> };
-      return { ...question.toObject(), order: q.order };
-    });
+  if (exam.shuffleQuestions) {
+    const seed = hashToSeed(`${exam.id}:${session.user.id}`);
+    orderedRefs = seededShuffle(orderedRefs, seed);
+  }
+
+  const questions = orderedRefs.map((q, i) => ({
+    ...(q.question as unknown as Record<string, unknown>),
+    // `order` here reflects what's actually being SHOWN to this student
+    // (post-shuffle), not the exam's canonical/admin-defined order - the
+    // client should trust this field for display sequencing.
+    order: i,
+  }));
 
   return NextResponse.json({
     exam: {

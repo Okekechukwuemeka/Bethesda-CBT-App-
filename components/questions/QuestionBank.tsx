@@ -1,14 +1,15 @@
 import React from "react";
 import Link from "next/link";
-import { Question } from "@/types/question";
+import { BankQuestion } from "@/types/exam.types";
 import QuestionBankFilters from "./QuestionBankFilters";
 import QuestionBankItem from "./QuestionBankItem";
-
 interface QuestionBankProps {
   isOpen: boolean;
   onToggle: () => void;
-  questions: Question[];
-  selectedQuestions: Question[];
+  isLoadingBank: boolean;
+  questions: BankQuestion[];
+  selectedQuestions: BankQuestion[];
+  subjects: { id: string; name: string }[];
   searchTerm: string;
   filterType: string;
   filterSubject: string;
@@ -17,7 +18,7 @@ interface QuestionBankProps {
   onTypeChange: (value: string) => void;
   onSubjectChange: (value: string) => void;
   onClassChange: (value: string) => void;
-  onAddQuestion: (question: Question) => void;
+  onAddQuestion: (question: BankQuestion) => void;
 }
 
 const QuestionBank: React.FC<QuestionBankProps> = ({
@@ -25,6 +26,7 @@ const QuestionBank: React.FC<QuestionBankProps> = ({
   onToggle,
   questions,
   selectedQuestions,
+  subjects,
   searchTerm,
   filterType,
   filterSubject,
@@ -59,12 +61,12 @@ const QuestionBank: React.FC<QuestionBankProps> = ({
             filterType={filterType}
             filterSubject={filterSubject}
             filterClass={filterClass}
+            subjects={subjects}
             onSearchChange={onSearchChange}
             onTypeChange={onTypeChange}
             onSubjectChange={onSubjectChange}
             onClassChange={onClassChange}
           />
-
           <div className="max-h-60 overflow-y-auto space-y-2">
             {questions.length === 0 ? (
               <p className="text-sm text-[#8A9CAE] text-center py-4">

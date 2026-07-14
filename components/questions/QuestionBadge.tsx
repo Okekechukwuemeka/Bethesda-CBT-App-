@@ -1,13 +1,13 @@
 import React from "react";
 
 interface QuestionBadgeProps {
-  type: "objective" | "theory";
+  type: "Objective" | "Theory"; // was lowercase — now matches BankQuestion.type
 }
 
 const QuestionBadge: React.FC<QuestionBadgeProps> = ({ type }) => {
   const colors = {
-    objective: "bg-blue-100 text-blue-800",
-    theory: "bg-purple-100 text-purple-800",
+    Objective: "bg-blue-100 text-blue-800",
+    Theory: "bg-purple-100 text-purple-800",
   };
 
   return (

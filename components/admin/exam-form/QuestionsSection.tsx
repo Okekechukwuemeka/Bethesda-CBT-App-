@@ -1,30 +1,34 @@
 import React from "react";
-import { Question } from "@/types/question";
+import { BankQuestion } from "@/types/exam.types";
 import SelectedQuestionsList from "@/components/questions/SelectedQuestionsList";
 import QuestionBank from "@/components/questions/QuestionBank";
 import Fieldset from "@/components/ui/form/Fieldset";
 
 interface QuestionsSectionProps {
-  selectedQuestions: Question[];
-  questionBank: Question[];
-  filteredQuestions: Question[];
+  selectedQuestions: BankQuestion[];
+  questionBank: BankQuestion[];
+  filteredQuestions: BankQuestion[];
+  subjects: { id: string; name: string }[];
+  isLoadingBank: boolean;
   searchTerm: string;
   filterType: string;
   filterSubject: string;
   filterClass: string;
   showQuestionBank: boolean;
-  onRemoveQuestion: (questionId: number) => void;
+  onRemoveQuestion: (questionId: string) => void;
   onSearchChange: (value: string) => void;
   onTypeChange: (value: string) => void;
   onSubjectChange: (value: string) => void;
   onClassChange: (value: string) => void;
-  onAddQuestion: (question: Question) => void;
+  onAddQuestion: (question: BankQuestion) => void;
   onToggleQuestionBank: () => void;
 }
 
 const QuestionsSection: React.FC<QuestionsSectionProps> = ({
   selectedQuestions,
   filteredQuestions,
+  subjects,
+  isLoadingBank,
   searchTerm,
   filterType,
   filterSubject,
@@ -55,6 +59,8 @@ const QuestionsSection: React.FC<QuestionsSectionProps> = ({
         onToggle={onToggleQuestionBank}
         questions={filteredQuestions}
         selectedQuestions={selectedQuestions}
+        subjects={subjects}
+        isLoadingBank={isLoadingBank}
         searchTerm={searchTerm}
         filterType={filterType}
         filterSubject={filterSubject}

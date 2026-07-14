@@ -1,14 +1,15 @@
-// components/admin/ExamsList.tsx
 import React from "react";
-import { Exam } from "@/types/exam";
-import ExamGrid from "./ExamGrid";
+import { Exam } from "@/types/exam.types";
 import EmptyState from "./EmptyState";
+import ExamGrid from "./ExamGrid";
 
 interface ExamsListProps {
   exams: Exam[];
+  onDelete: (exam: Exam) => void;
 }
 
-const ExamsList: React.FC<ExamsListProps> = ({ exams }) => {
+const ExamsList: React.FC<ExamsListProps> = ({ exams, onDelete }) => {
+  // was missing onDelete here
   if (exams.length === 0) {
     return (
       <EmptyState
@@ -19,7 +20,7 @@ const ExamsList: React.FC<ExamsListProps> = ({ exams }) => {
     );
   }
 
-  return <ExamGrid exams={exams} />;
+  return <ExamGrid exams={exams} onDelete={onDelete} />;
 };
 
 export default ExamsList;

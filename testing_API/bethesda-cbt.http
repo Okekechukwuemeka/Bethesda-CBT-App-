@@ -37,7 +37,7 @@ GET {{baseUrl}}/api/auth/csrf
 POST {{baseUrl}}/api/auth/callback/admin-login?json=true
 Content-Type: application/x-www-form-urlencoded
 
-csrfToken=f3339a23a4ed054ec7980c297cb4149a23061888f1102340cc225acd9116fd4d&username={{adminUsername}}&password={{adminPassword}}&json=true
+csrfToken=263eca5160268a6370435b227ddab6494ea8f86da2534b9119dfc8c1b400ef95&username={{adminUsername}}&password={{adminPassword}}&json=true
 
 ### 1d. Confirm the session - should show role: "admin"
 # @name adminSession
@@ -58,8 +58,8 @@ POST {{baseUrl}}/api/admin/subjects
 Content-Type: application/json
 
 {
-  "name": "{{subjectName}}",
-  "code": "{{subjectCode}}",
+  "name": "Physics",
+  "code": "PHY",
   "description": "Physical and chemical properties of matter"
 }
 

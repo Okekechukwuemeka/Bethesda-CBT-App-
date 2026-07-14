@@ -1,14 +1,17 @@
 import React from "react";
-import { Question } from "@/types/question";
+import { BankQuestion } from "@/types/exam.types"; // was: Question from "@/types/question"
 import QuestionBadge from "./QuestionBadge";
 
 interface QuestionBankItemProps {
-  question: Question;
+  question: BankQuestion;
   isSelected: boolean;
-  onAdd: (question: Question) => void;
+  onAdd: (question: BankQuestion) => void;
 }
 
 const QuestionBankItem: React.FC<QuestionBankItemProps> = ({ question, isSelected, onAdd }) => {
+  const subjectName =
+    typeof question.subject === "string" ? question.subject : question.subject.name;
+
   return (
     <div
       className={`flex items-center justify-between p-3 border rounded-lg ${
@@ -20,7 +23,7 @@ const QuestionBankItem: React.FC<QuestionBankItemProps> = ({ question, isSelecte
         <span className="text-sm text-[#1A3A5C] truncate">{question.text}</span>
         <QuestionBadge type={question.type} />
         <span className="text-xs text-[#5A7A9A] flex-shrink-0">{question.marks} marks</span>
-        <span className="text-xs text-[#5A7A9A] flex-shrink-0">{question.subject}</span>
+        <span className="text-xs text-[#5A7A9A] flex-shrink-0">{subjectName}</span>
         <span className="text-xs text-[#5A7A9A] flex-shrink-0">{question.class}</span>
       </div>
       <button

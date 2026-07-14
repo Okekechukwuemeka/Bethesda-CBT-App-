@@ -1,21 +1,22 @@
-import { CLASSES, SUBJECTS } from "@/mockData/question-bank";
+import { CLASS_OPTIONS } from "@/config/exam-form-options";
 
 interface QuestionBankFiltersProps {
   searchTerm: string;
   filterType: string;
   filterSubject: string;
   filterClass: string;
+  subjects: { id: string; name: string }[];
   onSearchChange: (value: string) => void;
   onTypeChange: (value: string) => void;
   onSubjectChange: (value: string) => void;
   onClassChange: (value: string) => void;
 }
-
 const QuestionBankFilters: React.FC<QuestionBankFiltersProps> = ({
   searchTerm,
   filterType,
   filterSubject,
   filterClass,
+  subjects,
   onSearchChange,
   onTypeChange,
   onSubjectChange,
@@ -42,7 +43,7 @@ const QuestionBankFilters: React.FC<QuestionBankFiltersProps> = ({
           onChange={(e) => onTypeChange(e.target.value)}
           className="px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE] text-sm"
           aria-label="Filter by type">
-          <option value="all">All Types</option>
+          <option value="">All Types</option>
           <option value="objective">Objective</option>
           <option value="theory">Theory</option>
         </select>
@@ -51,10 +52,10 @@ const QuestionBankFilters: React.FC<QuestionBankFiltersProps> = ({
           onChange={(e) => onSubjectChange(e.target.value)}
           className="px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE] text-sm"
           aria-label="Filter by subject">
-          <option value="all">All Subjects</option>
-          {SUBJECTS.map((subject) => (
-            <option key={subject} value={subject}>
-              {subject}
+          <option value="">All Subjects</option>
+          {subjects.map((subject) => (
+            <option key={subject.id} value={subject.id}>
+              {subject.name}
             </option>
           ))}
         </select>
@@ -63,10 +64,10 @@ const QuestionBankFilters: React.FC<QuestionBankFiltersProps> = ({
           onChange={(e) => onClassChange(e.target.value)}
           className="px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE] text-sm"
           aria-label="Filter by class">
-          <option value="all">All Classes</option>
-          {CLASSES.map((cls) => (
-            <option key={cls} value={cls}>
-              {cls}
+          <option value="">All Classes</option>
+          {CLASS_OPTIONS.map((cls) => (
+            <option key={cls.value} value={cls.value}>
+              {cls.label}
             </option>
           ))}
         </select>

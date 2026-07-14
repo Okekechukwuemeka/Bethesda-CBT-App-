@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { NavItem } from "@/components/admin/admin-navigation";
+import { NavItem } from "@/config/admin-navigation";
 
 export const useAdminLayout = (navItems: NavItem[]) => {
   const pathname = usePathname();
