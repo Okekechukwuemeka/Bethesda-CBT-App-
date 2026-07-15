@@ -5,7 +5,7 @@ interface DeleteConfirmModalProps {
   examTitle: string;
   examSubject: string;
   examClass: string;
-  isProcessing: boolean;
+  isProcessing?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -15,6 +15,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   examTitle,
   examSubject,
   examClass,
+  isProcessing = false,
   onConfirm,
   onCancel,
 }) => {
@@ -31,7 +32,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
     if (!isOpen) return;
 
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !isProcessing) {
         onCancel();
       }
     };
@@ -40,7 +41,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
       if (e.key !== "Tab" || !modalRef.current) return;
 
       const focusable = modalRef.current.querySelectorAll<HTMLElement>(
-        'button, a[href], input, [tabindex]:not([tabindex="-1"])',
+        'button:not(:disabled), a[href], input, [tabindex]:not([tabindex="-1"])',
       );
       if (focusable.length === 0) return;
 
@@ -62,7 +63,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
       document.removeEventListener("keydown", handleEscape);
       document.removeEventListener("keydown", handleTrap);
     };
-  }, [isOpen, onCancel]);
+  }, [isOpen, isProcessing, onCancel]);
 
   if (!isOpen) return null;
 
@@ -73,7 +74,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
       aria-modal="true"
       aria-labelledby="delete-title"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onCancel();
+        if (e.target === e.currentTarget && !isProcessing) onCancel();
       }}>
       <div
         ref={modalRef}
@@ -110,13 +111,16 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
             <button
               ref={cancelButtonRef}
               onClick={onCancel}
-              className="flex-1 bg-[#E8EEF5] hover:bg-[#D5DFE8] text-[#1A3A5C] font-medium py-2.5 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/30">
+              disabled={isProcessing}
+              className="flex-1 bg-[#E8EEF5] hover:bg-[#D5DFE8] text-[#1A3A5C] font-medium py-2.5 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/30 disabled:opacity-50 disabled:cursor-not-allowed">
               Cancel
             </button>
             <button
               onClick={onConfirm}
-              className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-4 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-red-500/50 active:scale-[0.98]">
-              Yes, Delete
+              disabled={isProcessing}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-4 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-red-500/50 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label={isProcessing ? "Deleting exam, please wait" : "Yes, delete this exam"}>
+              {isProcessing ? "Deleting..." : "Yes, Delete"}
             </button>
           </div>
         </div>
