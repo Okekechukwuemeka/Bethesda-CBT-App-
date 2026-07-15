@@ -22,7 +22,7 @@ export interface IStudent extends Document {
   // Forces a password reset on first login — set true whenever an admin
   // assigns/resets a student's password, so a shared/guessed initial
   // password can't be reused indefinitely.
-  mustChangePassword: boolean;
+  // mustChangePassword: boolean;
   firstName: string;
   lastName: string;
   class: ClassLevel;
@@ -52,7 +52,7 @@ const studentSchema = new Schema<IStudent>(
       minlength: [6, "Password must be at least 6 characters"],
       select: false,
     },
-    mustChangePassword: { type: Boolean, default: true },
+    // mustChangePassword: { type: Boolean, default: true },
     firstName: { type: String, required: [true, "First name is required"], trim: true },
     lastName: { type: String, required: [true, "Last name is required"], trim: true },
     // Class levels are a fixed, known set (JSS1 -> graduated), so this is a

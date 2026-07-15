@@ -2,7 +2,7 @@
 
 import React, { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn, getSession } from "next-auth/react";
+import { signIn } from "next-auth/react";
 
 const LoginPage: React.FC = () => {
   const router = useRouter();
@@ -11,15 +11,12 @@ const LoginPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
     if (!admissionNumber.trim() || !password) {
       setError("Please enter your admission number and password.");
-      // Move focus to the error so a screen reader announces it right away
-      // instead of leaving focus sitting on the submit button.
       setTimeout(() => errorRef.current?.focus(), 0);
       return;
     }
@@ -38,15 +35,7 @@ const LoginPage: React.FC = () => {
         return;
       }
 
-      // signIn's result doesn't carry the user object, only ok/error/url -
-      // pull the fresh session to decide where a forced password change
-      // needs to send the student before anything else.
-      const session = await getSession();
-      if (session?.user?.mustChangePassword) {
-        router.push("/student/change-password");
-      } else {
-        router.push("/student/exams");
-      }
+      router.push("/student/exams");
       router.refresh();
     } catch {
       setError("Something went wrong while signing in. Please try again.");

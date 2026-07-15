@@ -10,7 +10,6 @@ interface AppUserFields {
   username?: string;
   admissionNumber?: string;
   class?: ClassLevel;
-  mustChangePassword?: boolean;
 }
 
 declare module "next-auth" {

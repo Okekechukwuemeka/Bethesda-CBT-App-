@@ -62,7 +62,6 @@ export const authOptions: NextAuthOptions = {
           name: `${student.firstName} ${student.lastName}`,
           admissionNumber: student.admissionNumber,
           class: student.class,
-          mustChangePassword: student.mustChangePassword,
         };
       },
     }),
@@ -77,7 +76,6 @@ export const authOptions: NextAuthOptions = {
         token.username = user.username;
         token.admissionNumber = user.admissionNumber;
         token.class = user.class;
-        token.mustChangePassword = user.mustChangePassword;
       }
       return token;
     },
@@ -87,7 +85,6 @@ export const authOptions: NextAuthOptions = {
       session.user.username = token.username;
       session.user.admissionNumber = token.admissionNumber;
       session.user.class = token.class;
-      session.user.mustChangePassword = token.mustChangePassword;
       return session;
     },
   },
