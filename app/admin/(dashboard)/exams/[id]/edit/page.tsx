@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import DeleteConfirmModal from "@/components/admin/edit-exam/DeleteConfirmModal";
@@ -16,6 +16,7 @@ import { useEditExam } from "@/hooks/useEditExam";
 const EditExamPage: React.FC = () => {
   const params = useParams();
   const examId = params?.id as string;
+  const [copied, setCopied] = useState(false);
 
   const {
     isLoading,
@@ -28,6 +29,7 @@ const EditExamPage: React.FC = () => {
     subjects,
     loadError,
     formData,
+    examCode,
     titleInputRef,
     fieldRefs,
     handleInputChange,
@@ -50,6 +52,19 @@ const EditExamPage: React.FC = () => {
       <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">{loadError}</div>
     );
   }
+
+  const subjectName = subjects.find((s) => s.id === formData.subject)?.name ?? formData.subject;
+
+  const copyCode = async () => {
+    if (!examCode) return;
+    try {
+      await navigator.clipboard.writeText(examCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   return (
     <>
@@ -116,14 +131,31 @@ const EditExamPage: React.FC = () => {
           </div>
         )}
 
+        {/* Exam Code - fulfills the promise made on the Create Exam success
+            screen ("You can find it again on the exam's edit page later") */}
+        {examCode && (
+          <div className="bg-[#F8FAFE] border border-[#C5D8EC] rounded-lg p-4 flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <p className="text-xs font-medium text-[#5A7A9A] uppercase tracking-wide">
+                Exam Code
+              </p>
+              <p className="text-lg font-mono font-bold text-[#1A3A5C] select-all tracking-wider">
+                {examCode}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={copyCode}
+              className="text-sm px-3 py-1.5 rounded-lg border border-[#2B6CB0] text-[#2B6CB0] hover:bg-[#E8F0FE] focus:outline-none focus:ring-2 focus:ring-[#2B6CB0]"
+              aria-label={`Copy exam code ${examCode}`}>
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+        )}
+
         {/* Form */}
         <div className="bg-white rounded-xl border border-[#C5D8EC] p-6 shadow-sm">
           <form onSubmit={handleSubmit} noValidate className="space-y-8">
-            {/*
-              NOTE for ExamDetailsFormSection: same as the create form -
-              `subject` should render as a <select> from the `subjects`
-              prop (value = subject.id), not free text.
-            */}
             <ExamDetailsFormSection
               formData={formData}
               fieldErrors={fieldErrors}
@@ -165,8 +197,9 @@ const EditExamPage: React.FC = () => {
       <DeleteConfirmModal
         isOpen={showDeleteConfirm && !forceDeleteWarning}
         examTitle={formData.title}
-        examSubject={formData.subject}
+        examSubject={subjectName}
         examClass={formData.class}
+        isProcessing={isSubmitting}
         onConfirm={() => performDelete(false)}
         onCancel={cancelDeleteConfirm}
       />

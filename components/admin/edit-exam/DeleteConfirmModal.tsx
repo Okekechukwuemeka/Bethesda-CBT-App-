@@ -5,6 +5,7 @@ interface DeleteConfirmModalProps {
   examTitle: string;
   examSubject: string;
   examClass: string;
+  isProcessing: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
