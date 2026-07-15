@@ -1,25 +1,20 @@
 import React, { useState, useEffect } from "react";
+import type { Subject } from "@/types/question";
 import { CLASS_LEVELS } from "@/lib/models/constants";
-
-interface SubjectOption {
-  id: string;
-  name: string;
-  code: string;
-}
 
 interface QuestionBankFiltersProps {
   searchTerm: string;
   filterSubject: string;
   filterType: string;
   filterClass: string;
-  filteredCount?: number; // was required
-  subjects?: SubjectOption[]; // was Subject[] with _id — now optional + matches the rest of the app
-  isLoadingSubjects?: boolean; // was required
+  filteredCount?: number;
+  subjects?: Subject[];
+  isLoadingSubjects?: boolean;
   onSearchChange: (value: string) => void;
   onSubjectChange: (value: string) => void;
   onTypeChange: (value: string) => void;
   onClassChange: (value: string) => void;
-  onAddSubject?: (e: React.MouseEvent<HTMLButtonElement>) => void; // was required
+  onAddSubject?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 const QuestionBankFilters: React.FC<QuestionBankFiltersProps> = ({
@@ -72,7 +67,7 @@ const QuestionBankFilters: React.FC<QuestionBankFiltersProps> = ({
               className="px-4 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE] disabled:opacity-60">
               <option value="all">All Subjects</option>
               {subjects.map((subject) => (
-                <option key={subject.id} value={subject.id}>
+                <option key={subject._id} value={subject._id}>
                   {subject.name}
                 </option>
               ))}
