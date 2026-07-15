@@ -137,7 +137,7 @@ const ExamQuestionsPage: React.FC = () => {
 
       <QuestionFormModal
         isOpen={isModalOpen}
-        idatesEditing={isEditing}
+        isEditing={isEditing}
         formData={formData}
         formError={formError}
         isSubmitting={isSubmitting}

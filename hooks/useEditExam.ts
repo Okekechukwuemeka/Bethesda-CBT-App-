@@ -51,6 +51,7 @@ export function useEditExam(examId: string) {
   const [forceDeleteWarning, setForceDeleteWarning] = useState<string | null>(null);
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [examCode, setExamCode] = useState<string | null>(null);
 
   const titleInputRef = useRef<HTMLInputElement>(null);
   const fieldRefs = useRef<Partial<Record<RequiredField, HTMLElement | null>>>({});
@@ -107,6 +108,7 @@ export function useEditExam(examId: string) {
           shuffleQuestions: exam.shuffleQuestions ?? false,
           status: fromBackendEnum(exam.status),
         });
+        setExamCode(exam.examCode ?? null);
       } catch (err) {
         if (!cancelled) {
           setLoadError(err instanceof Error ? err.message : "Failed to load exam");
@@ -260,6 +262,7 @@ export function useEditExam(examId: string) {
     subjects,
     loadError,
     formData,
+    examCode,
     titleInputRef,
     fieldRefs,
     handleInputChange,
