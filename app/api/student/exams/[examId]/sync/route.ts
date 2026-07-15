@@ -12,21 +12,14 @@ interface IncomingAnswer {
   updatedAt?: number;
 }
 
-// PATCH /api/student/exams/[code]/sync
+// PATCH /api/student/exams/[examId]/sync
 // Body: { submissionId: string; answers: IncomingAnswer[] }
-//
-// Designed to be called repeatedly and safely from an offline-first client:
-// - idempotent (re-sending the same answer twice is harmless)
-// - last-write-wins per question, using each answer's own `updatedAt`, so a
-//   stale queued write that lands late doesn't clobber a newer one
-// - always returns the server's canonical clock + remaining time, so the
-//   client can correct for its own clock drift after being offline
-export async function PATCH(req: NextRequest, context: { params: Promise<{ code: string }> }) {
+export async function PATCH(req: NextRequest, context: { params: Promise<{ examId: string }> }) {
   const guard = await requireStudent();
   if (!guard.ok) return guard.response;
   const { session } = guard;
 
-  const { code } = await context.params;
+  const { examId } = await context.params;
   const body = (await req.json()) as { submissionId?: string; answers?: IncomingAnswer[] };
 
   if (!body.submissionId || !Array.isArray(body.answers)) {
@@ -35,7 +28,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ code:
 
   await connectDB();
 
-  const exam = await Exam.findOne({ examCode: code.toUpperCase() });
+  const exam = await Exam.findById(examId);
   if (!exam) return NextResponse.json({ error: "Exam not found" }, { status: 404 });
 
   const submission = await Submission.findOne({
@@ -53,9 +46,6 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ code:
     );
   }
 
-  // Server-side timeout check - don't accept new answers past the exam
-  // window even if the client's own countdown was somehow tampered with
-  // or its clock is wrong.
   const startedAt = submission.startedAt ?? new Date();
   const deadline = new Date(startedAt.getTime() + exam.duration * 60_000);
   if (new Date() > deadline) {
@@ -65,18 +55,16 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ code:
     );
   }
 
-  // Look up correct answers once for auto-grading objective questions.
   const questionIds = body.answers.map((a) => a.questionId);
   const questions = await Question.find({ _id: { $in: questionIds } });
   const questionById = new Map(questions.map((q) => [q.id, q]));
 
   for (const incoming of body.answers) {
     const question = questionById.get(incoming.questionId);
-    if (!question) continue; // ignore unknown question ids rather than failing the whole batch
+    if (!question) continue;
 
     const existing = submission.answers.find((a) => a.question.toString() === incoming.questionId);
 
-    // Last-write-wins: skip if we already have a newer edit for this question.
     if (existing?.updatedAt && incoming.updatedAt && existing.updatedAt > incoming.updatedAt) {
       continue;
     }

@@ -4,7 +4,7 @@ export const getExamTypeLabel = (type: string): string => {
     theory: "Theory",
     mixed: "Mixed",
   };
-  return labels[type] || type;
+  return labels[type.toLowerCase()] || type;
 };
 
 export const getExamTypeColor = (type: string): string => {
@@ -13,5 +13,5 @@ export const getExamTypeColor = (type: string): string => {
     theory: "bg-purple-100 text-purple-800",
     mixed: "bg-green-100 text-green-800",
   };
-  return colors[type] || "bg-gray-100 text-gray-800";
+  return colors[type.toLowerCase()] || "bg-gray-100 text-gray-800";
 };

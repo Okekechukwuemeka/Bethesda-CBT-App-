@@ -12,23 +12,14 @@ interface IncomingAnswer {
   updatedAt?: number;
 }
 
-// POST /api/student/exams/[code]/submit
+// POST /api/student/exams/[examId]/submit
 // Body: { submissionId: string; answers?: IncomingAnswer[] }
-//
-// `answers` is optional and only a safety net - the client should have
-// already flushed everything via /sync, but if that last sync failed
-// (e.g. connection dropped right as the timer hit zero), this accepts one
-// final batch before finalizing.
-//
-// Idempotent: calling this twice (e.g. an offline-queued submit that
-// retries after already succeeding) just returns the existing result
-// instead of erroring.
-export async function POST(req: NextRequest, context: { params: Promise<{ code: string }> }) {
+export async function POST(req: NextRequest, context: { params: Promise<{ examId: string }> }) {
   const guard = await requireStudent();
   if (!guard.ok) return guard.response;
   const { session } = guard;
 
-  const { code } = await context.params;
+  const { examId } = await context.params;
   const body = (await req.json().catch(() => ({}))) as {
     submissionId?: string;
     answers?: IncomingAnswer[];
@@ -40,7 +31,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ code: 
 
   await connectDB();
 
-  const exam = await Exam.findOne({ examCode: code.toUpperCase() });
+  const exam = await Exam.findById(examId);
   if (!exam) return NextResponse.json({ error: "Exam not found" }, { status: 404 });
 
   const submission = await Submission.findOne({
@@ -96,8 +87,6 @@ export async function POST(req: NextRequest, context: { params: Promise<{ code: 
     }
   }
 
-  // Fully-objective exams are done grading the moment they're submitted;
-  // anything with a theory component waits for a human to mark it.
   submission.status = exam.type === "Objective" ? "Marked" : "Submitted";
   submission.submittedAt = new Date();
   submission.totalMarks = exam.totalMarks;

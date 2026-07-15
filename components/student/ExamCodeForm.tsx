@@ -11,6 +11,7 @@ interface ExamCodeFormProps {
   onCancel: () => void;
   statusMessage: StatusMessage | null;
   isCodeVerified: boolean;
+  isVerifying: boolean;
 }
 
 const ExamCodeForm: React.FC<ExamCodeFormProps> = ({
@@ -21,12 +22,15 @@ const ExamCodeForm: React.FC<ExamCodeFormProps> = ({
   onCancel,
   statusMessage,
   isCodeVerified,
+  isVerifying,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  const isDisabled = isCodeVerified || isVerifying;
 
   return (
     <>
@@ -57,7 +61,7 @@ const ExamCodeForm: React.FC<ExamCodeFormProps> = ({
             aria-invalid={statusMessage?.type === "error"}
             aria-describedby={statusMessage ? "status-message" : undefined}
             placeholder="Enter the exam code provided"
-            disabled={isCodeVerified}
+            disabled={isDisabled}
             className="w-full px-4 py-3 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent transition bg-[#F8FAFE] text-[#1A1A1A] placeholder:text-[#8A9CAE] disabled:opacity-50"
           />
         </div>
@@ -66,19 +70,21 @@ const ExamCodeForm: React.FC<ExamCodeFormProps> = ({
           <button
             type="button"
             onClick={onCancel}
-            disabled={isCodeVerified}
+            disabled={isDisabled}
             className="flex-1 bg-[#E8EEF5] hover:bg-[#D5DFE8] text-[#1A3A5C] font-medium py-2.5 px-4 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/30 disabled:opacity-50 disabled:cursor-not-allowed">
             Cancel
           </button>
           <button
             type="submit"
-            disabled={isCodeVerified}
+            disabled={isDisabled}
             className="flex-1 bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium py-2.5 px-4 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
             {isCodeVerified ? (
               <>
                 <span aria-hidden="true">Verified ✓</span>
                 <span className="sr-only">Code verified, starting exam</span>
               </>
+            ) : isVerifying ? (
+              "Verifying..."
             ) : (
               "Verify & Start"
             )}
