@@ -23,8 +23,8 @@ const QuestionBankFilters: React.FC<QuestionBankFiltersProps> = ({
   onClassChange,
 }) => {
   return (
-    <div className="flex flex-col sm:flex-row gap-3 mb-4">
-      <div className="flex-1">
+    <div className="flex flex-col sm:flex-row gap-3 mb-4 min-w-0">
+      <div className="flex-1 min-w-0">
         <label htmlFor="searchQuestions" className="sr-only">
           Search questions
         </label>
@@ -37,7 +37,7 @@ const QuestionBankFilters: React.FC<QuestionBankFiltersProps> = ({
           className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE] text-sm"
         />
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2 min-w-0">
         <select
           value={filterType}
           onChange={(e) => onTypeChange(e.target.value)}

@@ -111,14 +111,6 @@ const CreateExamPage: React.FC = () => {
           />
         ) : (
           <form onSubmit={handleSubmit} noValidate className="space-y-8">
-            {/*
-              NOTE for ExamDetailsSection: `subject` now needs to render as
-              a <select> populated from the `subjects` prop below (each
-              option's value should be subject.id), not a free-text input -
-              subjects are a real backend model now, not a typed string.
-              isLoadingSubjects lets it show a disabled/loading state while
-              the list is still being fetched.
-            */}
             <ExamDetailsSection
               formData={formData}
               fieldErrors={fieldErrors}

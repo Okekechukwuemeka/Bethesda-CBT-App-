@@ -164,7 +164,10 @@ examSchema.pre("save", async function (this: IExam) {
 // One "row" per subject+class+term+type on the Exams page, so guard against
 // accidental duplicates (e.g. two "Objective" Chemistry exams for JSS1 First
 // Term). Remove this if you'll ever legitimately need more than one.
-examSchema.index({ subject: 1, class: 1, term: 1, academicYear: 1, type: 1 }, { unique: true });
+examSchema.index(
+  { subject: 1, class: 1, term: 1, academicYear: 1, type: 1, title: 1 },
+  { unique: true },
+);
 examSchema.index({ class: 1, status: 1 });
 
 // Recomputes questionCount/totalMarks from whichever bank questions are

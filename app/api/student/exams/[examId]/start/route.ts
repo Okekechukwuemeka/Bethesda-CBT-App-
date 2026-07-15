@@ -67,6 +67,19 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
     );
   }
 
+  // Can't start before the scheduled exam time, even with a valid code.
+  if (Date.now() < new Date(exam.examDate).getTime()) {
+    return NextResponse.json(
+      {
+        error: `This exam opens on ${new Date(exam.examDate).toLocaleString("en-NG", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        })}`,
+      },
+      { status: 403 },
+    );
+  }
+
   let submission = await Submission.findOne({ exam: exam._id, student: session.user.id });
 
   if (submission?.status === "Submitted" || submission?.status === "Marked") {
@@ -106,7 +119,20 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
     path: "questions.question",
     select: "-correctAnswer",
   });
-  let orderedRefs = [...populatedExam.questions].sort((a, b) => a.order - b.order);
+
+  // .toObject() flattens the Mongoose document (and nested populated docs)
+  // into plain objects. Spreading a raw Mongoose document instance instead
+  // only copies its internal properties ($__, _doc, isNew) - schema fields
+  // like text/options/marks/_id live on getters and get silently dropped,
+  // which is why the client was seeing blank questions with no _id.
+  const examObj = populatedExam.toObject() as unknown as {
+    questions: {
+      question: Record<string, unknown> & { _id: { toString(): string } };
+      order: number;
+    }[];
+  };
+
+  let orderedRefs = [...examObj.questions].sort((a, b) => a.order - b.order);
 
   if (exam.shuffleQuestions) {
     const seed = hashToSeed(`${exam.id}:${session.user.id}`);
@@ -118,10 +144,11 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
   const answersByQuestion = new Map(submission.answers.map((a) => [a.question.toString(), a]));
 
   const questions = orderedRefs.map((q, i) => {
-    const questionDoc = q.question as unknown as { _id: { toString(): string } };
-    const prior = answersByQuestion.get(questionDoc._id.toString());
+    const qId = q.question._id.toString();
+    const prior = answersByQuestion.get(qId);
     return {
-      ...(q.question as unknown as Record<string, unknown>),
+      ...q.question,
+      _id: qId,
       order: i,
       selectedOption: prior?.selectedOption,
       textAnswer: prior?.textAnswer,
@@ -140,6 +167,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
       type: exam.type,
       duration: exam.duration,
       totalMarks: exam.totalMarks,
+      instructions: exam.instructions,
     },
     submissionId: submission.id,
     startedAt: submission.startedAt,

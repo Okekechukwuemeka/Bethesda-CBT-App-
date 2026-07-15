@@ -28,6 +28,11 @@ const ExamCard: React.FC<ExamCardProps> = ({ exam, onStartExam }) => {
                 Ongoing
               </span>
             )}
+            {!exam.isAvailable && (
+              <span className="text-xs px-2 py-1 rounded-full font-medium bg-gray-100 text-gray-700">
+                Not Yet Open
+              </span>
+            )}
           </div>
           <p className="text-sm text-[#4A6A8A] font-medium">
             {exam.title} · {exam.term}
@@ -46,9 +51,14 @@ const ExamCard: React.FC<ExamCardProps> = ({ exam, onStartExam }) => {
         </div>
         <button
           onClick={(e) => onStartExam(exam, e)}
-          className="bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium px-6 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50 active:scale-[0.98] whitespace-nowrap"
-          aria-label={`Start ${exam.subject} ${getExamTypeLabel(exam.type)} examination, ${date} at ${time}, duration ${duration}`}>
-          Start Exam
+          disabled={!exam.isAvailable}
+          className="bg-[#1A3A5C] hover:bg-[#14304D] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#1A3A5C] text-white font-medium px-6 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50 active:scale-[0.98] whitespace-nowrap"
+          aria-label={
+            exam.isAvailable
+              ? `Start ${exam.subject} ${getExamTypeLabel(exam.type)} examination, ${date} at ${time}, duration ${duration}`
+              : `${exam.subject} opens on ${date} at ${time}`
+          }>
+          {exam.isAvailable ? "Start Exam" : "Not Yet Open"}
         </button>
       </div>
     </li>

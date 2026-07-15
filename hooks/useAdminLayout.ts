@@ -1,15 +1,16 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { NavItem } from "@/config/admin-navigation";
 
 export const useAdminLayout = (navItems: NavItem[]) => {
   const pathname = usePathname();
-  const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [routeAnnouncement, setRouteAnnouncement] = useState("");
   const sidebarRef = useRef<HTMLElement>(null);
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
@@ -55,14 +56,27 @@ export const useAdminLayout = (navItems: NavItem[]) => {
     return () => document.removeEventListener("keydown", handleEscape);
   }, [isSidebarOpen, isMobile]);
 
+  // Sidebar's logout button opens the confirm dialog instead of logging
+  // out immediately - actual sign-out happens in confirmLogout below.
   const handleLogout = useCallback(() => {
-    if (confirm("Are you sure you want to logout?")) {
-      setIsLoading(true);
-      setTimeout(() => {
-        router.push("/admin/login");
-      }, 500);
-    }
-  }, [router]);
+    setShowLogoutConfirm(true);
+  }, []);
+
+  const cancelLogout = useCallback(() => {
+    setShowLogoutConfirm(false);
+  }, []);
+
+  // Clears the NextAuth session (cookie + JWT) and redirects. Only called
+  // once the user confirms via the dialog.
+  const confirmLogout = useCallback(() => {
+    setShowLogoutConfirm(false);
+    setIsLoading(true);
+    signOut({ redirect: true, callbackUrl: "/admin/login" }).catch(() => {
+      // Only reached if signOut itself throws before it can redirect -
+      // otherwise the browser navigates away and this component unmounts.
+      setIsLoading(false);
+    });
+  }, []);
 
   const toggleSidebar = useCallback(() => {
     setIsSidebarOpen((prev) => !prev);
@@ -83,11 +97,14 @@ export const useAdminLayout = (navItems: NavItem[]) => {
     isSidebarOpen,
     isMobile,
     isLoading,
+    showLogoutConfirm,
     routeAnnouncement,
     mainIsInert,
     sidebarRef,
     toggleButtonRef,
     handleLogout,
+    confirmLogout,
+    cancelLogout,
     toggleSidebar,
     closeSidebar,
   };

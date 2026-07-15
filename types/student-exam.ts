@@ -7,12 +7,13 @@ export interface Exam {
   subject: string;
   term: string;
   academicYear: string;
-  examDate: string; // ISO date string
-  duration: number; // minutes
+  examDate: string;
+  duration: number;
   type: ExamType;
   status: ExamStatus;
   totalMarks: number;
   questionCount: number;
+  isAvailable: boolean;
 }
 
 export interface StatusMessage {

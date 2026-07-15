@@ -35,7 +35,6 @@ const ExamPage: React.FC = () => {
     getTotalQuestions,
     goToExamsList,
   } = useExamTaking();
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#E8F0FE] flex items-center justify-center">
@@ -72,6 +71,13 @@ const ExamPage: React.FC = () => {
         )}
 
         <main className="bg-white rounded-b-2xl shadow-2xl overflow-hidden border border-[#B8D0E8] p-6">
+          {exam.instructions && (
+            <div className="bg-[#F8FAFE] border border-[#C5D8EC] rounded-lg p-4 mb-6 text-sm text-[#4A6A8A]">
+              <span className="font-medium text-[#1A3A5C]">Instructions: </span>
+              {exam.instructions}
+            </div>
+          )}
+
           <QuestionsList
             questions={questions}
             answers={answers}

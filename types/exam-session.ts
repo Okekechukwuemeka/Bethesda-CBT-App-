@@ -16,8 +16,9 @@ export interface ExamSessionMeta {
   id: string;
   title: string;
   type: ExamType;
-  duration: number; // minutes
+  duration: number;
   totalMarks: number;
+  instructions?: string;
 }
 
 export interface ExamSessionResponse {
