@@ -1,16 +1,14 @@
 import React from "react";
-import { Question } from "@/types/exam-taking";
+import { SessionQuestion } from "@/types/exam-session";
 
 interface ObjectiveQuestionProps {
-  question: Question;
-  questionIndex: number;
-  selectedAnswer: string;
-  onAnswerChange: (questionId: number, value: string) => void;
+  question: SessionQuestion;
+  selectedAnswer: string | undefined;
+  onAnswerChange: (questionId: string, value: string, isObjective: boolean) => void;
 }
 
 const ObjectiveQuestion: React.FC<ObjectiveQuestionProps> = ({
   question,
-  questionIndex,
   selectedAnswer,
   onAnswerChange,
 }) => {
@@ -18,7 +16,7 @@ const ObjectiveQuestion: React.FC<ObjectiveQuestionProps> = ({
     <div
       className="space-y-2"
       role="radiogroup"
-      aria-labelledby={`question-label-${question.id}`}
+      aria-labelledby={`question-label-${question._id}`}
       aria-required="true">
       {question.options?.map((option, optIndex) => {
         const letter = String.fromCharCode(65 + optIndex);
@@ -32,10 +30,10 @@ const ObjectiveQuestion: React.FC<ObjectiveQuestionProps> = ({
             }`}>
             <input
               type="radio"
-              name={`question-${question.id}`}
+              name={`question-${question._id}`}
               value={option}
               checked={isSelected}
-              onChange={(e) => onAnswerChange(question.id, e.target.value)}
+              onChange={(e) => onAnswerChange(question._id, e.target.value, true)}
               className="w-4 h-4 text-[#1A3A5C] focus:ring-2 focus:ring-[#2B6CB0]"
               aria-label={`Option ${letter}: ${option}`}
             />

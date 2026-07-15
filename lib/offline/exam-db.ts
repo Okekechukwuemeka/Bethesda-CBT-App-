@@ -10,24 +10,27 @@ export interface CachedQuestion {
 }
 
 export interface ExamSessionRecord {
-  examCode: string; // primary key
+  examId: string; // primary key
   submissionId: string;
-  examId: string;
   title: string;
   type: string;
   durationMinutes: number;
-  // Authoritative, server-issued start time (ms since epoch). The timer is
-  // ALWAYS derived from this + durationMinutes, never from a client-side
-  // countdown - that's what makes it survive a closed tab or a dead
-  // battery: on reopen we just recompute "how much time is left" from this
-  // fixed point instead of resuming a counter that reset to zero.
+  // Authoritative, server-issued start time (ms since epoch). Time
+  // remaining is always recomputed from this + durationMinutes, never
+  // from a client-side counter - that's what makes it survive a closed
+  // tab or dead battery: on reopen we recompute instead of resuming a
+  // counter that reset to zero.
   startedAt: number;
   questions: CachedQuestion[];
+  // "pending-submit" means: the student hit submit (or the timer hit
+  // zero) but the server hasn't confirmed yet - e.g. they were offline
+  // at that moment. On reopening the app in this state, we skip
+  // rendering the exam entirely and go straight to retrying the submit.
   status: "in-progress" | "pending-submit" | "submitted";
 }
 
 export interface AnswerRecord {
-  examCode: string;
+  examId: string;
   questionId: string;
   selectedOption?: string;
   textAnswer?: string;
@@ -37,11 +40,11 @@ export interface AnswerRecord {
 
 interface ExamDB extends DBSchema {
   sessions: {
-    key: string; // examCode
+    key: string; // examId
     value: ExamSessionRecord;
   };
   answers: {
-    key: [string, string]; // [examCode, questionId]
+    key: [string, string]; // [examId, questionId]
     value: AnswerRecord;
     indexes: { byExam: string };
   };
@@ -56,11 +59,11 @@ function getDB(): Promise<IDBPDatabase<ExamDB>> {
   if (!dbPromise) {
     dbPromise = openDB<ExamDB>("exam-offline-store", 1, {
       upgrade(db) {
-        db.createObjectStore("sessions", { keyPath: "examCode" });
+        db.createObjectStore("sessions", { keyPath: "examId" });
         const answerStore = db.createObjectStore("answers", {
-          keyPath: ["examCode", "questionId"],
+          keyPath: ["examId", "questionId"],
         });
-        answerStore.createIndex("byExam", "examCode");
+        answerStore.createIndex("byExam", "examId");
       },
     });
   }
@@ -72,34 +75,34 @@ export async function saveSession(session: ExamSessionRecord): Promise<void> {
   await db.put("sessions", session);
 }
 
-export async function getSession(examCode: string): Promise<ExamSessionRecord | undefined> {
+export async function getSession(examId: string): Promise<ExamSessionRecord | undefined> {
   const db = await getDB();
-  return db.get("sessions", examCode);
+  return db.get("sessions", examId);
 }
 
 export async function updateSessionStatus(
-  examCode: string,
+  examId: string,
   status: ExamSessionRecord["status"],
 ): Promise<void> {
   const db = await getDB();
-  const session = await db.get("sessions", examCode);
+  const session = await db.get("sessions", examId);
   if (!session) return;
   session.status = status;
   await db.put("sessions", session);
 }
 
 // Called on every keystroke/option click. Writes straight to IndexedDB
-// before anything else happens - this is the durability guarantee. React
-// state updates for the UI happen separately and can be lost; this can't
-// (short of the device's storage itself failing).
+// before anything else - this is the durability guarantee. React state
+// updates for the UI happen separately and can be lost on a crash/reload;
+// this can't be, short of the device's storage itself failing.
 export async function saveAnswerLocally(
-  examCode: string,
+  examId: string,
   questionId: string,
   data: { selectedOption?: string; textAnswer?: string },
 ): Promise<void> {
   const db = await getDB();
   await db.put("answers", {
-    examCode,
+    examId,
     questionId,
     ...data,
     updatedAt: Date.now(),
@@ -107,21 +110,21 @@ export async function saveAnswerLocally(
   });
 }
 
-export async function getAllAnswers(examCode: string): Promise<AnswerRecord[]> {
+export async function getAllAnswers(examId: string): Promise<AnswerRecord[]> {
   const db = await getDB();
-  return db.getAllFromIndex("answers", "byExam", examCode);
+  return db.getAllFromIndex("answers", "byExam", examId);
 }
 
-export async function getUnsyncedAnswers(examCode: string): Promise<AnswerRecord[]> {
-  const all = await getAllAnswers(examCode);
+export async function getUnsyncedAnswers(examId: string): Promise<AnswerRecord[]> {
+  const all = await getAllAnswers(examId);
   return all.filter((a) => !a.synced);
 }
 
-export async function markAnswersSynced(examCode: string, questionIds: string[]): Promise<void> {
+export async function markAnswersSynced(examId: string, questionIds: string[]): Promise<void> {
   const db = await getDB();
   const tx = db.transaction("answers", "readwrite");
   for (const questionId of questionIds) {
-    const record = await tx.store.get([examCode, questionId]);
+    const record = await tx.store.get([examId, questionId]);
     if (record) {
       record.synced = true;
       await tx.store.put(record);
@@ -130,13 +133,13 @@ export async function markAnswersSynced(examCode: string, questionIds: string[])
   await tx.done;
 }
 
-export async function clearSession(examCode: string): Promise<void> {
+export async function clearSession(examId: string): Promise<void> {
   const db = await getDB();
   const tx = db.transaction(["sessions", "answers"], "readwrite");
-  await tx.objectStore("sessions").delete(examCode);
+  await tx.objectStore("sessions").delete(examId);
   const answerStore = tx.objectStore("answers");
   const answerIndex = answerStore.index("byExam");
-  let cursor = await answerIndex.openCursor(examCode);
+  let cursor = await answerIndex.openCursor(examId);
   while (cursor) {
     await cursor.delete();
     cursor = await cursor.continue();

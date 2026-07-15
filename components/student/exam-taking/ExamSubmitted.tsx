@@ -1,66 +1,49 @@
-import React, { useEffect, useRef } from "react";
-import { ExamData } from "@/types/exam-taking";
-import { getExamTypeLabel } from "@/config/exam-type-utils";
+import React from "react";
+import { ExamSessionMeta, SubmitResult } from "@/types/exam-session";
 
 interface ExamSubmittedProps {
-  exam: ExamData;
-  answeredCount: number;
-  totalQuestions: number;
-  isTimeUp: boolean;
+  exam: ExamSessionMeta;
+  result: SubmitResult | null;
+  onDone: () => void;
 }
 
-const ExamSubmitted: React.FC<ExamSubmittedProps> = ({
-  exam,
-  answeredCount,
-  totalQuestions,
-  isTimeUp,
-}) => {
-  const headingRef = useRef<HTMLHeadingElement>(null);
-
-  useEffect(() => {
-    headingRef.current?.focus();
-  }, []);
+const ExamSubmitted: React.FC<ExamSubmittedProps> = ({ exam, result, onDone }) => {
+  const isMarked = result?.status === "Marked";
 
   return (
-    <div className="min-h-screen bg-[#E8F0FE] flex items-center justify-center px-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full border border-[#B8D0E8] text-center">
+    <div className="min-h-screen bg-[#E8F0FE] flex items-center justify-center px-4 py-8">
+      <div className="bg-white rounded-2xl shadow-2xl border border-[#B8D0E8] max-w-md w-full p-8 text-center">
         <div
-          className={`p-4 rounded-lg mb-6 border ${
-            isTimeUp
-              ? "bg-yellow-100 text-yellow-800 border-yellow-300"
-              : "bg-green-100 text-green-800 border-green-300"
-          }`}>
-          <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-bold mb-2 focus:outline-none">
-            Exam Submitted
-          </h1>
-          <p>Your answers have been recorded successfully.</p>
+          className={`mx-auto mb-4 h-14 w-14 rounded-full flex items-center justify-center text-2xl ${
+            isMarked ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+          }`}
+          aria-hidden="true">
+          ✓
         </div>
+        <h1 className="text-xl font-bold text-[#1A3A5C] mb-1">Exam Submitted</h1>
+        <p className="text-sm text-[#4A6A8A] mb-6">{exam.title}</p>
 
-        <div className="bg-[#F8FAFE] border border-[#C5D8EC] rounded-lg p-4 mb-6">
-          <ExamDetail label="Subject" value={exam.subject} />
-          <ExamDetail label="Type" value={getExamTypeLabel(exam.type)} />
-          <ExamDetail label="Questions Answered" value={`${answeredCount} of ${totalQuestions}`} />
-          {isTimeUp && (
-            <p className="text-yellow-700 mt-2 text-sm">
-              Time is up. Your exam has been automatically submitted.
-            </p>
-          )}
-        </div>
+        {isMarked ? (
+          <p className="text-3xl font-bold text-[#1A3A5C] mb-6">
+            {result?.score}{" "}
+            <span className="text-base font-medium text-[#4A6A8A]">/ {result?.totalMarks}</span>
+          </p>
+        ) : (
+          <p className="text-sm text-[#4A6A8A] bg-[#F8FAFE] border border-[#C5D8EC] rounded-lg p-4 mb-6">
+            Your answers have been recorded. Theory questions are graded manually, so your final
+            score will be available once marking is complete.
+          </p>
+        )}
 
-        <a
-          href="/student/exams"
-          className="inline-block bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium px-6 py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50">
-          Return to Exams
-        </a>
+        <button
+          type="button"
+          onClick={onDone}
+          className="w-full bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium py-2.5 px-4 rounded-lg transition duration-200">
+          Back to Examinations
+        </button>
       </div>
     </div>
   );
 };
-
-const ExamDetail: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <p className="text-[#4A6A8A]">
-    <span className="font-medium">{label}:</span> {value}
-  </p>
-);
 
 export default ExamSubmitted;

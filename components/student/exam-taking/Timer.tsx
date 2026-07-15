@@ -1,12 +1,14 @@
 import React from "react";
 
-interface TimerProps {
-  timeRemaining: number;
-  isExamStarted: boolean;
-  onStartExam: () => void;
-  answeredCount: number;
-  totalQuestions: number;
-}
+type SyncState = "idle" | "syncing" | "synced" | "error" | "offline";
+
+const syncLabel: Record<SyncState, { text: string; className: string }> = {
+  idle: { text: "", className: "" },
+  syncing: { text: "Saving...", className: "text-[#4A6A8A]" },
+  synced: { text: "Saved", className: "text-green-700" },
+  error: { text: "Save failed, retrying", className: "text-red-700" },
+  offline: { text: "Offline - saved locally", className: "text-amber-700" },
+};
 
 const formatTime = (seconds: number) => {
   const hours = Math.floor(seconds / 3600);
@@ -15,13 +17,20 @@ const formatTime = (seconds: number) => {
   return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
 };
 
+interface TimerProps {
+  timeRemaining: number;
+  answeredCount: number;
+  totalQuestions: number;
+  syncState: SyncState;
+}
+
 const Timer: React.FC<TimerProps> = ({
   timeRemaining,
-  isExamStarted,
-  onStartExam,
   answeredCount,
   totalQuestions,
+  syncState,
 }) => {
+  const { text, className } = syncLabel[syncState];
   return (
     <div className="bg-white border-x border-[#B8D0E8] px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
       <div className="flex items-center gap-3">
@@ -33,19 +42,15 @@ const Timer: React.FC<TimerProps> = ({
           aria-hidden="true">
           {formatTime(timeRemaining)}
         </span>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-[#4A6A8A]">
-          {answeredCount} / {totalQuestions} answered
-        </span>
-        {!isExamStarted && (
-          <button
-            onClick={onStartExam}
-            className="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-1.5 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-green-500/50">
-            Start Exam
-          </button>
+        {text && (
+          <span className={`text-xs font-medium ${className}`} role="status" aria-live="polite">
+            {text}
+          </span>
         )}
       </div>
+      <span className="text-sm text-[#4A6A8A]">
+        {answeredCount} / {totalQuestions} answered
+      </span>
     </div>
   );
 };
