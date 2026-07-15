@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 interface ExamDeletedStateProps {
@@ -7,10 +7,17 @@ interface ExamDeletedStateProps {
 
 const ExamDeletedState: React.FC<ExamDeletedStateProps> = ({ examTitle }) => {
   const router = useRouter();
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
 
   return (
-    <div className="max-w-md mx-auto text-center py-16 space-y-4">
-      <h1 className="text-xl font-bold text-[#1A3A5C]">Exam Deleted</h1>
+    <div className="max-w-md mx-auto text-center py-16 space-y-4" role="status" aria-live="polite">
+      <h1 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-[#1A3A5C] outline-none">
+        Exam Deleted
+      </h1>
       <p className="text-[#5A7A9A]">
         &ldquo;{examTitle}&rdquo; and all associated questions and results have been permanently
         deleted.
