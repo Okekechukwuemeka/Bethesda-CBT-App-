@@ -1,33 +1,7 @@
 import ExcelJS from "exceljs";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-
-interface SubjectResult {
-  id: number;
-  subject: string;
-  examType: "objective" | "theory" | "mixed";
-  totalStudents: number;
-  averageScore: number;
-  highestScore: number;
-  lowestScore: number;
-  completed: number;
-  status: "completed" | "pending" | "in-progress";
-}
-
-interface StudentAnswer {
-  questionNo: number;
-  answer: string;
-}
-
-interface StudentScript {
-  id: number;
-  studentName: string;
-  admissionNo: string;
-  score: number;
-  status: "marked" | "pending" | "in-progress";
-  submittedAt: string;
-  answers?: StudentAnswer[];
-}
+import { SubjectResult, StudentScript } from "@/types/admin-results";
 
 // ---------- OBJECTIVE / MIXED -> Excel ----------
 export async function generateObjectiveExcel(
@@ -63,7 +37,12 @@ export async function generateObjectiveExcel(
   });
 
   students.forEach((s) => {
-    sheet.addRow([s.admissionNo, s.studentName, s.score > 0 ? s.score : "Not marked", s.status]);
+    sheet.addRow([
+      s.admissionNo,
+      s.studentName,
+      s.status === "marked" ? s.score : "Not marked",
+      s.status,
+    ]);
   });
 
   sheet.columns.forEach((col) => {
@@ -98,7 +77,7 @@ function addScriptHeader(
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.text(`Exam Type: Theory`, 14, 33);
+  doc.text(`Exam Type: ${subject.examType}`, 14, 33);
   doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 39);
   doc.text(`Student: ${student.studentName}`, 14, 45);
   doc.text(`Admission No: ${student.admissionNo}`, 14, 51);
@@ -115,7 +94,7 @@ export function generateTheoryScriptPDF(
   autoTable(doc, {
     startY: 58,
     head: [["Q. No.", "Answer"]],
-    body: (student.answers ?? []).map((a) => [a.questionNo, a.answer]),
+    body: (student.answers ?? []).map((a) => [a.questionNo, a.answer || "(No answer)"]),
     styles: { fontSize: 10, cellPadding: 3, valign: "top" },
     headStyles: { fillColor: [26, 58, 92], textColor: 255, fontStyle: "bold" },
     columnStyles: { 0: { cellWidth: 20 } },
@@ -130,15 +109,17 @@ export function generateAllTheoryScriptsPDF(
   students: StudentScript[],
 ) {
   const doc = new jsPDF();
+  // Only students who actually submitted have anything worth printing.
+  const submitted = students.filter((s) => s.status !== "not-started");
 
-  students.forEach((student, idx) => {
+  submitted.forEach((student, idx) => {
     if (idx > 0) doc.addPage();
     addScriptHeader(doc, className, subject, student);
 
     autoTable(doc, {
       startY: 58,
       head: [["Q. No.", "Answer"]],
-      body: (student.answers ?? []).map((a) => [a.questionNo, a.answer]),
+      body: (student.answers ?? []).map((a) => [a.questionNo, a.answer || "(No answer)"]),
       styles: { fontSize: 10, cellPadding: 3, valign: "top" },
       headStyles: { fillColor: [26, 58, 92], textColor: 255, fontStyle: "bold" },
       columnStyles: { 0: { cellWidth: 20 } },
