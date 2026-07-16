@@ -10,6 +10,7 @@ import { useClassResults } from "@/hooks/useClassResults";
 
 const ClassResultsPage: React.FC = () => {
   const params = useParams<{ className: string }>();
+  console.log(params);
   const className = decodeURIComponent(params.className);
 
   const {

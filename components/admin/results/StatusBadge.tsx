@@ -1,9 +1,6 @@
 import React from "react";
 import type { ResultStatus } from "@/types/admin-results";
 
-// Also referenced but not included in either pasted version. Colors match
-// what SubjectResultCard (Version 1) already used, so status coloring is
-// consistent regardless of which layout renders it.
 interface StatusBadgeProps {
   status: ResultStatus;
 }

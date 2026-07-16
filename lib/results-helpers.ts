@@ -6,6 +6,7 @@ import { Submission } from "@/lib/models/submission.model";
 import type { ClassLevel } from "@/lib/models/constants";
 import type {
   ExamTypeLower,
+  Performance,
   ResultStatus,
   ScriptStatus,
   SubjectResult,
@@ -22,6 +23,18 @@ export function toScriptStatus(status?: string): ScriptStatus {
   return "not-started";
 }
 
+// Thresholds are a reasonable default (>=75 excellent, >=60 good, >=45
+// average, below that poor) - adjust to match the school's actual grading
+// scale if this doesn't line up with their existing bands. Shared between
+// the classes list and anywhere else that needs to bucket a percentage
+// into a performance tier, so the bands only ever live in one place.
+export function bucketPerformance(avg: number): Performance {
+  if (avg >= 75) return "excellent";
+  if (avg >= 60) return "good";
+  if (avg >= 45) return "average";
+  return "poor";
+}
+
 interface SubmissionLean {
   status: string;
   score: number;
@@ -33,6 +46,7 @@ export interface ExamLean {
   subject: { name?: string } | string;
   type: string;
 }
+
 // One row per exam ("subject" on the Results page). Completion is judged
 // by how many students actually have a fully-Marked submission, NOT by
 // the exam's own `status` field - an exam can be "Completed" (its sitting
@@ -97,4 +111,29 @@ export async function getSubjectResultsForClass(className: ClassLevel): Promise<
       return buildSubjectResult(exam as unknown as ExamLean, submissions, totalStudents);
     }),
   );
+}
+
+// Micro-average across every marked submission in the class (not an
+// average of each subject's own average - see buildSubjectResult's
+// comment for why that distinction matters). Used by the classes list
+// page to show one headline number per class.
+export async function getClassAverageScore(className: ClassLevel): Promise<number> {
+  await connectDB();
+
+  const classExams = await Exam.find({ class: className }).select("_id");
+  const classExamIds = classExams.map((e) => e._id);
+  if (classExamIds.length === 0) return 0;
+
+  const markedSubmissions = await Submission.find({
+    exam: { $in: classExamIds },
+    status: "Marked",
+  }).select("score totalMarks");
+
+  const percentages = markedSubmissions
+    .filter((s) => s.totalMarks > 0)
+    .map((s) => (s.score / s.totalMarks) * 100);
+
+  return percentages.length > 0
+    ? Math.round(percentages.reduce((a, b) => a + b, 0) / percentages.length)
+    : 0;
 }
