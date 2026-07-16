@@ -35,11 +35,14 @@ const FormField: React.FC<FormFieldProps> = ({
           </span>
         )}
       </label>
-      {React.cloneElement(children as React.ReactElement, {
-        "aria-required": required,
-        "aria-invalid": error ? "true" : undefined,
-        "aria-describedby": describedBy,
-      })}
+      {React.cloneElement(
+        children as React.ReactElement<Record<string, unknown>>,
+        {
+          "aria-required": required,
+          "aria-invalid": error ? "true" : undefined,
+          "aria-describedby": describedBy,
+        } as Record<string, unknown>,
+      )}
       {error && (
         <p id={errorId} className="mt-1 text-sm text-red-600" role="alert">
           {error}
