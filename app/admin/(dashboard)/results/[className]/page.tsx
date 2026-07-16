@@ -10,13 +10,13 @@ import { useClassResults } from "@/hooks/useClassResults";
 
 const ClassResultsPage: React.FC = () => {
   const params = useParams<{ className: string }>();
-  console.log(params);
   const className = decodeURIComponent(params.className);
 
   const {
     subjects,
     isLoading,
-    error,
+    subjectsError,
+    studentsError,
     statusMessage,
     studentsByExam,
     loadingStudentsFor,
@@ -87,12 +87,12 @@ const ClassResultsPage: React.FC = () => {
         <p role="status" aria-live="polite" className="text-center text-[#5A7A9A] py-12">
           Loading exams...
         </p>
-      ) : error ? (
+      ) : subjectsError ? (
         <div
           role="alert"
           aria-live="assertive"
           className="p-4 rounded-lg text-sm font-medium bg-red-100 text-red-800 border border-red-300">
-          {error}
+          {subjectsError}
         </div>
       ) : (
         <>

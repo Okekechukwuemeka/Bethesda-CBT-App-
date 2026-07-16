@@ -27,7 +27,6 @@ import type { ClassExportRow, SubjectResult } from "@/types/admin-results";
 export async function GET(req: NextRequest, context: { params: Promise<{ className: string }> }) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
-  console.log(context);
 
   const { className: rawClassName } = await context.params;
   const className = decodeURIComponent(rawClassName) as ClassLevel;
@@ -41,7 +40,6 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
       .sort({ lastName: 1, firstName: 1 })
       .lean(),
   ]);
-
   const subjects: SubjectResult[] = [];
   const scoresBySubject: Record<string, ClassExportRow[]> = {};
 

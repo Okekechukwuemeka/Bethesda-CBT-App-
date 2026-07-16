@@ -22,12 +22,13 @@ async function parseErrorMessage(res: Response, fallback: string): Promise<strin
 export const useClassResults = (className: string) => {
   const [subjects, setSubjects] = useState<SubjectResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
+  // ✅ FIX: Split the ambiguous error state into descriptive contexts
+  const [subjectsError, setSubjectsError] = useState<string | null>(null);
+  const [studentsError, setStudentsError] = useState<string | null>(null);
+
   const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
 
-  // Full per-student rows (with theory answers) are only fetched when
-  // actually needed - opening the scripts modal, or exporting - then
-  // cached by examId so re-opening/re-exporting doesn't refetch.
   const [studentsByExam, setStudentsByExam] = useState<Record<string, StudentScript[]>>({});
   const [loadingStudentsFor, setLoadingStudentsFor] = useState<string | null>(null);
 
@@ -45,14 +46,14 @@ export const useClassResults = (className: string) => {
 
   const fetchSubjects = useCallback(async () => {
     setIsLoading(true);
-    setError(null);
+    setSubjectsError(null);
     try {
       const res = await fetch(`/api/admin/results/${encodeURIComponent(className)}/subjects`);
       if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to load subject results"));
       const { subjects: data } = await res.json();
       setSubjects(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load subject results.");
+      setSubjectsError(err instanceof Error ? err.message : "Failed to load subject results.");
     } finally {
       setIsLoading(false);
     }
@@ -67,17 +68,24 @@ export const useClassResults = (className: string) => {
       if (studentsByExam[examId]) return studentsByExam[examId];
 
       setLoadingStudentsFor(examId);
+      setStudentsError(null);
       try {
-        const res = await fetch(`/api/admin/results/exams/${examId}/students`);
+        // ✅ FIX: Pointing to your actual API path structure and appending examId as a query parameter
+        const res = await fetch(
+          `/api/admin/results/${encodeURIComponent(className)}/students?examId=${examId}`,
+        );
         if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to load students"));
         const { students } = await res.json();
         setStudentsByExam((prev) => ({ ...prev, [examId]: students }));
         return students as StudentScript[];
+      } catch (err) {
+        setStudentsError(err instanceof Error ? err.message : "Failed to load students.");
+        throw err;
       } finally {
         setLoadingStudentsFor(null);
       }
     },
-    [studentsByExam],
+    [className, studentsByExam],
   );
 
   const handleViewScripts = useCallback(
@@ -88,18 +96,16 @@ export const useClassResults = (className: string) => {
       try {
         await ensureStudentsLoaded(subject.id);
       } catch (err) {
-        showStatus({
-          type: "error",
-          text: err instanceof Error ? err.message : "Failed to load students.",
-        });
+        // Handled within ensureStudentsLoaded error catch block
       }
     },
-    [ensureStudentsLoaded, showStatus],
+    [ensureStudentsLoaded],
   );
 
   const closeScriptModal = useCallback(() => {
     setShowScriptModal(false);
     setSelectedSubject(null);
+    setStudentsError(null); // Clear active modal error streams on close
   }, []);
 
   const exportExcel = useCallback(
@@ -180,7 +186,8 @@ export const useClassResults = (className: string) => {
     className,
     subjects,
     isLoading,
-    error,
+    subjectsError, // ✅ Updated
+    studentsError, // ✅ Updated
     statusMessage,
     studentsByExam,
     loadingStudentsFor,

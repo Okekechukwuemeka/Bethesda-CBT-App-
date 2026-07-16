@@ -8,29 +8,40 @@ import { toScriptStatus } from "@/lib/results-helpers";
 import type { ClassLevel } from "@/lib/models/constants";
 import type { StudentScript } from "@/types/admin-results";
 
-// GET /api/admin/results/exams/[examId]/students
-// Returns every active student in the exam's class, with their submission
-// (if any) and, for Theory questions only, their written answers in
-// question order - this is what feeds the printable script PDF and the
-// Student Scripts modal. Objective answers aren't included since those
-// are already auto-graded and don't need a human to review them.
-export async function GET(req: NextRequest, context: { params: Promise<{ examId: string }> }) {
+// GET /api/admin/results/[className]/students?examId=...
+export async function GET(req: NextRequest, context: { params: Promise<{ className: string }> }) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
-  console.log(context);
 
-  const { examId } = await context.params;
+  // 1. Read className from the actual route parameters
+  const { className: rawClassName } = await context.params;
+  const className = decodeURIComponent(rawClassName) as ClassLevel;
+
+  // 2. Read examId from the URL query search parameters (?examId=...)
+  const { searchParams } = new URL(req.url);
+  const examId = searchParams.get("examId");
+
+  // Validate the incoming query string parameters
+  if (!examId || examId === "undefined" || examId === "null") {
+    return NextResponse.json(
+      { error: "Missing or invalid examId query parameter" },
+      { status: 400 },
+    );
+  }
+
   await connectDB();
 
   let exam;
   try {
+    // 3. Look up the exam record using our query string variable
     exam = await Exam.findById(examId).populate({
       path: "questions.question",
       select: "text type",
     });
-  } catch {
-    return NextResponse.json({ error: "Invalid exam ID" }, { status: 400 });
+  } catch (err) {
+    return NextResponse.json({ error: "Invalid exam ID format" }, { status: 400 });
   }
+
   if (!exam) return NextResponse.json({ error: "Exam not found" }, { status: 404 });
 
   const examObj = exam.toObject() as unknown as {
@@ -43,12 +54,13 @@ export async function GET(req: NextRequest, context: { params: Promise<{ examId:
     }[];
   };
 
-  const theoryQuestionsInOrder = [...examObj.questions]
+  const theoryQuestionsInOrder = [...(examObj.questions || [])]
     .sort((a, b) => a.order - b.order)
-    .filter((q) => q.question.type === "Theory")
+    .filter((q) => q.question && q.question.type === "Theory")
     .map((q, i) => ({ id: q.question._id.toString(), questionNo: i + 1 }));
 
-  const students = await Student.find({ class: examObj.class, isActive: true })
+  // Use our parsed className variable to gather active classroom students
+  const students = await Student.find({ class: className, isActive: true })
     .select("firstName lastName admissionNumber")
     .sort({ lastName: 1, firstName: 1 })
     .lean();

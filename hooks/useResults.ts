@@ -38,7 +38,9 @@ export const useResults = () => {
     return classes.filter((cls) => {
       const matchesSearch = cls.className.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesPerformance =
-        filterPerformance === "all" || cls.performance === filterPerformance;
+        filterPerformance === "all" ||
+        cls.performance?.toLowerCase() === filterPerformance.toLowerCase();
+
       return matchesSearch && matchesPerformance;
     });
   }, [classes, searchTerm, filterPerformance]);
@@ -49,9 +51,9 @@ export const useResults = () => {
     isLoading,
     error,
     searchTerm,
-    filterPerformance,
     setSearchTerm,
+    filterPerformance,
     setFilterPerformance,
-    refetch: fetchClasses,
+    refreshClasses: fetchClasses,
   };
 };
