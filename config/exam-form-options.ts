@@ -1,12 +1,11 @@
-// config/exam-form-options.ts
 export const CLASS_OPTIONS = [
   { value: "", label: "Select Class" },
   { value: "JSS1", label: "JSS1" },
   { value: "JSS2", label: "JSS2" },
   { value: "JSS3", label: "JSS3" },
-  { value: "SS1", label: "SS1" },
-  { value: "SS2", label: "SS2" },
-  { value: "SS3", label: "SS3" },
+  { value: "SSS1", label: "SSS1" },
+  { value: "SSS2", label: "SSS2" },
+  { value: "SSS3", label: "SSS3" },
 ];
 
 export const TERM_OPTIONS = [

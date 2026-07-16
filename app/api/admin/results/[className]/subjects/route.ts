@@ -7,6 +7,7 @@ import { getSubjectResultsForClass } from "@/lib/results-helpers";
 export async function GET(req: NextRequest, context: { params: Promise<{ className: string }> }) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
+  console.log(context);
 
   const { className } = await context.params;
   const subjects = await getSubjectResultsForClass(decodeURIComponent(className) as ClassLevel);

@@ -17,14 +17,20 @@ import type { StudentScript } from "@/types/admin-results";
 export async function GET(req: NextRequest, context: { params: Promise<{ examId: string }> }) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
+  console.log(context);
 
   const { examId } = await context.params;
   await connectDB();
 
-  const exam = await Exam.findById(examId).populate({
-    path: "questions.question",
-    select: "text type",
-  });
+  let exam;
+  try {
+    exam = await Exam.findById(examId).populate({
+      path: "questions.question",
+      select: "text type",
+    });
+  } catch {
+    return NextResponse.json({ error: "Invalid exam ID" }, { status: 400 });
+  }
   if (!exam) return NextResponse.json({ error: "Exam not found" }, { status: 404 });
 
   const examObj = exam.toObject() as unknown as {

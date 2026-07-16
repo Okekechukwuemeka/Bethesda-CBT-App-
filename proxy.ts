@@ -2,14 +2,12 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-// Public (unauthenticated) paths within each role's route tree - these
-// must NOT be protected, or visiting them while logged out would redirect
-// to themselves and loop forever.
 const ADMIN_PUBLIC_PATHS = ["/admin/login"];
 const ADMIN_PUBLIC_API_PATHS = ["/api/admin/register"];
 const STUDENT_PUBLIC_PATHS = ["/student/login"];
 
-export async function middleware(req: NextRequest) {
+// CHANGE: Renamed from middleware to proxy
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
@@ -36,8 +34,6 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL("/student/login", req.url));
   }
 
-  // Already-logged-in users shouldn't sit on a login page - bounce them
-  // to their own dashboard instead.
   if (pathname === "/admin/login" && role === "admin") {
     return NextResponse.redirect(new URL("/admin", req.url));
   }
@@ -48,12 +44,6 @@ export async function middleware(req: NextRequest) {
   return NextResponse.next();
 }
 
-// Run on everything except static assets/Next internals, and let
-// /api/auth/* (NextAuth's own sign-in/sign-out/callback routes) through
-// untouched.
 export const config = {
   matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico).*)"],
 };
-// 01cbd7ebcf71c2e0514d56bd4d08e1f2f068482e562ee17b52d56b57017a48ed
-// BHS-2026-001
-// 170189
