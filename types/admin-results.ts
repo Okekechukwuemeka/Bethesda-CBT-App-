@@ -14,6 +14,7 @@ export interface ClassResult {
 export interface SubjectResult {
   id: string;
   subject: string;
+  examTitle: string;
   examType: ExamTypeLower;
   totalStudents: number;
   averageScore: number;

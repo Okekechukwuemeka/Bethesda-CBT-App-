@@ -75,6 +75,46 @@ function examStatusToTabStatus(status: string): ExamData["status"] {
   return "scheduled";
 }
 
+interface SummaryExamRow {
+  id: string;
+  subject: string;
+  class: string;
+  term: string;
+  totalQuestions: number;
+  duration: number;
+  status: string;
+  date: string;
+  totalStudents: number;
+  completedCount: number;
+}
+
+interface SummaryStudentRow {
+  id: string;
+  firstName: string;
+  lastName: string;
+  class: string;
+  admissionNumber: string;
+  examsTaken: number;
+  avgScore: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+interface ActivityRow {
+  id: string;
+  student: string;
+  exam: string;
+  subject: string;
+  action: string;
+  status: RecentActivity["status"];
+  submissionStatus: string;
+  score: number;
+  totalMarks: number;
+  timeTakenSeconds: number | null;
+  submittedAt: string | null;
+  time: string;
+}
+
 export function useDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,107 +139,87 @@ export function useDashboard() {
       setIsLoading(true);
       setError(null);
       try {
-        const [studentsRes, examsRes, resultsRes, activityRes] = await Promise.all([
-          fetch("/api/admin/students"),
-          fetch("/api/admin/exams"),
-          fetch("/api/admin/results"),
+        const [summaryRes, activityRes] = await Promise.all([
+          fetch("/api/admin/dashboard/summary"),
           fetch("/api/admin/activity?limit=50"),
         ]);
 
-        if (!studentsRes.ok || !examsRes.ok || !resultsRes.ok || !activityRes.ok) {
+        if (!summaryRes.ok || !activityRes.ok) {
           throw new Error("Failed to load dashboard data");
         }
 
-        const { students } = await studentsRes.json();
-        const { exams } = await examsRes.json();
-        const { results } = await resultsRes.json();
-        const { activities } = await activityRes.json();
+        const {
+          stats: apiStats,
+          exams,
+          students,
+        }: {
+          stats: DashboardStats;
+          exams: SummaryExamRow[];
+          students: SummaryStudentRow[];
+        } = await summaryRes.json();
+        const { activities }: { activities: ActivityRow[] } = await activityRes.json();
 
         if (cancelled) return;
 
-        // --- stats ---
-        const activeExams = exams.filter((e: any) => e.status === "Ongoing").length;
-        const totalPossible = results.reduce((sum: number, r: any) => sum + r.totalStudents, 0);
-        const totalCompleted = results.reduce((sum: number, r: any) => sum + r.completedCount, 0);
-        setStats({
-          totalStudents: students.length,
-          totalExams: exams.length,
-          activeExams,
-          pendingSubmissions: Math.max(0, totalPossible - totalCompleted),
-          completionRate:
-            totalPossible > 0 ? Math.round((totalCompleted / totalPossible) * 100) : 0,
-        });
+        setStats(apiStats);
 
         // --- upcoming exams ---
         const now = new Date();
         const todayStr = now.toISOString().split("T")[0];
         const upcoming = exams
-          .filter((e: any) => new Date(e.examDate) >= now || e.status === "Ongoing")
-          .sort((a: any, b: any) => new Date(a.examDate).getTime() - new Date(b.examDate).getTime())
+          .filter((e) => new Date(e.date) >= now || e.status === "Ongoing")
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
           .slice(0, 4)
-          .map((e: any) => ({
-            id: e._id,
-            subject: e.subject?.name ?? "Unknown subject",
+          .map((e) => ({
+            id: e.id,
+            subject: e.subject,
             class: e.class,
-            date: e.examDate,
-            time: new Date(e.examDate).toLocaleTimeString("en-US", {
+            date: e.date,
+            time: new Date(e.date).toLocaleTimeString("en-US", {
               hour: "numeric",
               minute: "2-digit",
             }),
             status:
               e.status === "Ongoing"
                 ? "ongoing"
-                : e.examDate.split("T")[0] === todayStr
+                : e.date.split("T")[0] === todayStr
                   ? "today"
-                  : "upcoming",
+                  : ("upcoming" as UpcomingExam["status"]),
           }));
         setUpcomingExams(upcoming);
 
-        // --- exams tab (merge exams + results by id) ---
-        const resultsByExamId = new Map(results.map((r: any) => [r.examId, r]));
+        // --- exams tab ---
         setExamsData(
-          exams.map((e: any) => {
-            const result = resultsByExamId.get(e._id) as any;
-            return {
-              id: e._id,
-              subject: e.subject?.name ?? "Unknown subject",
-              class: e.class,
-              term: e.term,
-              totalQuestions: e.questionCount,
-              duration: `${e.duration} minutes`,
-              status: examStatusToTabStatus(e.status),
-              date: e.examDate,
-              participants: result?.totalStudents ?? 0,
-            };
-          }),
+          exams.map((e) => ({
+            id: e.id,
+            subject: e.subject,
+            class: e.class,
+            term: e.term,
+            totalQuestions: e.totalQuestions,
+            duration: `${e.duration} minutes`,
+            status: examStatusToTabStatus(e.status),
+            date: e.date,
+            participants: e.totalStudents,
+          })),
         );
 
         // --- students tab ---
         setStudentsData(
-          students.map((s: any) => {
-            const completed = s.completedExams ?? [];
-            const avgScore =
-              completed.length > 0
-                ? Math.round(
-                    completed.reduce((sum: number, c: any) => sum + c.score, 0) / completed.length,
-                  )
-                : 0;
-            return {
-              id: s._id,
-              name: `${s.firstName} ${s.lastName}`,
-              class: s.class,
-              admissionNumber: s.admissionNumber,
-              examsTaken: completed.length,
-              avgScore,
-              status: s.class === "graduated" ? "graduated" : s.isActive ? "active" : "inactive",
-              createdAt: s.createdAt,
-            };
-          }),
+          students.map((s) => ({
+            id: s.id,
+            name: `${s.firstName} ${s.lastName}`,
+            class: s.class,
+            admissionNumber: s.admissionNumber,
+            examsTaken: s.examsTaken,
+            avgScore: s.avgScore,
+            status: s.class === "graduated" ? "graduated" : s.isActive ? "active" : "inactive",
+            createdAt: s.createdAt,
+          })),
         );
 
-        // --- recent activity (dashboard overview tab) ---
+        // --- recent activity (overview tab) ---
         setRecentActivities(
-          activities.slice(0, 5).map((a: any) => ({
+          activities.slice(0, 5).map((a) => ({
             id: a.id,
             student: a.student,
             exam: a.exam,
@@ -214,18 +234,16 @@ export function useDashboard() {
           })),
         );
 
-        // --- submissions tab (only actually-submitted work, not in-progress) ---
+        // --- submissions tab ---
         setSubmissionsData(
           activities
-            .filter(
-              (a: any) => a.submissionStatus === "Marked" || a.submissionStatus === "Submitted",
-            )
-            .map((a: any) => ({
+            .filter((a) => a.submissionStatus === "Marked" || a.submissionStatus === "Submitted")
+            .map((a) => ({
               id: a.id,
               student: a.student,
               exam: a.exam,
               subject: a.subject,
-              submittedDate: a.submittedAt,
+              submittedDate: a.submittedAt ?? "",
               score:
                 a.submissionStatus === "Marked" && a.totalMarks > 0
                   ? Math.round((a.score / a.totalMarks) * 100)

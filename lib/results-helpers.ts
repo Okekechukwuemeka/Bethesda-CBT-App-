@@ -44,6 +44,7 @@ interface SubmissionLean {
 export interface ExamLean {
   _id: mongoose.Types.ObjectId | string;
   subject: { name?: string } | string;
+  title: string;
   type: string;
 }
 
@@ -77,6 +78,7 @@ export function buildSubjectResult(
     id: exam._id.toString(),
     subject:
       typeof exam.subject === "string" ? exam.subject : (exam.subject?.name ?? "Unknown Subject"),
+    examTitle: exam.title,
     examType: toLowerExamType(exam.type),
     totalStudents,
     averageScore,

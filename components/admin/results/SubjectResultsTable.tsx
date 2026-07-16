@@ -84,6 +84,7 @@ const SubjectResultsTable: React.FC<SubjectResultsTableProps> = ({
                 <tr key={subject.id} className="hover:bg-[#F8FAFE] transition">
                   <td className="px-4 py-3 text-sm font-medium text-[#1A3A5C]">
                     {subject.subject}
+                    <p className="text-xs font-normal text-[#8A9CAE]">{subject.examTitle}</p>
                   </td>
                   <td className="px-4 py-3">
                     <ExamTypeBadge type={subject.examType} />
