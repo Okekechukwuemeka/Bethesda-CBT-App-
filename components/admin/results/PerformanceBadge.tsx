@@ -1,7 +1,8 @@
 import React from "react";
+import type { Performance } from "@/types/admin-results";
 
 interface PerformanceBadgeProps {
-  performance: "excellent" | "good" | "average" | "poor";
+  performance: Performance;
 }
 
 const getPerformanceColor = (performance: string) => {

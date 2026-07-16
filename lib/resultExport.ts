@@ -1,9 +1,9 @@
 import ExcelJS from "exceljs";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { SubjectResult, StudentScript } from "@/types/admin-results";
+import { ClassExportRow, SubjectResult, StudentScript } from "@/types/admin-results";
 
-// ---------- OBJECTIVE / MIXED -> Excel ----------
+// ---------- OBJECTIVE / MIXED -> Excel (single subject) ----------
 export async function generateObjectiveExcel(
   className: string,
   subject: SubjectResult,
@@ -50,13 +50,106 @@ export async function generateObjectiveExcel(
   });
 
   const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  downloadBlob(
+    buffer,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    `${className}_${subject.subject}_Results.xlsx`,
+  );
+}
+
+// ---------- WHOLE CLASS, ALL SUBJECTS -> Excel ----------
+// One "Summary" sheet with every subject's headline stats, plus one
+// detail sheet per subject listing every student's score - covers the
+// "download an excel sheet for a class" case in a single file, rather
+// than the admin having to export each subject separately.
+export async function generateClassResultsExcel(
+  className: string,
+  subjects: SubjectResult[],
+  scoresBySubject: Record<string, ClassExportRow[]>,
+) {
+  const workbook = new ExcelJS.Workbook();
+
+  const summary = workbook.addWorksheet("Summary");
+  summary.mergeCells("A1:F1");
+  summary.getCell("A1").value = `${className} — All Subjects`;
+  summary.getCell("A1").font = { bold: true, size: 14 };
+  summary.mergeCells("A2:F2");
+  summary.getCell("A2").value = `Date: ${new Date().toLocaleDateString()}`;
+  summary.getCell("A2").font = { bold: true };
+  summary.addRow([]);
+
+  const summaryHeader = summary.addRow([
+    "Subject",
+    "Exam Type",
+    "Completed",
+    "Average (%)",
+    "Highest (%)",
+    "Lowest (%)",
+  ]);
+  summaryHeader.font = { bold: true };
+  summaryHeader.eachCell((cell) => {
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8EEF5" } };
   });
+
+  subjects.forEach((s) => {
+    summary.addRow([
+      s.subject,
+      s.examType,
+      `${s.completed}/${s.totalStudents}`,
+      s.averageScore,
+      s.highestScore,
+      s.lowestScore,
+    ]);
+  });
+  summary.columns.forEach((col) => {
+    col.width = 20;
+  });
+
+  subjects.forEach((subject) => {
+    const rows = scoresBySubject[subject.id] ?? [];
+    // Excel sheet names: max 31 chars, and can't contain : \ / ? * [ ]
+    const sheetName =
+      subject.subject.replace(/[:\\/?*[\]]/g, "").slice(0, 31) || subject.id.slice(0, 8);
+    const sheet = workbook.addWorksheet(sheetName);
+
+    sheet.mergeCells("A1:D1");
+    sheet.getCell("A1").value = subject.subject;
+    sheet.getCell("A1").font = { bold: true, size: 12 };
+    sheet.addRow([]);
+
+    const head = sheet.addRow(["Admission No.", "Student Name", "Score (%)", "Status"]);
+    head.font = { bold: true };
+    head.eachCell((cell) => {
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8EEF5" } };
+    });
+
+    rows.forEach((r) => {
+      sheet.addRow([
+        r.admissionNo,
+        r.studentName,
+        r.status === "marked" ? r.score : "Not marked",
+        r.status,
+      ]);
+    });
+    sheet.columns.forEach((col) => {
+      col.width = 24;
+    });
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  downloadBlob(
+    buffer,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    `${className}_All_Subjects_Results.xlsx`,
+  );
+}
+
+function downloadBlob(buffer: ExcelJS.Buffer, type: string, filename: string) {
+  const blob = new Blob([buffer], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${className}_${subject.subject}_Results.xlsx`;
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
 }

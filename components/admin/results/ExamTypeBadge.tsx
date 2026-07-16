@@ -1,29 +1,23 @@
 import React from "react";
+import type { ExamTypeLower } from "@/types/admin-results";
 
+// Referenced by SubjectResultsTable in both pasted versions but never
+// actually included - built to match the color conventions already used
+// elsewhere (QuestionBankTable's type badges, PerformanceBadge's palette).
 interface ExamTypeBadgeProps {
-  type: string;
+  type: ExamTypeLower;
 }
 
-const getExamTypeColor = (type: string) => {
-  switch (type) {
-    case "objective":
-      return "bg-blue-100 text-blue-800";
-    case "theory":
-      return "bg-purple-100 text-purple-800";
-    case "mixed":
-      return "bg-green-100 text-green-800";
-    default:
-      return "bg-gray-100 text-gray-800";
-  }
+const colors: Record<ExamTypeLower, string> = {
+  objective: "bg-blue-100 text-blue-800",
+  theory: "bg-purple-100 text-purple-800",
+  mixed: "bg-indigo-100 text-indigo-800",
 };
 
-const ExamTypeBadge: React.FC<ExamTypeBadgeProps> = ({ type }) => {
-  return (
-    <span
-      className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${getExamTypeColor(type)}`}>
-      {type}
-    </span>
-  );
-};
+const ExamTypeBadge: React.FC<ExamTypeBadgeProps> = ({ type }) => (
+  <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${colors[type]}`}>
+    {type}
+  </span>
+);
 
 export default ExamTypeBadge;

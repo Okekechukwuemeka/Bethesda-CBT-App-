@@ -37,3 +37,12 @@ export interface StudentScript {
   submittedAt: string;
   answers?: StudentAnswer[];
 }
+
+// Lean row used by the whole-class export - no per-question answers, just
+// enough to fill a spreadsheet cell.
+export interface ClassExportRow {
+  admissionNo: string;
+  studentName: string;
+  score: number;
+  status: ScriptStatus;
+}

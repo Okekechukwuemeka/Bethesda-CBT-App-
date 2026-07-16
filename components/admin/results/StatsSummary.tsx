@@ -1,36 +1,26 @@
 import React from "react";
-
-interface SubjectResult {
-  id: number;
-  subject: string;
-  examType: "objective" | "theory" | "mixed";
-  totalStudents: number;
-  averageScore: number;
-  highestScore: number;
-  lowestScore: number;
-  completed: number;
-  status: "completed" | "pending" | "in-progress";
-}
+import type { SubjectResult } from "@/types/admin-results";
 
 interface StatsSummaryProps {
-  subjectResults: SubjectResult[];
+  subjects: SubjectResult[];
 }
 
-const StatsSummary: React.FC<StatsSummaryProps> = ({ subjectResults }) => {
-  const completedCount = subjectResults.filter((s) => s.status === "completed").length;
-  const pendingCount = subjectResults.filter((s) => s.status === "pending").length;
-  const averageScore = Math.round(
-    subjectResults.reduce((sum, s) => sum + s.averageScore, 0) / subjectResults.length,
-  );
+const StatsSummary: React.FC<StatsSummaryProps> = ({ subjects }) => {
+  const completedCount = subjects.filter((s) => s.status === "completed").length;
+  const pendingCount = subjects.filter((s) => s.status === "pending").length;
+  const averageScore =
+    subjects.length > 0
+      ? Math.round(subjects.reduce((sum, s) => sum + s.averageScore, 0) / subjects.length)
+      : 0;
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       <div
         className="bg-white rounded-xl border border-[#C5D8EC] p-4 shadow-sm"
         role="group"
-        aria-label={`Total subjects: ${subjectResults.length}`}>
+        aria-label={`Total subjects: ${subjects.length}`}>
         <p className="text-sm text-[#5A7A9A]">Total Subjects</p>
-        <p className="text-2xl font-bold text-[#1A3A5C]">{subjectResults.length}</p>
+        <p className="text-2xl font-bold text-[#1A3A5C]">{subjects.length}</p>
       </div>
       <div
         className="bg-white rounded-xl border border-[#C5D8EC] p-4 shadow-sm"

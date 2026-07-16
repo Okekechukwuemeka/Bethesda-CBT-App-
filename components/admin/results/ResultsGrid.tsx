@@ -1,14 +1,6 @@
 import React from "react";
+import type { ClassResult } from "@/types/admin-results";
 import ClassResultCard from "./ClassResultCard";
-
-interface ClassResult {
-  id: number;
-  className: string;
-  studentCount: number;
-  completedExams: number;
-  averageScore: number;
-  performance: "excellent" | "good" | "average" | "poor";
-}
 
 interface ResultsGridProps {
   classes: ClassResult[];
@@ -30,7 +22,7 @@ const ResultsGrid: React.FC<ResultsGridProps> = ({ classes }) => {
   return (
     <ul role="list" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {classes.map((classResult) => (
-        <ClassResultCard key={classResult.id} classResult={classResult} />
+        <ClassResultCard key={classResult.className} classResult={classResult} />
       ))}
     </ul>
   );
