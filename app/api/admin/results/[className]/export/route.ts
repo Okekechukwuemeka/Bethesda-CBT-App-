@@ -53,11 +53,15 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
     const submissionByStudent = new Map(submissions.map((s) => [s.student.toString(), s]));
     scoresBySubject[exam._id.toString()] = students.map((student) => {
       const submission = submissionByStudent.get(student._id.toString());
+      const isMarked = submission?.status === "Marked";
+
       return {
         admissionNo: student.admissionNumber,
         studentName: `${student.firstName} ${student.lastName}`,
-        score:
-          submission?.status === "Marked" && submission.totalMarks > 0
+        score: isMarked ? submission.score : 0,
+        totalMarks: submission?.totalMarks ?? 0,
+        percentage:
+          isMarked && submission.totalMarks > 0
             ? Math.round((submission.score / submission.totalMarks) * 100)
             : 0,
         status: toScriptStatus(submission?.status),
