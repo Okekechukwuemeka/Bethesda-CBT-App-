@@ -12,7 +12,7 @@ const statusLabels: Record<string, string> = {
   marked: "Marked",
   pending: "Awaiting Marking",
   "in-progress": "In Progress",
-  "not-started": "Not Started",
+  "not-started": "Did Not Take Exam",
 };
 
 interface StudentScriptRowProps {

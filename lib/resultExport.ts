@@ -3,6 +3,13 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { ClassExportRow, SubjectResult, StudentScript } from "@/types/admin-results";
 
+const STATUS_LABELS: Record<string, string> = {
+  marked: "Marked",
+  pending: "Awaiting Marking",
+  "in-progress": "In Progress",
+  "not-started": "Did Not Take Exam",
+};
+
 // ---------- OBJECTIVE / MIXED -> Excel (single subject) ----------
 export async function generateObjectiveExcel(
   className: string,
@@ -46,9 +53,9 @@ export async function generateObjectiveExcel(
     sheet.addRow([
       s.admissionNo,
       s.studentName,
-      s.status === "marked" ? `${s.score}/${s.totalMarks}` : "Not marked",
+      s.status === "marked" ? `${s.score}/${s.totalMarks}` : "—",
       s.status === "marked" ? s.percentage : "",
-      s.status,
+      STATUS_LABELS[s.status] ?? s.status,
     ]);
   });
 
@@ -144,9 +151,9 @@ export async function generateClassResultsExcel(
       sheet.addRow([
         r.admissionNo,
         r.studentName,
-        r.status === "marked" ? `${r.score}/${r.totalMarks}` : "Not marked",
+        r.status === "marked" ? `${r.score}/${r.totalMarks}` : "—",
         r.status === "marked" ? r.percentage : "",
-        r.status,
+        STATUS_LABELS[r.status] ?? r.status,
       ]);
     });
     sheet.columns.forEach((col) => {
