@@ -5,8 +5,6 @@ export interface Student {
   lastName: string;
   class: string;
   gender?: string;
-  dateOfBirth?: string;
-  address?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

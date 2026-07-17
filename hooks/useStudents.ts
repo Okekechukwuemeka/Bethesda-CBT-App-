@@ -11,8 +11,6 @@ export interface Student {
   lastName: string;
   class: string;
   gender: "Male" | "Female" | "Other";
-  dateOfBirth: string;
-  address: string;
   status: "active" | "inactive" | "graduated";
   enrollmentDate: string; // read-only, sourced from the backend's createdAt
 }
@@ -22,8 +20,6 @@ interface ImportPreviewStudent {
   lastName: string;
   class: string;
   gender: string;
-  dateOfBirth: string;
-  address: string;
   status: string;
 }
 
@@ -47,8 +43,6 @@ function fromApiStudent(s: any): Student {
     lastName: s.lastName,
     class: s.class,
     gender: s.gender ?? "Male",
-    dateOfBirth: s.dateOfBirth ? s.dateOfBirth.split("T")[0] : "",
-    address: s.address ?? "",
     status: s.class === "graduated" ? "graduated" : s.isActive ? "active" : "inactive",
     enrollmentDate: s.createdAt ? s.createdAt.split("T")[0] : "",
   };
@@ -97,8 +91,6 @@ export const useStudents = () => {
     lastName: "",
     class: "",
     gender: "Male",
-    dateOfBirth: "",
-    address: "",
     status: "active",
   });
 
@@ -197,8 +189,6 @@ export const useStudents = () => {
       lastName: "",
       class: "",
       gender: "Male",
-      dateOfBirth: "",
-      address: "",
       status: "active",
     });
     setIsModalOpen(true);
@@ -258,8 +248,6 @@ export const useStudents = () => {
         lastName: formData.lastName,
         class: isGraduated ? "graduated" : formData.class,
         gender: formData.gender,
-        dateOfBirth: formData.dateOfBirth || undefined,
-        address: formData.address,
         isActive: formData.status === "active",
       };
 
@@ -362,8 +350,6 @@ export const useStudents = () => {
         lastName: "",
         class: "",
         gender: "Male",
-        dateOfBirth: "",
-        address: "",
         status: "active",
       };
       headers.forEach((header, index) => {
@@ -382,13 +368,6 @@ export const useStudents = () => {
             break;
           case "gender":
             student.gender = value || "Male";
-            break;
-          case "dateofbirth":
-          case "dob":
-            student.dateOfBirth = value;
-            break;
-          case "address":
-            student.address = value;
             break;
           case "status":
             student.status = value || "active";
@@ -452,8 +431,6 @@ export const useStudents = () => {
             lastName: row.lastName,
             class: row.class,
             gender: row.gender,
-            dateOfBirth: row.dateOfBirth || undefined,
-            address: row.address,
             isActive: row.status !== "inactive",
           }),
         });
@@ -495,18 +472,8 @@ export const useStudents = () => {
   }, [importPreview]);
 
   const downloadTemplate = useCallback(() => {
-    const headers = [
-      "firstName",
-      "lastName",
-      "class",
-      "gender",
-      "dateOfBirth",
-      "address",
-      "status",
-    ];
-    const csvContent = [headers.join(","), "John,Doe,JSS1,Male,2010-05-15,123 Main St,active"].join(
-      "\n",
-    );
+    const headers = ["firstName", "lastName", "class", "gender", "status"];
+    const csvContent = [headers.join(","), "John,Doe,JSS1,Male,active"].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

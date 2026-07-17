@@ -7,8 +7,6 @@ interface Student {
   lastName: string;
   class: string;
   gender: "Male" | "Female" | "Other";
-  dateOfBirth: string;
-  address: string;
   status: "active" | "inactive" | "graduated";
   enrollmentDate: string;
 }

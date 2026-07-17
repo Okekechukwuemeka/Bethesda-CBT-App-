@@ -5,8 +5,6 @@ interface ImportPreviewStudent {
   lastName: string;
   class: string;
   gender: string;
-  dateOfBirth: string;
-  address: string;
   status: string;
 }
 

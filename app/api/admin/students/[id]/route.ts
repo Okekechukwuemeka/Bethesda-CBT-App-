@@ -17,19 +17,10 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
   return NextResponse.json({ student });
 }
 
-const EDITABLE_FIELDS = [
-  "firstName",
-  "lastName",
-  "class",
-  "gender",
-  "dateOfBirth",
-  "address",
-  "isActive",
-] as const;
+const EDITABLE_FIELDS = ["firstName", "lastName", "class", "gender", "isActive"] as const;
 
 // PATCH /api/admin/students/[id]
-// Body: any subset of { firstName, lastName, class, gender, dateOfBirth,
-// address, isActive }
+// Body: any subset of { firstName, lastName, class, gender, isActive }
 // Password is never editable here - that's a separate reset flow (a
 // dedicated POST /api/admin/students/[id]/reset-password endpoint would be
 // the right place for that, not a silent field update).

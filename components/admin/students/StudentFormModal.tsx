@@ -151,21 +151,6 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
                   <option value="Other">Other</option>
                 </select>
               </div>
-              <div>
-                <label
-                  htmlFor="dateOfBirth"
-                  className="block text-sm font-medium text-[#1A3A5C] mb-1">
-                  Date of Birth
-                </label>
-                <input
-                  type="date"
-                  id="dateOfBirth"
-                  name="dateOfBirth"
-                  value={formData.dateOfBirth || ""}
-                  onChange={onChange}
-                  className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE]"
-                />
-              </div>
             </div>
           </fieldset>
 
@@ -241,20 +226,6 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
                   </p>
                 </div>
               )}
-
-              <div className="md:col-span-2">
-                <label htmlFor="address" className="block text-sm font-medium text-[#1A3A5C] mb-1">
-                  Address
-                </label>
-                <textarea
-                  id="address"
-                  name="address"
-                  value={formData.address || ""}
-                  onChange={onChange}
-                  rows={2}
-                  className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE] resize-y"
-                />
-              </div>
             </div>
           </fieldset>
 
@@ -269,14 +240,7 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium py-2.5 px-4 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50 active:scale-[0.98] disabled:opacity-50"
-              aria-label={
-                isSubmitting
-                  ? "Saving student, please wait"
-                  : isEditing
-                    ? "Update student"
-                    : "Add student"
-              }>
+              className="flex-1 bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium py-2.5 px-4 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50 active:scale-[0.98] disabled:opacity-50">
               {isSubmitting ? "Saving..." : isEditing ? "Update Student" : "Add Student"}
             </button>
           </div>
