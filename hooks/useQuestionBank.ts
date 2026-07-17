@@ -17,9 +17,9 @@ interface ApiErrorPayload {
 const emptyFormData: QuestionInput = {
   text: "",
   type: "Objective",
-  options: ["", "", "", ""],
+  options: ["", ""],
   correctAnswer: "",
-  marks: 5,
+  marks: 1,
   subject: "",
   class: "",
 };
@@ -170,6 +170,28 @@ export const useQuestionBank = () => {
       const newOptions = [...(prev.options || ["", "", "", ""])];
       newOptions[index] = value;
       return { ...prev, options: newOptions };
+    });
+  }, []);
+
+  const handleAddOption = useCallback(() => {
+    setFormData((prev) => ({
+      ...prev,
+      options: [...(prev.options || []), ""],
+    }));
+  }, []);
+
+  const handleRemoveOption = useCallback((index: number) => {
+    setFormData((prev) => {
+      const options = [...(prev.options || [])];
+      const removed = options[index];
+      options.splice(index, 1);
+      return {
+        ...prev,
+        options,
+        // If the option being removed was the selected correct answer,
+        // clear it rather than silently keeping a stale value.
+        correctAnswer: prev.correctAnswer === removed ? "" : prev.correctAnswer,
+      };
     });
   }, []);
 
@@ -389,26 +411,33 @@ export const useQuestionBank = () => {
   }, [selectedFile, importSubject, importClass, showStatus, fetchQuestionsList]);
 
   const downloadTemplate = useCallback(() => {
-    const headers = [
-      "text",
-      "type",
-      "marks",
-      "optionA",
-      "optionB",
-      "optionC",
-      "optionD",
-      "correctAnswer",
-    ];
-    const objectiveRow = [
-      "What is the chemical symbol for water?",
+    const headers = ["text", "type", "marks", "option1", "option2", "option3", "option4"];
+
+    // For this row, option3 ("NaCl") is the last populated option,
+    // meaning the API will automatically register "NaCl" as the correct answer.
+    const objectiveRow3Options = [
+      "What is the chemical formula for common table salt?",
       "Objective",
-      "5",
+      "3",
       "H2O",
       "CO2",
       "NaCl",
-      "HCl",
-      "H2O",
+      "", // Left empty
     ];
+
+    // For this row, option4 ("HCl") is the last populated option,
+    // so "HCl" becomes its correct answer.
+    const objectiveRow4Options = [
+      "Which of these is a strong acid?",
+      "Objective",
+      "5",
+      "H2O",
+      "CH3COOH",
+      "NH3",
+      "HCl", // Last populated column -> implicitly the correct answer!
+    ];
+
+    // Theory rows leave all option columns completely blank.
     const theoryRow = [
       "Define an acid and give two examples with their chemical formulas.",
       "Theory",
@@ -417,9 +446,14 @@ export const useQuestionBank = () => {
       "",
       "",
       "",
-      "",
     ];
-    const csvContent = [headers.join(","), objectiveRow.join(","), theoryRow.join(",")].join("\n");
+
+    const csvContent = [
+      headers.join(","),
+      objectiveRow3Options.join(","),
+      objectiveRow4Options.join(","),
+      theoryRow.join(","),
+    ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -558,5 +592,7 @@ export const useQuestionBank = () => {
     handleOpenSubjectModal,
     closeSubjectModal,
     handleSubjectSubmit,
+    handleAddOption,
+    handleRemoveOption,
   };
 };

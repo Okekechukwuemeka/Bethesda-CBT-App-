@@ -56,6 +56,9 @@ const StudentFilters: React.FC<StudentFiltersProps> = ({
               <option value="JSS1">JSS1</option>
               <option value="JSS2">JSS2</option>
               <option value="JSS3">JSS3</option>
+              <option value="SSS1">SSS1</option>
+              <option value="SSS2">SSS2</option>
+              <option value="SSS3">SSS3</option>
             </select>
           </div>
           <div>

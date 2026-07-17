@@ -14,6 +14,8 @@ interface QuestionFormModalProps {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => void;
   onOptionChange: (index: number, value: string) => void;
+  onAddOption: () => void;
+  onRemoveOption: (index: number) => void;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
 }
@@ -28,12 +30,13 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
   isLoadingSubjects,
   onChange,
   onOptionChange,
+  onAddOption,
+  onRemoveOption,
   onSubmit,
   onCancel,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const firstInputRef = useRef<HTMLTextAreaElement>(null);
-  const optionRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -158,7 +161,7 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
                   type="number"
                   id="marks"
                   name="marks"
-                  value={formData.marks || 5}
+                  value={formData.marks || 1}
                   onChange={onChange}
                   aria-required="true"
                   min="1"
@@ -232,20 +235,34 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
                     </span>
                   )}
                 </label>
-                <input
-                  type="text"
-                  id="correctAnswer"
-                  name="correctAnswer"
-                  value={formData.correctAnswer || ""}
-                  onChange={onChange}
-                  aria-required={formData.type === "Objective"}
-                  placeholder={
-                    formData.type === "Objective"
-                      ? "Enter the correct option (e.g., H2O)"
-                      : "Optional for theory"
-                  }
-                  className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE]"
-                />
+                {formData.type === "Objective" ? (
+                  <select
+                    id="correctAnswer"
+                    name="correctAnswer"
+                    value={formData.correctAnswer || ""}
+                    onChange={onChange}
+                    aria-required="true"
+                    className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE]">
+                    <option value="">Select the correct option</option>
+                    {(formData.options || [])
+                      .filter((opt) => opt.trim())
+                      .map((opt, i) => (
+                        <option key={i} value={opt}>
+                          {String.fromCharCode(65 + i)}. {opt}
+                        </option>
+                      ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    id="correctAnswer"
+                    name="correctAnswer"
+                    value={formData.correctAnswer || ""}
+                    onChange={onChange}
+                    placeholder="Optional for theory"
+                    className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE]"
+                  />
+                )}
               </div>
             </div>
 
@@ -256,23 +273,64 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
                   <span className="text-red-500" aria-hidden="true">
                     *
                   </span>
+                  <span className="text-xs font-normal text-[#8A9CAE] ml-2">(minimum 2)</span>
                 </label>
                 <div className="space-y-2">
-                  {[0, 1, 2, 3].map((index) => (
-                    <input
-                      key={index}
-                      ref={(el) => {
-                        optionRefs.current[index] = el;
-                      }}
-                      type="text"
-                      placeholder={`Option ${String.fromCharCode(65 + index)}`}
-                      value={formData.options?.[index] || ""}
-                      onChange={(e) => onOptionChange(index, e.target.value)}
-                      className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE]"
-                      aria-label={`Option ${String.fromCharCode(65 + index)}`}
-                    />
+                  {(formData.options || []).map((option, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <span className="text-sm text-[#5A7A9A] w-5 flex-shrink-0">
+                        {String.fromCharCode(65 + index)}.
+                      </span>
+                      <input
+                        type="text"
+                        placeholder={`Option ${String.fromCharCode(65 + index)}`}
+                        value={option}
+                        onChange={(e) => onOptionChange(index, e.target.value)}
+                        className="flex-1 px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-[#F8FAFE]"
+                        aria-label={`Option ${String.fromCharCode(65 + index)}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => onRemoveOption(index)}
+                        disabled={(formData.options || []).length <= 2}
+                        className="text-red-600 hover:text-red-800 p-1.5 rounded disabled:opacity-30 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-red-500"
+                        aria-label={`Remove option ${String.fromCharCode(65 + index)}`}>
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </div>
                   ))}
                 </div>
+                <button
+                  type="button"
+                  onClick={onAddOption}
+                  className="mt-2 text-sm text-[#2B6CB0] hover:text-[#1A3A5C] font-medium flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] rounded px-2 py-1">
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 4v16m8-8H4"
+                    />
+                  </svg>
+                  Add Option
+                </button>
               </div>
             )}
           </div>

@@ -81,6 +81,8 @@ const QuestionsPage: React.FC = () => {
     handleOpenSubjectModal,
     closeSubjectModal,
     handleSubjectSubmit,
+    handleAddOption,
+    handleRemoveOption,
   } = useQuestionBank();
 
   const formModalRef = React.useRef<HTMLDivElement>(null);
@@ -225,6 +227,8 @@ const QuestionsPage: React.FC = () => {
         onOptionChange={handleOptionChange}
         onSubmit={handleSubmit}
         onCancel={closeFormModal}
+        onAddOption={handleAddOption}
+        onRemoveOption={handleRemoveOption}
       />
 
       {/* Bulk Import Modal */}

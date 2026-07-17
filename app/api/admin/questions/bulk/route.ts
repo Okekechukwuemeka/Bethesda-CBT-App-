@@ -4,30 +4,29 @@ import { connectDB } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-guards";
 import { Question, IQuestion } from "@/lib/models/question.model";
 
-// Expected CSV header (order doesn't matter, matched by column name):
+// Expected CSV header for Objective rows (order doesn't matter for the
+// first two columns, but option columns are read positionally):
 //
-//   text,type,marks,optionA,optionB,optionC,optionD,correctAnswer
+//   text,type,marks,option1,option2,option3,...,optionN
 //
-// - type must be "Objective" or "Theory"
-// - for Theory rows, leave optionA-D and correctAnswer blank
+// The LAST populated option column in each row is always treated as the
+// correct answer, regardless of how many option columns that row has -
+// this lets different rows in the same file have different numbers of
+// options (2, 3, 5, whatever) without a fixed optionA-D/correctAnswer
+// schema. For Theory rows, leave every option column blank.
 //
 // subject and class are NOT columns in the CSV - they're passed once as
-// form fields alongside the file and applied to the whole batch, matching
-// the realistic workflow of "here's my JSS1 Chemistry question set".
-interface CsvRow {
-  text?: string;
-  type?: string;
-  marks?: string;
-  optionA?: string;
-  optionB?: string;
-  optionC?: string;
-  optionD?: string;
-  correctAnswer?: string;
-}
-
+// form fields alongside the file and applied to the whole batch.
 interface RowError {
   row: number; // 1-based, matches spreadsheet row numbers (header = row 1)
   error: string;
+}
+
+// Recognizes any header matching option1, option2, ... optionN (case-
+// insensitive) - NOT limited to optionA-D. Falls back to also accepting
+// the old fixed optionA/B/C/D naming for CSVs exported before this change.
+function isOptionColumn(header: string): boolean {
+  return /^option\d+$/i.test(header) || /^option[a-z]$/i.test(header);
 }
 
 // POST /api/admin/questions/bulk
@@ -46,24 +45,35 @@ export async function POST(req: NextRequest) {
   if (!(file instanceof File)) {
     return NextResponse.json(
       { error: "A CSV file is required in the 'file' field" },
-      {
-        status: 400,
-      },
+      { status: 400 },
     );
   }
   if (typeof subject !== "string" || typeof classLevel !== "string") {
     return NextResponse.json(
       { error: "subject and class are required form fields" },
-      {
-        status: 400,
-      },
+      { status: 400 },
     );
   }
 
-  const text = await file.text();
-  let rows: CsvRow[];
+  // Read as raw bytes and decode explicitly as UTF-8, rather than
+  // file.text() (which can silently mis-decode files saved by Excel as
+  // Windows-1252/Latin-1) - this is what shows up as "?" in place of
+  // special characters like minus signs, superscripts, or accented
+  // letters after import.
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const text = buffer.toString("utf-8");
+
+  let rows: Record<string, string>[];
+  let headerRow: string[];
   try {
-    rows = parse(text, { columns: true, skip_empty_lines: true, trim: true }) as CsvRow[];
+    rows = parse(text, { columns: true, skip_empty_lines: true, trim: true }) as Record<
+      string,
+      string
+    >[];
+    // csv-parse doesn't expose the header list directly from the columns
+    // output, so re-derive it from the first data row's own keys - fine
+    // since every row shares the same header set by construction.
+    headerRow = rows.length > 0 ? Object.keys(rows[0]) : [];
   } catch (error) {
     const message = error instanceof Error ? error.message : "Malformed CSV";
     return NextResponse.json({ error: `Could not parse CSV: ${message}` }, { status: 400 });
@@ -73,9 +83,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "CSV has no data rows" }, { status: 400 });
   }
 
-  // Validate every row up front - either the whole batch goes in, or none
-  // of it does, so the admin gets one clean list of what to fix rather
-  // than a partially-imported question set.
+  const optionColumns = headerRow.filter(isOptionColumn);
+  if (optionColumns.length === 0) {
+    return NextResponse.json(
+      {
+        error:
+          "No option columns found. Use headers like option1, option2, option3, ... (as many as needed).",
+      },
+      { status: 400 },
+    );
+  }
+
   const errors: RowError[] = [];
   const candidates: IQuestion[] = [];
 
@@ -100,9 +118,19 @@ export async function POST(req: NextRequest) {
       return;
     }
 
-    const options = [row.optionA, row.optionB, row.optionC, row.optionD]
-      .map((o) => o?.trim())
+    // Read every option column present for this row, in header order,
+    // dropping blanks - this naturally supports rows with different
+    // numbers of options within the same file.
+    const filledOptions = optionColumns
+      .map((col) => row[col]?.trim())
       .filter((o): o is string => !!o);
+
+    // The LAST filled option is always the correct answer for Objective
+    // rows - no separate correctAnswer column needed.
+    const correctAnswer =
+      type === "Objective" && filledOptions.length > 0
+        ? filledOptions[filledOptions.length - 1]
+        : undefined;
 
     const question = new Question({
       text: row.text?.trim(),
@@ -110,8 +138,8 @@ export async function POST(req: NextRequest) {
       subject,
       class: classLevel,
       marks,
-      options: type === "Objective" ? options : undefined,
-      correctAnswer: type === "Objective" ? row.correctAnswer?.trim() : undefined,
+      options: type === "Objective" ? filledOptions : undefined,
+      correctAnswer,
       createdBy: guard.session.user.id,
     });
 
