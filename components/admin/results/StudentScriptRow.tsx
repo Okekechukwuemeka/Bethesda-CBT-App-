@@ -36,7 +36,10 @@ const StudentScriptRow: React.FC<StudentScriptRowProps> = ({
       </div>
       <div className="flex items-center gap-3 flex-shrink-0">
         {student.status === "marked" && (
-          <span className="text-sm font-semibold text-[#1A3A5C]">{student.score}%</span>
+          <span className="text-sm font-semibold text-[#1A3A5C]">
+            {student.score}/{student.totalMarks}{" "}
+            <span className="text-xs font-normal text-[#5A7A9A]">({student.percentage}%)</span>
+          </span>
         )}
         <span
           className={`text-xs px-2 py-1 rounded-full font-medium ${statusStyles[student.status]}`}>

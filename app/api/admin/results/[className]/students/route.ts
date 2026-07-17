@@ -72,6 +72,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
 
   const data: StudentScript[] = students.map((student) => {
     const submission = submissionByStudent.get(student._id.toString());
+    const isMarked = submission?.status === "Marked";
 
     const answers = theoryQuestionsInOrder.map((q) => {
       const record = submission?.answers?.find((a) => a.question.toString() === q.id);
@@ -82,8 +83,10 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
       id: student._id.toString(),
       studentName: `${student.firstName} ${student.lastName}`,
       admissionNo: student.admissionNumber,
-      score:
-        submission?.status === "Marked" && submission.totalMarks > 0
+      score: isMarked ? submission.score : 0,
+      totalMarks: submission?.totalMarks ?? 0,
+      percentage:
+        isMarked && submission.totalMarks > 0
           ? Math.round((submission.score / submission.totalMarks) * 100)
           : 0,
       status: toScriptStatus(submission?.status),

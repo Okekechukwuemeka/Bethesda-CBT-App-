@@ -12,25 +12,31 @@ export async function generateObjectiveExcel(
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Results");
 
-  sheet.mergeCells("A1:D1");
+  sheet.mergeCells("A1:E1");
   sheet.getCell("A1").value = className;
   sheet.getCell("A1").font = { bold: true, size: 14 };
 
-  sheet.mergeCells("A2:D2");
+  sheet.mergeCells("A2:E2");
   sheet.getCell("A2").value = subject.subject;
   sheet.getCell("A2").font = { bold: true, size: 12 };
 
-  sheet.mergeCells("A3:D3");
+  sheet.mergeCells("A3:E3");
   sheet.getCell("A3").value = `Exam Type: ${subject.examType}`;
   sheet.getCell("A3").font = { bold: true };
 
-  sheet.mergeCells("A4:D4");
+  sheet.mergeCells("A4:E4");
   sheet.getCell("A4").value = `Date: ${new Date().toLocaleDateString()}`;
   sheet.getCell("A4").font = { bold: true };
 
   sheet.addRow([]);
 
-  const headerRow = sheet.addRow(["Admission No.", "Student Name", "Score (%)", "Status"]);
+  const headerRow = sheet.addRow([
+    "Admission No.",
+    "Student Name",
+    "Score",
+    "Percentage (%)",
+    "Status",
+  ]);
   headerRow.font = { bold: true };
   headerRow.eachCell((cell) => {
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8EEF5" } };
@@ -40,13 +46,14 @@ export async function generateObjectiveExcel(
     sheet.addRow([
       s.admissionNo,
       s.studentName,
-      s.status === "marked" ? s.score : "Not marked",
+      s.status === "marked" ? `${s.score}/${s.totalMarks}` : "Not marked",
+      s.status === "marked" ? s.percentage : "",
       s.status,
     ]);
   });
 
   sheet.columns.forEach((col) => {
-    col.width = 24;
+    col.width = 20;
   });
 
   const buffer = await workbook.xlsx.writeBuffer();
@@ -78,6 +85,10 @@ export async function generateClassResultsExcel(
   summary.getCell("A2").font = { bold: true };
   summary.addRow([]);
 
+  // Summary sheet stays percentage-only by design - it's comparing across
+  // subjects with different total marks, so percentage is the only
+  // meaningful common unit here. Raw scores belong on the per-subject
+  // detail sheets below, where "out of what" is unambiguous.
   const summaryHeader = summary.addRow([
     "Subject",
     "Exam Type",
@@ -112,12 +123,18 @@ export async function generateClassResultsExcel(
       subject.subject.replace(/[:\\/?*[\]]/g, "").slice(0, 31) || subject.id.slice(0, 8);
     const sheet = workbook.addWorksheet(sheetName);
 
-    sheet.mergeCells("A1:D1");
+    sheet.mergeCells("A1:E1");
     sheet.getCell("A1").value = subject.subject;
     sheet.getCell("A1").font = { bold: true, size: 12 };
     sheet.addRow([]);
 
-    const head = sheet.addRow(["Admission No.", "Student Name", "Score (%)", "Status"]);
+    const head = sheet.addRow([
+      "Admission No.",
+      "Student Name",
+      "Score",
+      "Percentage (%)",
+      "Status",
+    ]);
     head.font = { bold: true };
     head.eachCell((cell) => {
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8EEF5" } };
@@ -127,12 +144,13 @@ export async function generateClassResultsExcel(
       sheet.addRow([
         r.admissionNo,
         r.studentName,
-        r.status === "marked" ? r.score : "Not marked",
+        r.status === "marked" ? `${r.score}/${r.totalMarks}` : "Not marked",
+        r.status === "marked" ? r.percentage : "",
         r.status,
       ]);
     });
     sheet.columns.forEach((col) => {
-      col.width = 24;
+      col.width = 20;
     });
   });
 

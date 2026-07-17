@@ -28,22 +28,23 @@ export interface StudentAnswer {
   questionNo: number;
   answer: string;
 }
-
 export interface StudentScript {
   id: string;
   studentName: string;
   admissionNo: string;
-  score: number;
+  score: number; // raw score, e.g. 7
+  totalMarks: number; // e.g. 10
+  percentage: number; // derived, e.g. 70
   status: ScriptStatus;
   submittedAt: string;
   answers?: StudentAnswer[];
 }
 
-// Lean row used by the whole-class export - no per-question answers, just
-// enough to fill a spreadsheet cell.
 export interface ClassExportRow {
   admissionNo: string;
   studentName: string;
-  score: number;
+  score: number; // raw score
+  totalMarks: number;
+  percentage: number;
   status: ScriptStatus;
 }
