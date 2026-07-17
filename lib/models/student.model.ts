@@ -19,16 +19,10 @@ export interface IClassHistoryEntry {
 export interface IStudent extends Document {
   admissionNumber: string;
   password: string;
-  // Forces a password reset on first login — set true whenever an admin
-  // assigns/resets a student's password, so a shared/guessed initial
-  // password can't be reused indefinitely.
-  // mustChangePassword: boolean;
   firstName: string;
   lastName: string;
   class: ClassLevel;
   gender?: "Male" | "Female" | "Other";
-  dateOfBirth?: Date;
-  address?: string;
   isActive: boolean;
   enrolledExams: mongoose.Types.ObjectId[];
   completedExams: ICompletedExam[];
@@ -37,6 +31,21 @@ export interface IStudent extends Document {
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
+
+// Assigns each class level a fixed 2-digit code used in the admission
+// number, e.g. BHS-2026-01-001 for the first SSS3 student registered.
+// Codes run from most senior (01) to most junior - adjust freely, this
+// mapping only needs to stay stable once students have been admitted
+// under it, since existing admission numbers are never regenerated.
+const CLASS_CODE_MAP: Record<ClassLevel, string> = {
+  SSS3: "01",
+  SSS2: "02",
+  SSS1: "03",
+  JSS3: "04",
+  JSS2: "05",
+  JSS1: "06",
+  graduated: "00",
+};
 
 const studentSchema = new Schema<IStudent>(
   {
@@ -52,30 +61,14 @@ const studentSchema = new Schema<IStudent>(
       minlength: [6, "Password must be at least 6 characters"],
       select: false,
     },
-    // mustChangePassword: { type: Boolean, default: true },
     firstName: { type: String, required: [true, "First name is required"], trim: true },
     lastName: { type: String, required: [true, "Last name is required"], trim: true },
-    // Class levels are a fixed, known set (JSS1 -> graduated), so this is a
-    // plain enum rather than a ref to a separate Class collection.
     class: {
       type: String,
       required: [true, "Class is required"],
       enum: { values: CLASS_LEVELS, message: "{VALUE} is not a valid class level" },
     },
     gender: { type: String, enum: ["Male", "Female", "Other"] },
-    dateOfBirth: {
-      type: Date,
-      validate: {
-        validator: function (value: Date) {
-          if (!value) return true;
-          const minAge = new Date();
-          minAge.setFullYear(minAge.getFullYear() - 5);
-          return value <= minAge;
-        },
-        message: "Student must be at least 5 years old",
-      },
-    },
-    address: { type: String, trim: true },
     isActive: { type: Boolean, default: true },
     enrolledExams: [{ type: Schema.Types.ObjectId, ref: "Exam" }],
     completedExams: [
@@ -98,37 +91,38 @@ const studentSchema = new Schema<IStudent>(
   { timestamps: true },
 );
 
-// Auto-generate the admission number if one wasn't provided, in the format
-// used across the admin frontend (BHS-<year>-<sequence>). Adjust the "BHS"
-// prefix if the school's short code differs.
-//
-// No `next` parameter here on purpose: async pre-save hooks can just
-// return/throw, and Mongoose treats a thrown error the same as calling
-// next(error). This also avoids the "SaveOptions has no call signatures"
-// TS overload issue that turning up when a `next` param is declared.
+// e.g. "Alexander Rengkat" -> "AR" + 6 random digits, e.g. "AR034643".
+// Not cryptographically meaningful as a password on its own (predictable
+// prefix), but combined with mustChangePassword-style first-login flows
+// this is meant as a memorable temporary credential, not a permanent one.
+function generateStudentPassword(firstName: string, lastName: string): string {
+  const initials = `${firstName.trim().charAt(0)}${lastName.trim().charAt(0)}`.toUpperCase();
+  const digits = String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
+  return `${initials}${digits}`;
+}
+
+// Auto-generates BOTH admission number and password if not provided.
+// Admission numbers are scoped per class code (BHS-<year>-<classCode>-<seq>)
+// so each class has its own independent sequence starting at 001, rather
+// than one global counter shared across every class.
 studentSchema.pre("validate", async function (this: IStudent) {
   if (this.isNew && !this.admissionNumber) {
     const year = new Date().getFullYear();
-    const count = await Student.countDocuments();
-    this.admissionNumber = `BHS-${year}-${String(count + 1).padStart(3, "0")}`;
+    const classCode = CLASS_CODE_MAP[this.class] ?? "00";
+    const prefix = `BHS-${year}-${classCode}-`;
+    const count = await Student.countDocuments({
+      admissionNumber: { $regex: `^${prefix}` },
+    });
+    this.admissionNumber = `${prefix}${String(count + 1).padStart(3, "0")}`;
   }
 
   if (this.isNew && !this.password) {
-    const plain = generateStudentPassword();
+    const plain = generateStudentPassword(this.firstName, this.lastName);
     this.password = plain;
     this.$locals.plainPassword = plain;
   }
 });
 
-function generateStudentPassword(): string {
-  // 6 digits, zero-padded, e.g. "042817".
-  return String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
-}
-
-// Hash password before saving, only when it's actually changed — same
-// pattern as Admin. Runs as its own pre-save hook so it stays independent
-// of the admission-number generation above (Mongoose runs pre-save hooks
-// in the order they're registered).
 studentSchema.pre("save", async function (this: IStudent) {
   if (!this.isModified("password")) return;
   const salt = await bcrypt.genSalt(12);
