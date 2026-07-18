@@ -5,11 +5,15 @@ import SelectField from "@/components/ui/form/SelectField";
 import Fieldset from "@/components/ui/form/Fieldset";
 import { ExamFormData, FieldErrors, RequiredField } from "@/types/exam-form";
 import { CLASS_OPTIONS, TERM_OPTIONS, EXAM_TYPE_OPTIONS } from "@/config/exam-form-options";
+
 interface SubjectOption {
   id: string;
   name: string;
   code: string;
 }
+
+type TitleMode = "auto" | "custom";
+
 interface ExamDetailsSectionProps {
   formData: ExamFormData;
   fieldErrors: FieldErrors;
@@ -17,6 +21,8 @@ interface ExamDetailsSectionProps {
   titleInputRef: React.RefObject<HTMLInputElement | null>;
   subjects: SubjectOption[];
   isLoadingSubjects: boolean;
+  titleMode: TitleMode;
+  onTitleModeChange: (mode: TitleMode) => void;
   onChange: (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => void;
@@ -29,33 +35,70 @@ const ExamDetailsSection: React.FC<ExamDetailsSectionProps> = ({
   titleInputRef,
   subjects,
   isLoadingSubjects,
+  titleMode,
+  onTitleModeChange,
   onChange,
 }) => {
   return (
     <Fieldset legend="Exam Details">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Title - Full Width */}
-        <FormField
-          label="Exam Title"
-          htmlFor="title"
-          required
-          error={fieldErrors.title}
-          className="md:col-span-2">
-          <TextField
-            ref={(el) => {
-              titleInputRef.current = el;
-              fieldRefs.current.title = el;
-            }}
-            type="text"
-            name="title"
-            value={formData.title}
-            onChange={onChange}
-            error={!!fieldErrors.title}
-            placeholder="e.g., Chemistry First Term Examination"
-          />
-        </FormField>
+        {/* Title mode toggle lives OUTSIDE FormField - FormField's
+            cloneElement only works with a single child, and putting the
+            toggle + input + helper text all inside it as siblings broke
+            that (children became an array, cloneElement silently produced
+            an element with type: undefined). */}
+        <div className="md:col-span-2">
+          <div className="flex items-center gap-4 mb-2">
+            <label className="flex items-center gap-1.5 text-sm text-[#4A6A8A] cursor-pointer">
+              <input
+                type="radio"
+                name="titleMode"
+                checked={titleMode === "auto"}
+                onChange={() => onTitleModeChange("auto")}
+                className="text-[#1A3A5C] focus:ring-[#2B6CB0]"
+              />
+              Auto-generate from class/term/subject
+            </label>
+            <label className="flex items-center gap-1.5 text-sm text-[#4A6A8A] cursor-pointer">
+              <input
+                type="radio"
+                name="titleMode"
+                checked={titleMode === "custom"}
+                onChange={() => onTitleModeChange("custom")}
+                className="text-[#1A3A5C] focus:ring-[#2B6CB0]"
+              />
+              Custom title
+            </label>
+          </div>
 
-        {/* Subject */}
+          <FormField label="Exam Title" htmlFor="title" required error={fieldErrors.title}>
+            <TextField
+              ref={(el) => {
+                titleInputRef.current = el;
+                fieldRefs.current.title = el;
+              }}
+              type="text"
+              name="title"
+              value={formData.title}
+              onChange={onChange}
+              error={!!fieldErrors.title}
+              disabled={titleMode === "auto"}
+              placeholder={
+                titleMode === "auto"
+                  ? "Fill in class, term, and subject below to generate a title"
+                  : "e.g., Mathematics Midterm Test"
+              }
+            />
+          </FormField>
+
+          {titleMode === "auto" && (
+            <p className="text-xs text-[#8A9CAE] mt-1">
+              Generated automatically from the fields below. Switch to &quot;Custom title&quot; to
+              edit it directly (e.g. for a midterm or mock test).
+            </p>
+          )}
+        </div>
+
         <FormField label="Subject" htmlFor="subject" required error={fieldErrors.subject}>
           <SelectField
             ref={(el) => {
@@ -73,7 +116,6 @@ const ExamDetailsSection: React.FC<ExamDetailsSectionProps> = ({
           />
         </FormField>
 
-        {/* Class */}
         <FormField label="Class" htmlFor="class" required error={fieldErrors.class}>
           <SelectField
             ref={(el) => {
@@ -87,7 +129,6 @@ const ExamDetailsSection: React.FC<ExamDetailsSectionProps> = ({
           />
         </FormField>
 
-        {/* Term */}
         <FormField label="Term" htmlFor="term" required error={fieldErrors.term}>
           <SelectField
             ref={(el) => {
@@ -101,7 +142,6 @@ const ExamDetailsSection: React.FC<ExamDetailsSectionProps> = ({
           />
         </FormField>
 
-        {/* Exam Type */}
         <FormField label="Exam Type" htmlFor="type" required>
           <SelectField
             name="type"

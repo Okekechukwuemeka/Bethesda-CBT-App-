@@ -6,8 +6,10 @@ import Link from "next/link";
 import QuestionFilters from "@/components/admin/questions/QuestionFilters";
 import QuestionsTable from "@/components/admin/questions/QuestionsTable";
 import QuestionFormModal from "@/components/admin/questions/QuestionFormModal";
+import QuestionBank from "@/components/questions/QuestionBank";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useExamQuestions } from "@/hooks/useExamQuestions";
+import type { BankQuestion as SharedBankQuestion } from "@/types/exam.types";
 
 const ExamQuestionsPage: React.FC = () => {
   const params = useParams();
@@ -34,6 +36,8 @@ const ExamQuestionsPage: React.FC = () => {
     setFilterType,
     handleInputChange,
     handleOptionChange,
+    handleAddOption,
+    handleRemoveOption,
     handleAddQuestion,
     handleEditQuestion,
     requestDeleteQuestion,
@@ -41,10 +45,63 @@ const ExamQuestionsPage: React.FC = () => {
     confirmDeleteQuestion,
     handleSubmit,
     closeModal,
+
+    // bank browsing/attach
+    showQuestionBank,
+    setShowQuestionBank,
+    bankQuestions,
+    isLoadingBank,
+    bankSearchTerm,
+    setBankSearchTerm,
+    bankFilterType,
+    setBankFilterType,
+    bankFilterSubject,
+    setBankFilterSubject,
+    bankFilterClass,
+    setBankFilterClass,
+    attachedIds,
+    handleAttachBankQuestion,
   } = useExamQuestions(examId);
 
   const subjectName =
     exam?.subject && typeof exam.subject === "object" ? exam.subject.name : exam?.subject;
+
+  // QuestionBank.tsx (and its children) were built against a DIFFERENT
+  // BankQuestion type (types/exam.types.ts, keyed by "id") than the one
+  // this hook returns (keyed by "_id"). Rather than reconciling the two
+  // types everywhere, adapt at this one boundary: convert hook shape ->
+  // component shape going in, and go the other way for the callback.
+  const bankQuestionsForComponent: SharedBankQuestion[] = bankQuestions.map((q) => ({
+    id: q._id,
+    text: q.text,
+    type: q.type,
+    subject: typeof q.subject === "string" ? q.subject : q.subject.name,
+    class: q.class,
+    marks: q.marks,
+    options: q.options,
+    correctAnswer: q.correctAnswer,
+  }));
+
+  const selectedQuestionsForComponent: SharedBankQuestion[] = filteredQuestions
+    .filter((q) => attachedIds.has(q._id))
+    .map((q) => ({
+      id: q._id,
+      text: q.text,
+      type: q.type,
+      subject: typeof q.subject === "string" ? q.subject : q.subject.name,
+      class: q.class,
+      marks: q.marks,
+      options: q.options,
+      correctAnswer: q.correctAnswer,
+    }));
+
+  const handleAddFromBank = (question: SharedBankQuestion) => {
+    // Map back to the hook's _id-keyed shape it actually expects. The
+    // component only round-trips fields it received, so `id` maps
+    // straight back to the original `_id`.
+    const original = bankQuestions.find((q) => q._id === question.id);
+    if (original) handleAttachBankQuestion(original);
+  };
 
   return (
     <>
@@ -120,6 +177,26 @@ const ExamQuestionsPage: React.FC = () => {
           </div>
         )}
 
+        <div className="bg-white rounded-xl border border-[#C5D8EC] p-4 shadow-sm">
+          <QuestionBank
+            isOpen={showQuestionBank}
+            onToggle={() => setShowQuestionBank(!showQuestionBank)}
+            questions={bankQuestionsForComponent}
+            selectedQuestions={selectedQuestionsForComponent}
+            subjects={subjects.map((s) => ({ id: s._id, name: s.name }))}
+            isLoadingBank={isLoadingBank}
+            searchTerm={bankSearchTerm}
+            filterType={bankFilterType}
+            filterSubject={bankFilterSubject}
+            filterClass={bankFilterClass}
+            onSearchChange={setBankSearchTerm}
+            onTypeChange={setBankFilterType}
+            onSubjectChange={setBankFilterSubject}
+            onClassChange={setBankFilterClass}
+            onAddQuestion={handleAddFromBank}
+          />
+        </div>
+
         <QuestionFilters
           searchTerm={searchTerm}
           filterType={filterType}
@@ -145,6 +222,8 @@ const ExamQuestionsPage: React.FC = () => {
         isLoadingSubjects={isLoadingSubjects}
         onChange={handleInputChange}
         onOptionChange={handleOptionChange}
+        onAddOption={handleAddOption}
+        onRemoveOption={handleRemoveOption}
         onSubmit={handleSubmit}
         onCancel={closeModal}
       />

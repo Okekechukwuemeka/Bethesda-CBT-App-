@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { BankQuestion } from "../types/exam.types";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 interface StatusMessage {
   type: "success" | "error" | "warning";
@@ -10,6 +9,7 @@ interface StatusMessage {
 
 type RequiredField = "title" | "subject" | "class" | "term" | "date" | "time";
 type FieldErrors = Partial<Record<RequiredField, string>>;
+type TitleMode = "auto" | "custom";
 
 interface FormData {
   title: string;
@@ -31,9 +31,6 @@ interface SubjectOption {
   code: string;
 }
 
-// Capitalizes the lowercase UI values ("objective") to what the backend's
-// enums actually expect ("Objective"). Keeping the UI on lowercase avoids
-// touching ExamDetailsSection/ScheduleSection's existing option values.
 function toBackendType(type: FormData["type"]): "Objective" | "Theory" | "Mixed" {
   return (type.charAt(0).toUpperCase() + type.slice(1)) as "Objective" | "Theory" | "Mixed";
 }
@@ -41,9 +38,6 @@ function toBackendType(type: FormData["type"]): "Objective" | "Theory" | "Mixed"
 function currentAcademicYear(): string {
   const now = new Date();
   const year = now.getFullYear();
-  // Nigerian school year conventionally runs Sept -> July. Before
-  // September, we're still in the year that started the previous
-  // September.
   const startYear = now.getMonth() >= 8 ? year : year - 1;
   return `${startYear}/${startYear + 1}`;
 }
@@ -62,35 +56,28 @@ export function useCreateExamWithQuestions() {
     passingScore: 40,
     shuffleQuestions: false,
   });
-  // Not shown in any section you've built yet (ExamDetailsSection etc.
-  // weren't shared with me) - defaults sensibly and is sent to the
-  // backend as-is. Add an input for it if you want admins to override
-  // the auto-computed value; until then this is what gets submitted.
   const [academicYear, setAcademicYear] = useState(currentAcademicYear());
+
+  // "auto" computes title from class/term/subject as those fields fill
+  // in; "custom" lets the admin type any title freely (e.g. "Midterm
+  // Test"). Defaults to auto since that's the common case.
+  const [titleMode, setTitleMode] = useState<TitleMode>("auto");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [createdExamCode, setCreatedExamCode] = useState<string | null>(null);
+  const [createdExamId, setCreatedExamId] = useState<string | null>(null);
+  const [importedQuestionCount, setImportedQuestionCount] = useState(0);
   const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
   const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
 
-  const [selectedQuestions, setSelectedQuestions] = useState<BankQuestion[]>([]);
-  const [bankQuestions, setBankQuestions] = useState<BankQuestion[]>([]);
-  const [isLoadingBank, setIsLoadingBank] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState("");
-  const [filterSubject, setFilterSubject] = useState("");
-  const [filterClass, setFilterClass] = useState("");
-  const [showQuestionBank, setShowQuestionBank] = useState(false);
-
-  // --- Bulk CSV import (new) -----------------------------------------
-  // The exam doesn't exist yet while filling this form, so the file is
-  // just held onto here and actually uploaded to
-  // /api/admin/exams/[examId]/questions/bulk AFTER the exam is created
-  // during handleSubmit - not at selection time.
+  // Question bank browsing/selection has been removed from exam creation.
+  // Adding bank questions now happens on the exam's own "Questions" page
+  // (/admin/exams/[id]/questions) after the exam exists - bulk CSV import
+  // is the only way to seed questions at creation time.
   const [questionsCsvFile, setQuestionsCsvFile] = useState<File | null>(null);
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [partialErrorMessage, setPartialErrorMessage] = useState<string | null>(null);
@@ -98,12 +85,6 @@ export function useCreateExamWithQuestions() {
   const titleInputRef = useRef<HTMLInputElement>(null);
   const fieldRefs = useRef<Partial<Record<RequiredField, HTMLElement | null>>>({});
 
-  const totalMarks = useMemo(
-    () => selectedQuestions.reduce((sum, q) => sum + q.marks, 0),
-    [selectedQuestions],
-  );
-
-  // --- Load subjects once ----------------------------------------------
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -125,54 +106,24 @@ export function useCreateExamWithQuestions() {
     };
   }, []);
 
-  // --- Load/filter the question bank, server-side ----------------------
+  // Recomputes the title whenever class/term/subject change, but ONLY in
+  // "auto" mode - switching to "custom" leaves whatever's currently there
+  // alone so the admin can freely edit it.
   useEffect(() => {
-    let cancelled = false;
-    const timeout = setTimeout(async () => {
-      setIsLoadingBank(true);
-      try {
-        const params = new URLSearchParams();
-        if (searchTerm) params.set("search", searchTerm);
-        if (filterType) params.set("type", filterType);
-        if (filterSubject) params.set("subject", filterSubject);
-        if (filterClass) params.set("class", filterClass);
+    if (titleMode !== "auto") return;
+    const subjectName = subjects.find((s) => s.id === formData.subject)?.name;
+    const parts = [formData.class, formData.term, subjectName].filter(Boolean);
+    const computed = parts.length > 0 ? `${parts.join(" ")} Examination` : "";
+    setFormData((prev) => (prev.title === computed ? prev : { ...prev, title: computed }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [titleMode, formData.class, formData.term, formData.subject, subjects]);
 
-        const res = await fetch(`/api/admin/questions?${params.toString()}`);
-        if (res.ok) {
-          const { questions } = await res.json();
-          if (!cancelled) {
-            setBankQuestions(
-              questions.map((q: any) => ({
-                id: q._id,
-                text: q.text,
-                type: q.type,
-                subject: q.subject,
-                class: q.class,
-                marks: q.marks,
-                options: q.options,
-                correctAnswer: q.correctAnswer,
-              })),
-            );
-          }
-        }
-      } finally {
-        if (!cancelled) setIsLoadingBank(false);
-      }
-      // Debounced - avoids firing a request on every keystroke in the
-      // search box.
-    }, 300);
-    return () => {
-      cancelled = true;
-      clearTimeout(timeout);
-    };
-  }, [searchTerm, filterType, filterSubject, filterClass]);
-
-  // filteredQuestions and questionBank are the same list here - the
-  // filtering already happened server-side above via the query params,
-  // there's no separate client-side pass to apply. Kept as two names
-  // since that's the shape the existing QuestionsSection component
-  // expects.
-  const filteredQuestions = bankQuestions;
+  const handleTitleModeChange = useCallback((mode: TitleMode) => {
+    setTitleMode(mode);
+    // Switching to custom starts from whatever the auto title currently
+    // is, rather than clearing it - most admins just want to tweak the
+    // auto-generated one, not start from scratch.
+  }, []);
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -192,17 +143,6 @@ export function useCreateExamWithQuestions() {
     },
     [fieldErrors],
   );
-
-  const handleAddQuestion = useCallback((question: BankQuestion) => {
-    setSelectedQuestions((prev) => {
-      if (prev.some((q) => q.id === question.id)) return prev; // no duplicates
-      return [...prev, question];
-    });
-  }, []);
-
-  const handleRemoveQuestion = useCallback((questionId: string) => {
-    setSelectedQuestions((prev) => prev.filter((q) => q.id !== questionId));
-  }, []);
 
   const handleQuestionsCsvSelect = useCallback((file: File | null) => {
     setQuestionsCsvFile(file);
@@ -240,7 +180,6 @@ export function useCreateExamWithQuestions() {
       setIsSubmitting(true);
 
       try {
-        // Step 1: create the exam shell.
         const examDate = new Date(`${formData.date}T${formData.time}`).toISOString();
         const createRes = await fetch("/api/admin/exams", {
           method: "POST",
@@ -264,26 +203,8 @@ export function useCreateExamWithQuestions() {
 
         const examId = createBody.exam._id;
         setCreatedExamCode(createBody.exam.examCode);
+        setCreatedExamId(examId);
 
-        // Step 2: attach any bank-selected questions.
-        if (selectedQuestions.length > 0) {
-          const attachRes = await fetch(`/api/admin/exams/${examId}/questions`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ questionIds: selectedQuestions.map((q) => q.id) }),
-          });
-          if (!attachRes.ok) {
-            const body = await attachRes.json().catch(() => ({}));
-            // The exam DOES exist at this point - not a full failure, so
-            // don't treat it as one. Let the admin finish from the edit
-            // page instead of leaving them with nothing.
-            setPartialErrorMessage(
-              `The exam was created, but attaching the selected bank questions failed: ${body.error ?? "unknown error"}. You can add them from the exam's edit page.`,
-            );
-          }
-        }
-
-        // Step 3: upload the CSV, if one was chosen.
         if (questionsCsvFile) {
           const csvForm = new FormData();
           csvForm.append("file", questionsCsvFile);
@@ -297,9 +218,11 @@ export function useCreateExamWithQuestions() {
               ? ` (${body.rowErrors.length} row error(s) - e.g. row ${body.rowErrors[0]?.row}: ${body.rowErrors[0]?.error})`
               : "";
             setPartialErrorMessage(
-              (prev) =>
-                `${prev ? prev + " " : ""}The exam was created, but the CSV question import failed: ${body.error ?? "unknown error"}${rowErrorSummary}. You can retry the import from the exam's edit page.`,
+              `The exam was created, but the CSV question import failed: ${body.error ?? "unknown error"}${rowErrorSummary}. You can retry the import, or add questions manually, from the exam's Questions page.`,
             );
+          } else {
+            const csvBody = await csvRes.json();
+            setImportedQuestionCount(csvBody.imported ?? csvBody.attached ?? 0);
           }
         }
 
@@ -313,7 +236,7 @@ export function useCreateExamWithQuestions() {
         setIsSubmitting(false);
       }
     },
-    [formData, academicYear, selectedQuestions, questionsCsvFile, validate],
+    [formData, academicYear, questionsCsvFile, validate],
   );
 
   const resetForm = useCallback(() => {
@@ -330,9 +253,11 @@ export function useCreateExamWithQuestions() {
       passingScore: 40,
       shuffleQuestions: false,
     });
+    setTitleMode("auto");
     setAcademicYear(currentAcademicYear());
-    setSelectedQuestions([]);
     setQuestionsCsvFile(null);
+    setImportedQuestionCount(0);
+    setCreatedExamId(null);
     setPartialErrorMessage(null);
     setIsSubmitted(false);
     setCreatedExamCode(null);
@@ -344,39 +269,27 @@ export function useCreateExamWithQuestions() {
     formData,
     academicYear,
     setAcademicYear,
+    titleMode,
+    handleTitleModeChange,
     isSubmitting,
     isSubmitted,
     createdExamCode,
+    createdExamId,
+    importedQuestionCount,
     statusMessage,
     fieldErrors,
     subjects,
     isLoadingSubjects,
-    selectedQuestions,
-    filteredQuestions,
-    isLoadingBank,
-    searchTerm,
-    filterType,
-    filterSubject,
-    filterClass,
-    showQuestionBank,
-    totalMarks,
     titleInputRef,
     fieldRefs,
     questionsCsvFile,
     showBulkImportModal,
     partialErrorMessage,
     handleInputChange,
-    handleAddQuestion,
-    handleRemoveQuestion,
     handleQuestionsCsvSelect,
     clearQuestionsCsvFile,
     handleSubmit,
     resetForm,
-    setSearchTerm,
-    setFilterType,
-    setFilterSubject,
-    setFilterClass,
-    setShowQuestionBank,
     setShowBulkImportModal,
     clearPartialErrorMessage: () => setPartialErrorMessage(null),
   };

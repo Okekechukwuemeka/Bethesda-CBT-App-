@@ -8,7 +8,6 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ScheduleSection from "@/components/admin/exam-form/ScheduleSection";
 import ScoringSection from "@/components/admin/exam-form/ScoringSection";
 import InstructionsSection from "@/components/admin/exam-form/InstructionsSection";
-import QuestionsSection from "@/components/admin/exam-form/QuestionsSection";
 import QuestionsCsvUploadModal from "@/components/admin/exam-form/QuestionsCsvUploadModal";
 import { useCreateExamWithQuestions } from "@/hooks/useCreateExamWithQuestions";
 import SuccessStateWithQuestions from "@/components/admin/exam-form/SuccessStateWithQuestions";
@@ -43,51 +42,48 @@ const UploadIcon = () => (
 );
 
 const CreateExamPage: React.FC = () => {
+  // console.log({
+  //   PageHeader,
+  //   StatusMessage,
+  //   ConfirmDialog,
+  //   ScheduleSection,
+  //   ScoringSection,
+  //   InstructionsSection,
+  //   QuestionsCsvUploadModal,
+  //   SuccessStateWithQuestions,
+  //   ExamDetailsSection,
+  // });
   const {
     formData,
     isSubmitting,
     isSubmitted,
     createdExamCode,
+    createdExamId,
+    importedQuestionCount,
     statusMessage,
     fieldErrors,
     subjects,
     isLoadingSubjects,
-    selectedQuestions,
-    filteredQuestions,
-    isLoadingBank,
-    searchTerm,
-    filterType,
-    filterSubject,
-    filterClass,
-    showQuestionBank,
-    totalMarks,
+    titleMode,
+    handleTitleModeChange,
     titleInputRef,
     fieldRefs,
     questionsCsvFile,
     showBulkImportModal,
     partialErrorMessage,
     handleInputChange,
-    handleAddQuestion,
-    handleRemoveQuestion,
     handleQuestionsCsvSelect,
-    clearQuestionsCsvFile,
     handleSubmit,
     resetForm,
-    setSearchTerm,
-    setFilterType,
-    setFilterSubject,
-    setFilterClass,
-    setShowQuestionBank,
     setShowBulkImportModal,
     clearPartialErrorMessage,
   } = useCreateExamWithQuestions();
-  console.log(subjects);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Create Exam"
-        description="Create a new examination with questions"
+        description="Create a new examination"
         actions={[
           {
             label: "Back to Exams",
@@ -104,8 +100,8 @@ const CreateExamPage: React.FC = () => {
         {isSubmitted ? (
           <SuccessStateWithQuestions
             examTitle={formData.title}
-            questionCount={selectedQuestions.length}
-            totalMarks={totalMarks}
+            examId={createdExamId}
+            questionCount={importedQuestionCount}
             examCode={createdExamCode}
             onReset={resetForm}
           />
@@ -119,6 +115,8 @@ const CreateExamPage: React.FC = () => {
               onChange={handleInputChange}
               subjects={subjects}
               isLoadingSubjects={isLoadingSubjects}
+              titleMode={titleMode}
+              onTitleModeChange={handleTitleModeChange}
             />
 
             <ScheduleSection
@@ -132,47 +130,25 @@ const CreateExamPage: React.FC = () => {
 
             <InstructionsSection formData={formData} onChange={handleInputChange} />
 
-            <div className="space-y-4">
-              <QuestionsSection
-                selectedQuestions={selectedQuestions}
-                questionBank={filteredQuestions}
-                filteredQuestions={filteredQuestions}
-                subjects={subjects}
-                searchTerm={searchTerm}
-                filterType={filterType}
-                filterSubject={filterSubject}
-                filterClass={filterClass}
-                showQuestionBank={showQuestionBank}
-                onRemoveQuestion={handleRemoveQuestion}
-                onSearchChange={setSearchTerm}
-                onTypeChange={setFilterType}
-                onSubjectChange={setFilterSubject}
-                onClassChange={setFilterClass}
-                onAddQuestion={handleAddQuestion}
-                onToggleQuestionBank={() => setShowQuestionBank(!showQuestionBank)}
-                isLoadingBank={isLoadingBank}
-              />
-
-              <div className="flex items-center justify-between bg-[#F8FAFE] border border-[#C5D8EC] rounded-lg p-4">
-                <div>
-                  <p className="text-sm font-medium text-[#1A3A5C]">
-                    Prefer to import a question set instead?
-                  </p>
-                  {questionsCsvFile && (
-                    <p className="text-sm text-green-700 mt-1">
-                      CSV ready: <strong>{questionsCsvFile.name}</strong> (imported when you create
-                      the exam)
-                    </p>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowBulkImportModal(true)}
-                  className="flex items-center gap-2 text-sm bg-white border border-[#2B6CB0] text-[#2B6CB0] font-medium px-4 py-2 rounded-lg hover:bg-[#E8F0FE] focus:outline-none focus:ring-2 focus:ring-[#2B6CB0]">
-                  <UploadIcon />
-                  {questionsCsvFile ? "Change CSV" : "Import from CSV"}
-                </button>
-              </div>
+            <div className="bg-[#F8FAFE] border border-[#C5D8EC] rounded-lg p-4">
+              <p className="text-sm font-medium text-[#1A3A5C] mb-1">Questions (optional)</p>
+              <p className="text-sm text-[#5A7A9A] mb-3">
+                Import a set of questions now via CSV, or skip this and add questions afterward from
+                the exam&apos;s Questions page.
+              </p>
+              {questionsCsvFile && (
+                <p className="text-sm text-green-700 mb-3">
+                  CSV ready: <strong>{questionsCsvFile.name}</strong> (imported when you create the
+                  exam)
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowBulkImportModal(true)}
+                className="flex items-center gap-2 text-sm bg-white border border-[#2B6CB0] text-[#2B6CB0] font-medium px-4 py-2 rounded-lg hover:bg-[#E8F0FE] focus:outline-none focus:ring-2 focus:ring-[#2B6CB0]">
+                <UploadIcon />
+                {questionsCsvFile ? "Change CSV" : "Import from CSV"}
+              </button>
             </div>
 
             <div className="flex gap-3 pt-4 border-t border-[#E8EEF5]">
@@ -186,9 +162,7 @@ const CreateExamPage: React.FC = () => {
                 disabled={isSubmitting}
                 className="flex-1 bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium py-2.5 px-4 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                 aria-label={isSubmitting ? "Creating exam, please wait" : "Create exam"}>
-                {isSubmitting
-                  ? "Creating..."
-                  : `Create Exam (${selectedQuestions.length}${questionsCsvFile ? " + CSV" : ""} questions)`}
+                {isSubmitting ? "Creating..." : "Create Exam"}
               </button>
             </div>
           </form>
@@ -202,8 +176,6 @@ const CreateExamPage: React.FC = () => {
         onClose={() => setShowBulkImportModal(false)}
       />
 
-      {/* Accessible replacement for alert() - the exam WAS created even if
-          this shows, so it's acknowledge-and-continue, not a retry loop. */}
       <ConfirmDialog
         isOpen={!!partialErrorMessage}
         title="Exam created, but with a problem"

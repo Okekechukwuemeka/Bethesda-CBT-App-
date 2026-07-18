@@ -21,6 +21,19 @@ export interface ExamSummary {
   class: string;
 }
 
+// Separate shape from ExamQuestion - this is a bank question NOT yet
+// attached to this exam, as returned by GET /api/admin/questions.
+export interface BankQuestion {
+  _id: string;
+  text: string;
+  type: "Objective" | "Theory";
+  options?: string[];
+  correctAnswer?: string;
+  marks: number;
+  subject: string | { _id: string; name: string };
+  class: ClassLevel;
+}
+
 interface StatusMessage {
   type: "success" | "error" | "warning";
   text: string;
@@ -29,7 +42,7 @@ interface StatusMessage {
 const emptyFormData: QuestionInput = {
   text: "",
   type: "Objective",
-  options: ["", "", "", ""],
+  options: ["", ""], // starts at the model's minimum, not a fixed 4
   correctAnswer: "",
   marks: 5,
   subject: "",
@@ -54,17 +67,23 @@ export const useExamQuestions = (examId: string) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
 
-  // Delete goes through ConfirmDialog, never window.confirm()
   const [questionPendingDelete, setQuestionPendingDelete] = useState<ExamQuestion | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const triggerRef = useRef<HTMLElement | null>(null);
   const [formData, setFormData] = useState<QuestionInput>(emptyFormData);
 
+  // --- Bank browsing (new): pick EXISTING bank questions to attach ---
+  const [showQuestionBank, setShowQuestionBank] = useState(false);
+  const [bankQuestions, setBankQuestions] = useState<BankQuestion[]>([]);
+  const [isLoadingBank, setIsLoadingBank] = useState(false);
+  const [bankSearchTerm, setBankSearchTerm] = useState("");
+  const [bankFilterType, setBankFilterType] = useState("");
+  const [bankFilterSubject, setBankFilterSubject] = useState("");
+  const [bankFilterClass, setBankFilterClass] = useState("");
+  const [isAttaching, setIsAttaching] = useState(false);
+
   // --- Load the exam's own details (title, subject, class) -----------
-  // Used only for the page header - if this fetch fails, the page still
-  // works fine, it just falls back to showing "Loading exam details…"
-  // instead of a real title.
   useEffect(() => {
     if (!examId) return;
     let cancelled = false;
@@ -82,7 +101,7 @@ export const useExamQuestions = (examId: string) => {
           }
         }
       } catch {
-        // non-fatal, see comment above
+        // non-fatal - page falls back to "Loading exam details…"
       }
     })();
     return () => {
@@ -133,6 +152,83 @@ export const useExamQuestions = (examId: string) => {
     };
   }, []);
 
+  // --- Load/filter the question bank, server-side, debounced -----------
+  // Defaults the filters to this exam's own subject/class the first time
+  // the bank is opened, since that's almost always what an admin wants -
+  // they can still change the filters afterward.
+  const bankFiltersInitialized = useRef(false);
+  useEffect(() => {
+    if (!showQuestionBank || bankFiltersInitialized.current || !exam) return;
+    bankFiltersInitialized.current = true;
+    const subjectId = typeof exam.subject === "string" ? exam.subject : exam.subject._id;
+    setBankFilterSubject(subjectId ?? "");
+    setBankFilterClass(exam.class ?? "");
+  }, [showQuestionBank, exam]);
+
+  useEffect(() => {
+    if (!showQuestionBank) return;
+    let cancelled = false;
+    const timeout = setTimeout(async () => {
+      setIsLoadingBank(true);
+      try {
+        const params = new URLSearchParams();
+        if (bankSearchTerm) params.set("search", bankSearchTerm);
+        if (bankFilterType) params.set("type", bankFilterType);
+        if (bankFilterSubject) params.set("subject", bankFilterSubject);
+        if (bankFilterClass) params.set("class", bankFilterClass);
+
+        const res = await fetch(`/api/admin/questions?${params.toString()}`);
+        if (res.ok) {
+          const { questions: apiQuestions } = await res.json();
+          if (!cancelled) setBankQuestions(apiQuestions);
+        }
+      } finally {
+        if (!cancelled) setIsLoadingBank(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [showQuestionBank, bankSearchTerm, bankFilterType, bankFilterSubject, bankFilterClass]);
+
+  const attachedIds = useMemo(() => new Set(questions.map((q) => q._id)), [questions]);
+
+  // Bank questions already attached to this exam are marked, not hidden -
+  // matches the "Added ✓" pattern used elsewhere (QuestionBankItem).
+  const filteredBankQuestions = useMemo(
+    () => bankQuestions.filter((q) => q?.text && q?.type),
+    [bankQuestions],
+  );
+
+  const handleAttachBankQuestion = useCallback(
+    async (question: BankQuestion) => {
+      if (attachedIds.has(question._id) || isAttaching) return;
+      setIsAttaching(true);
+      try {
+        const res = await fetch(`/api/admin/exams/${examId}/questions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ questionIds: [question._id] }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error ?? "Failed to attach question");
+
+        await loadQuestions();
+        setStatusMessage({ type: "success", text: "Question added to exam." });
+        setTimeout(() => setStatusMessage(null), 3000);
+      } catch (err) {
+        setStatusMessage({
+          type: "error",
+          text: err instanceof Error ? err.message : "Failed to attach question.",
+        });
+      } finally {
+        setIsAttaching(false);
+      }
+    },
+    [examId, attachedIds, isAttaching, loadQuestions],
+  );
+
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       const { name, value, type } = e.target;
@@ -146,9 +242,29 @@ export const useExamQuestions = (examId: string) => {
 
   const handleOptionChange = useCallback((index: number, value: string) => {
     setFormData((prev) => {
-      const newOptions = [...(prev.options || ["", "", "", ""])];
+      const newOptions = [...(prev.options || [])];
       newOptions[index] = value;
       return { ...prev, options: newOptions };
+    });
+  }, []);
+
+  const handleAddOption = useCallback(() => {
+    setFormData((prev) => ({
+      ...prev,
+      options: [...(prev.options || []), ""],
+    }));
+  }, []);
+
+  const handleRemoveOption = useCallback((index: number) => {
+    setFormData((prev) => {
+      const options = [...(prev.options || [])];
+      const removed = options[index];
+      options.splice(index, 1);
+      return {
+        ...prev,
+        options,
+        correctAnswer: prev.correctAnswer === removed ? "" : prev.correctAnswer,
+      };
     });
   }, []);
 
@@ -170,7 +286,7 @@ export const useExamQuestions = (examId: string) => {
       setFormData({
         text: question.text,
         type: question.type,
-        options: question.options ?? ["", "", "", ""],
+        options: question.options?.length ? question.options : ["", ""],
         correctAnswer: question.correctAnswer ?? "",
         marks: question.marks,
         subject: typeof question.subject === "string" ? question.subject : question.subject._id,
@@ -181,7 +297,6 @@ export const useExamQuestions = (examId: string) => {
     [],
   );
 
-  // --- Delete flow, driven by ConfirmDialog -----------------------------
   const requestDeleteQuestion = useCallback((question: ExamQuestion) => {
     setQuestionPendingDelete(question);
   }, []);
@@ -226,14 +341,17 @@ export const useExamQuestions = (examId: string) => {
     if (!formData.subject) return "Please select a subject.";
     if (!formData.class) return "Please select a class.";
     if (!formData.marks || formData.marks < 1) return "Marks must be at least 1.";
-    if (
-      formData.type === "Objective" &&
-      (!formData.options || formData.options.some((opt) => !opt?.trim()))
-    ) {
-      return "Please provide all four options for objective questions.";
-    }
-    if (formData.type === "Objective" && !formData.correctAnswer?.trim()) {
-      return "Please provide the correct answer for objective questions.";
+    if (formData.type === "Objective") {
+      const filledOptions = (formData.options || []).filter((opt) => opt?.trim());
+      if (filledOptions.length < 2) {
+        return "Please provide at least 2 options for objective questions.";
+      }
+      if (!formData.correctAnswer?.trim()) {
+        return "Please select the correct answer for objective questions.";
+      }
+      if (!filledOptions.includes(formData.correctAnswer.trim())) {
+        return "The correct answer must match one of the options exactly.";
+      }
     }
     return null;
   };
@@ -250,13 +368,17 @@ export const useExamQuestions = (examId: string) => {
       setFormError(null);
       setIsSubmitting(true);
 
+      const payload =
+        formData.type === "Objective"
+          ? { ...formData, options: formData.options?.filter((opt) => opt.trim()) }
+          : { ...formData, options: undefined, correctAnswer: undefined };
+
       try {
         if (isEditing && selectedQuestion) {
-          // Confirm this route exists - not seen in any file shared so far.
           const res = await fetch(`/api/admin/questions/${selectedQuestion._id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(formData),
+            body: JSON.stringify(payload),
           });
           const body = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(body.error ?? "Failed to update question");
@@ -269,7 +391,7 @@ export const useExamQuestions = (examId: string) => {
           const res = await fetch(`/api/admin/exams/${examId}/questions`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ newQuestions: [formData] }),
+            body: JSON.stringify({ newQuestions: [payload] }),
           });
           const body = await res.json().catch(() => ({}));
           if (!res.ok) {
@@ -293,7 +415,7 @@ export const useExamQuestions = (examId: string) => {
 
   const filteredQuestions = useMemo(() => {
     return questions.filter((q) => {
-      if (!q?.text || !q?.type) return false; // skip malformed entries instead of crashing
+      if (!q?.text || !q?.type) return false;
       const matchesSearch = q.text.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = filterType === "all" || q.type.toLowerCase() === filterType;
       return matchesSearch && matchesType;
@@ -325,6 +447,8 @@ export const useExamQuestions = (examId: string) => {
     setFilterType,
     handleInputChange,
     handleOptionChange,
+    handleAddOption,
+    handleRemoveOption,
     handleAddQuestion,
     handleEditQuestion,
     requestDeleteQuestion,
@@ -332,5 +456,22 @@ export const useExamQuestions = (examId: string) => {
     confirmDeleteQuestion,
     handleSubmit,
     closeModal,
+
+    // bank browsing/attach
+    showQuestionBank,
+    setShowQuestionBank,
+    bankQuestions: filteredBankQuestions,
+    isLoadingBank,
+    bankSearchTerm,
+    setBankSearchTerm,
+    bankFilterType,
+    setBankFilterType,
+    bankFilterSubject,
+    setBankFilterSubject,
+    bankFilterClass,
+    setBankFilterClass,
+    attachedIds,
+    isAttaching,
+    handleAttachBankQuestion,
   };
 };

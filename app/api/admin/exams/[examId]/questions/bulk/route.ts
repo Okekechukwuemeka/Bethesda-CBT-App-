@@ -6,29 +6,26 @@ import { requireAdmin } from "@/lib/api-guards";
 import { Exam, recomputeExamTotals } from "@/lib/models/exam.model";
 import { Question, IQuestion } from "@/lib/models/question.model";
 
-// Expected CSV header (order doesn't matter, matched by column name):
+// Expected CSV header for Objective rows (order doesn't matter for text/
+// type/marks, but option columns are read positionally):
 //
-//   text,type,marks,optionA,optionB,optionC,optionD,correctAnswer
+//   text,type,marks,option1,option2,option3,...,optionN
+//
+// The LAST populated option column in each row is always treated as the
+// correct answer, regardless of how many option columns that row has -
+// mirrors /api/admin/questions/bulk so both bulk-import paths behave
+// identically. For Theory rows, leave every option column blank.
 //
 // subject/class are NOT columns here - every question created this way
 // inherits the exam's own subject and class, same as the single/multi
-// "newQuestions" path on POST .../questions. If you want to build a
-// reusable, cross-exam question set instead, import into the bank
-// directly via POST /api/admin/questions/bulk.
-interface CsvRow {
-  text?: string;
-  type?: string;
-  marks?: string;
-  optionA?: string;
-  optionB?: string;
-  optionC?: string;
-  optionD?: string;
-  correctAnswer?: string;
-}
-
+// "newQuestions" path on POST .../questions.
 interface RowError {
   row: number; // 1-based, matches spreadsheet row numbers (header = row 1)
   error: string;
+}
+
+function isOptionColumn(header: string): boolean {
+  return /^option\d+$/i.test(header) || /^option[a-z]$/i.test(header);
 }
 
 // POST /api/admin/exams/[examId]/questions/bulk
@@ -48,16 +45,26 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
   if (!(file instanceof File)) {
     return NextResponse.json(
       { error: "A CSV file is required in the 'file' field" },
-      {
-        status: 400,
-      },
+      { status: 400 },
     );
   }
 
-  const text = await file.text();
-  let rows: CsvRow[];
+  // Read as raw bytes and decode explicitly as UTF-8, rather than
+  // file.text() (which can silently mis-decode files saved by Excel as
+  // Windows-1252/Latin-1) - this is what shows up as "?" in place of
+  // special characters like minus signs, superscripts, or exponents
+  // after import.
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const text = buffer.toString("utf-8");
+
+  let rows: Record<string, string>[];
+  let headerRow: string[];
   try {
-    rows = parse(text, { columns: true, skip_empty_lines: true, trim: true }) as CsvRow[];
+    rows = parse(text, { columns: true, skip_empty_lines: true, trim: true }) as Record<
+      string,
+      string
+    >[];
+    headerRow = rows.length > 0 ? Object.keys(rows[0]) : [];
   } catch (error) {
     const message = error instanceof Error ? error.message : "Malformed CSV";
     return NextResponse.json({ error: `Could not parse CSV: ${message}` }, { status: 400 });
@@ -65,6 +72,17 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
 
   if (rows.length === 0) {
     return NextResponse.json({ error: "CSV has no data rows" }, { status: 400 });
+  }
+
+  const optionColumns = headerRow.filter(isOptionColumn);
+  if (optionColumns.length === 0) {
+    return NextResponse.json(
+      {
+        error:
+          "No option columns found. Use headers like option1, option2, option3, ... (as many as needed).",
+      },
+      { status: 400 },
+    );
   }
 
   const errors: RowError[] = [];
@@ -91,17 +109,22 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
       return;
     }
 
-    const options = [row.optionA, row.optionB, row.optionC, row.optionD]
-      .map((o) => o?.trim())
+    const filledOptions = optionColumns
+      .map((col) => row[col]?.trim())
       .filter((o): o is string => !!o);
+
+    const correctAnswer =
+      type === "Objective" && filledOptions.length > 0
+        ? filledOptions[filledOptions.length - 1]
+        : undefined;
 
     candidates.push(
       new Question({
         text: row.text?.trim(),
         type,
         marks,
-        options: type === "Objective" ? options : undefined,
-        correctAnswer: type === "Objective" ? row.correctAnswer?.trim() : undefined,
+        options: type === "Objective" ? filledOptions : undefined,
+        correctAnswer,
         subject: exam.subject,
         class: exam.class,
         createdBy: guard.session.user.id,

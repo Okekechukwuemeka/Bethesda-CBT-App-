@@ -3,16 +3,16 @@ import { useRouter } from "next/navigation";
 
 interface SuccessStateWithQuestionsProps {
   examTitle: string;
+  examId?: string | null;
   questionCount: number;
-  totalMarks: number;
   examCode?: string | null;
   onReset: () => void;
 }
 
 const SuccessStateWithQuestions: React.FC<SuccessStateWithQuestionsProps> = ({
   examTitle,
+  examId,
   questionCount,
-  totalMarks,
   examCode,
   onReset,
 }) => {
@@ -33,9 +33,9 @@ const SuccessStateWithQuestions: React.FC<SuccessStateWithQuestionsProps> = ({
   return (
     <div className="text-center py-8 space-y-4" role="status" aria-live="polite">
       <p className="text-[#1A3A5C]">
-        &ldquo;{examTitle}&rdquo; has been created with <strong>{questionCount}</strong> questions.
+        &ldquo;{examTitle}&rdquo; has been created
+        {questionCount > 0 ? ` with ${questionCount} question(s) imported.` : "."}
       </p>
-      <p className="text-sm text-[#5A7A9A]">Total Marks: {totalMarks}</p>
 
       {examCode && (
         <div className="max-w-sm mx-auto bg-[#F8FAFE] border border-[#C5D8EC] rounded-lg p-4">
@@ -59,6 +59,13 @@ const SuccessStateWithQuestions: React.FC<SuccessStateWithQuestionsProps> = ({
         </div>
       )}
 
+      {questionCount === 0 && (
+        <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 max-w-sm mx-auto">
+          No questions were added yet. Go to the exam&apos;s Questions page to add some before
+          students can take it.
+        </p>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-3 justify-center">
         <button
           type="button"
@@ -66,6 +73,14 @@ const SuccessStateWithQuestions: React.FC<SuccessStateWithQuestionsProps> = ({
           className="bg-[#E8EEF5] hover:bg-[#D5DFE8] text-[#1A3A5C] font-medium py-2.5 px-6 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/30">
           Create Another Exam
         </button>
+        {examId && (
+          <button
+            type="button"
+            onClick={() => router.push(`/admin/exams/${examId}/questions`)}
+            className="bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 px-6 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-green-500/50">
+            Manage Questions
+          </button>
+        )}
         <button
           type="button"
           onClick={() => router.push("/admin/exams")}
