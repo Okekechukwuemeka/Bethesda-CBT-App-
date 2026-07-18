@@ -36,9 +36,12 @@ const QuestionsCsvUploadModal: React.FC<QuestionsCsvUploadModalProps> = ({
           <p className="text-sm text-[#4A6A8A]">
             Columns:{" "}
             <code className="text-xs bg-[#F8FAFE] px-1 py-0.5 rounded">
-              text, type, marks, optionA, optionB, optionC, optionD, correctAnswer
+              text, type, marks, option1, option2, ..., optionN
             </code>
-            . Leave the option/answer columns blank for Theory questions.
+            . Use as many option columns as you need. The <strong>last</strong> option column must
+            repeat the exact text of whichever earlier option is correct - it designates the answer,
+            it&apos;s not a separate extra choice. Leave all option columns blank for Theory
+            questions.
           </p>
           <p className="text-sm text-[#4A6A8A]">
             These questions will use this exam&apos;s subject and class automatically. The file is

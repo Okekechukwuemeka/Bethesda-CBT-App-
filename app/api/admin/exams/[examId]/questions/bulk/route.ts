@@ -6,26 +6,21 @@ import { requireAdmin } from "@/lib/api-guards";
 import { Exam, recomputeExamTotals } from "@/lib/models/exam.model";
 import { Question, IQuestion } from "@/lib/models/question.model";
 
-// Expected CSV header for Objective rows (order doesn't matter for text/
-// type/marks, but option columns are read positionally):
-//
-//   text,type,marks,option1,option2,option3,...,optionN
-//
-// The LAST populated option column in each row is always treated as the
-// correct answer, regardless of how many option columns that row has -
-// mirrors /api/admin/questions/bulk so both bulk-import paths behave
-// identically. For Theory rows, leave every option column blank.
-//
-// subject/class are NOT columns here - every question created this way
-// inherits the exam's own subject and class, same as the single/multi
-// "newQuestions" path on POST .../questions.
 interface RowError {
-  row: number; // 1-based, matches spreadsheet row numbers (header = row 1)
+  row: number;
   error: string;
 }
 
 function isOptionColumn(header: string): boolean {
   return /^option\d+$/i.test(header) || /^option[a-z]$/i.test(header);
+}
+
+function optionColumnSortKey(header: string): number {
+  const numMatch = header.match(/(\d+)$/);
+  if (numMatch) return parseInt(numMatch[1], 10);
+  const letterMatch = header.match(/([a-zA-Z])$/);
+  if (letterMatch) return letterMatch[1].toUpperCase().charCodeAt(0) - 64;
+  return 0;
 }
 
 // POST /api/admin/exams/[examId]/questions/bulk
@@ -49,21 +44,18 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
     );
   }
 
-  // Read as raw bytes and decode explicitly as UTF-8, rather than
-  // file.text() (which can silently mis-decode files saved by Excel as
-  // Windows-1252/Latin-1) - this is what shows up as "?" in place of
-  // special characters like minus signs, superscripts, or exponents
-  // after import.
   const buffer = Buffer.from(await file.arrayBuffer());
   const text = buffer.toString("utf-8");
 
   let rows: Record<string, string>[];
   let headerRow: string[];
   try {
-    rows = parse(text, { columns: true, skip_empty_lines: true, trim: true }) as Record<
-      string,
-      string
-    >[];
+    rows = parse(text, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+      relax_column_count: true,
+    }) as Record<string, string>[];
     headerRow = rows.length > 0 ? Object.keys(rows[0]) : [];
   } catch (error) {
     const message = error instanceof Error ? error.message : "Malformed CSV";
@@ -74,22 +66,15 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
     return NextResponse.json({ error: "CSV has no data rows" }, { status: 400 });
   }
 
-  const optionColumns = headerRow.filter(isOptionColumn);
-  if (optionColumns.length === 0) {
-    return NextResponse.json(
-      {
-        error:
-          "No option columns found. Use headers like option1, option2, option3, ... (as many as needed).",
-      },
-      { status: 400 },
-    );
-  }
+  const optionColumns = headerRow
+    .filter(isOptionColumn)
+    .sort((a, b) => optionColumnSortKey(a) - optionColumnSortKey(b));
 
   const errors: RowError[] = [];
   const candidates: IQuestion[] = [];
 
   rows.forEach((row, i) => {
-    const rowNumber = i + 2; // +1 for 0-index, +1 for the header row
+    const rowNumber = i + 2;
 
     const type = row.type?.trim();
     if (type !== "Objective" && type !== "Theory") {
@@ -109,21 +94,47 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
       return;
     }
 
-    const filledOptions = optionColumns
-      .map((col) => row[col]?.trim())
-      .filter((o): o is string => !!o);
+    let optionsForQuestion: string[] | undefined;
+    let correctAnswer: string | undefined;
 
-    const correctAnswer =
-      type === "Objective" && filledOptions.length > 0
-        ? filledOptions[filledOptions.length - 1]
-        : undefined;
+    if (type === "Objective") {
+      const correctAnswerColumn = optionColumns[optionColumns.length - 1];
+      const optionValueColumns = optionColumns.slice(0, -1);
+
+      const filledOptions = optionValueColumns
+        .map((col) => row[col]?.trim())
+        .filter((o): o is string => !!o);
+      const correctAnswerRaw = correctAnswerColumn ? row[correctAnswerColumn]?.trim() : undefined;
+
+      if (filledOptions.length < 2) {
+        errors.push({
+          row: rowNumber,
+          error: `Objective questions need at least 2 options, found ${filledOptions.length}`,
+        });
+        return;
+      }
+      if (!correctAnswerRaw) {
+        errors.push({ row: rowNumber, error: "Missing correct answer in the last option column" });
+        return;
+      }
+      if (!filledOptions.includes(correctAnswerRaw)) {
+        errors.push({
+          row: rowNumber,
+          error: `Correct answer "${correctAnswerRaw}" (last column) must exactly match one of the other option columns`,
+        });
+        return;
+      }
+
+      optionsForQuestion = filledOptions;
+      correctAnswer = correctAnswerRaw;
+    }
 
     candidates.push(
       new Question({
         text: row.text?.trim(),
         type,
         marks,
-        options: type === "Objective" ? filledOptions : undefined,
+        options: optionsForQuestion,
         correctAnswer,
         subject: exam.subject,
         class: exam.class,

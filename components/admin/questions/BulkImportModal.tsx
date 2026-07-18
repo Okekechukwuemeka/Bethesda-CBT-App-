@@ -81,12 +81,17 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
                 <strong>CSV</strong> file
               </li>
               <li>
-                CSV columns:{" "}
-                <code>text, type, marks, optionA, optionB, optionC, optionD, correctAnswer</code>
+                CSV columns: <code>text, type, marks, option1, option2, ..., optionN</code>. Use as
+                many option columns as you need.
               </li>
               <li>
-                <code>type</code> must be exactly “Objective” or “Theory”; leave the option and
-                correctAnswer columns blank for Theory rows
+                The <strong>last</strong> option column must repeat the exact text of whichever
+                earlier option is correct - it designates the answer, it&apos;s not a separate extra
+                choice.
+              </li>
+              <li>
+                <code>type</code> must be exactly “Objective” or “Theory”; leave all option columns
+                blank for Theory rows
               </li>
             </ul>
           </div>

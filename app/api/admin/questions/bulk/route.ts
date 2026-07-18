@@ -4,29 +4,21 @@ import { connectDB } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-guards";
 import { Question, IQuestion } from "@/lib/models/question.model";
 
-// Expected CSV header for Objective rows (order doesn't matter for the
-// first two columns, but option columns are read positionally):
-//
-//   text,type,marks,option1,option2,option3,...,optionN
-//
-// The LAST populated option column in each row is always treated as the
-// correct answer, regardless of how many option columns that row has -
-// this lets different rows in the same file have different numbers of
-// options (2, 3, 5, whatever) without a fixed optionA-D/correctAnswer
-// schema. For Theory rows, leave every option column blank.
-//
-// subject and class are NOT columns in the CSV - they're passed once as
-// form fields alongside the file and applied to the whole batch.
 interface RowError {
-  row: number; // 1-based, matches spreadsheet row numbers (header = row 1)
+  row: number;
   error: string;
 }
 
-// Recognizes any header matching option1, option2, ... optionN (case-
-// insensitive) - NOT limited to optionA-D. Falls back to also accepting
-// the old fixed optionA/B/C/D naming for CSVs exported before this change.
 function isOptionColumn(header: string): boolean {
   return /^option\d+$/i.test(header) || /^option[a-z]$/i.test(header);
+}
+
+function optionColumnSortKey(header: string): number {
+  const numMatch = header.match(/(\d+)$/);
+  if (numMatch) return parseInt(numMatch[1], 10);
+  const letterMatch = header.match(/([a-zA-Z])$/);
+  if (letterMatch) return letterMatch[1].toUpperCase().charCodeAt(0) - 64; // A=1, B=2...
+  return 0;
 }
 
 // POST /api/admin/questions/bulk
@@ -55,24 +47,23 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Read as raw bytes and decode explicitly as UTF-8, rather than
-  // file.text() (which can silently mis-decode files saved by Excel as
-  // Windows-1252/Latin-1) - this is what shows up as "?" in place of
-  // special characters like minus signs, superscripts, or accented
-  // letters after import.
   const buffer = Buffer.from(await file.arrayBuffer());
   const text = buffer.toString("utf-8");
 
   let rows: Record<string, string>[];
   let headerRow: string[];
   try {
-    rows = parse(text, { columns: true, skip_empty_lines: true, trim: true }) as Record<
-      string,
-      string
-    >[];
-    // csv-parse doesn't expose the header list directly from the columns
-    // output, so re-derive it from the first data row's own keys - fine
-    // since every row shares the same header set by construction.
+    rows = parse(text, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+      // A row with an unquoted comma inside question text will have more
+      // fields than the header. Without this, csv-parse throws and aborts
+      // the WHOLE file instead of letting us report just that one bad
+      // row. Extra fields beyond the header are dropped; missing fields
+      // become undefined - both handled by the per-row validation below.
+      relax_column_count: true,
+    }) as Record<string, string>[];
     headerRow = rows.length > 0 ? Object.keys(rows[0]) : [];
   } catch (error) {
     const message = error instanceof Error ? error.message : "Malformed CSV";
@@ -83,22 +74,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "CSV has no data rows" }, { status: 400 });
   }
 
-  const optionColumns = headerRow.filter(isOptionColumn);
-  if (optionColumns.length === 0) {
-    return NextResponse.json(
-      {
-        error:
-          "No option columns found. Use headers like option1, option2, option3, ... (as many as needed).",
-      },
-      { status: 400 },
-    );
-  }
+  const optionColumns = headerRow
+    .filter(isOptionColumn)
+    .sort((a, b) => optionColumnSortKey(a) - optionColumnSortKey(b));
 
   const errors: RowError[] = [];
   const candidates: IQuestion[] = [];
 
   rows.forEach((row, i) => {
-    const rowNumber = i + 2; // +1 for 0-index, +1 for the header row
+    const rowNumber = i + 2;
 
     const type = row.type?.trim();
     if (type !== "Objective" && type !== "Theory") {
@@ -118,36 +102,60 @@ export async function POST(req: NextRequest) {
       return;
     }
 
-    // Read every option column present for this row, in header order,
-    // dropping blanks - this naturally supports rows with different
-    // numbers of options within the same file.
-    const filledOptions = optionColumns
-      .map((col) => row[col]?.trim())
-      .filter((o): o is string => !!o);
+    let optionsForQuestion: string[] | undefined;
+    let correctAnswer: string | undefined;
 
-    // The LAST filled option is always the correct answer for Objective
-    // rows - no separate correctAnswer column needed.
-    const correctAnswer =
-      type === "Objective" && filledOptions.length > 0
-        ? filledOptions[filledOptions.length - 1]
-        : undefined;
+    if (type === "Objective") {
+      // Last option column designates the answer; everything before it
+      // is a real choice.
+      const correctAnswerColumn = optionColumns[optionColumns.length - 1];
+      const optionValueColumns = optionColumns.slice(0, -1);
 
-    const question = new Question({
-      text: row.text?.trim(),
-      type,
-      subject,
-      class: classLevel,
-      marks,
-      options: type === "Objective" ? filledOptions : undefined,
-      correctAnswer,
-      createdBy: guard.session.user.id,
-    });
+      const filledOptions = optionValueColumns
+        .map((col) => row[col]?.trim())
+        .filter((o): o is string => !!o);
+      const correctAnswerRaw = correctAnswerColumn ? row[correctAnswerColumn]?.trim() : undefined;
 
-    candidates.push(question);
+      if (filledOptions.length < 2) {
+        errors.push({
+          row: rowNumber,
+          error: `Objective questions need at least 2 options, found ${filledOptions.length}`,
+        });
+        return;
+      }
+      if (!correctAnswerRaw) {
+        errors.push({
+          row: rowNumber,
+          error: "Missing correct answer in the last option column",
+        });
+        return;
+      }
+      if (!filledOptions.includes(correctAnswerRaw)) {
+        errors.push({
+          row: rowNumber,
+          error: `Correct answer "${correctAnswerRaw}" (last column) must exactly match one of the other option columns`,
+        });
+        return;
+      }
+
+      optionsForQuestion = filledOptions;
+      correctAnswer = correctAnswerRaw;
+    }
+
+    candidates.push(
+      new Question({
+        text: row.text?.trim(),
+        type,
+        subject,
+        class: classLevel,
+        marks,
+        options: optionsForQuestion,
+        correctAnswer,
+        createdBy: guard.session.user.id,
+      }),
+    );
   });
 
-  // Runs the model's own validators (including the objective/theory rule)
-  // without writing anything to the DB yet.
   const validationResults = await Promise.allSettled(candidates.map((q) => q.validate()));
   validationResults.forEach((result, i) => {
     if (result.status === "rejected") {
