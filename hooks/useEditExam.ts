@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 
 interface StatusMessage {
   type: "success" | "error" | "warning";
@@ -42,6 +43,8 @@ function fromBackendEnum<T extends string>(value: string): T {
 }
 
 export function useEditExam(examId: string) {
+  const router = useRouter();
+
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleted, setIsDeleted] = useState(false);
@@ -197,17 +200,21 @@ export function useEditExam(examId: string) {
         const body = await res.json();
         if (!res.ok) throw new Error(body.error ?? "Failed to update exam");
 
-        setStatusMessage({ type: "success", text: "Exam updated successfully." });
+        setStatusMessage({ type: "success", text: "Exam updated successfully. Redirecting..." });
+        // Brief pause so the success message is actually visible before
+        // navigating away, rather than the page instantly vanishing.
+        setTimeout(() => {
+          router.push("/admin/exams");
+        }, 1200);
       } catch (err) {
+        setIsSubmitting(false);
         setStatusMessage({
           type: "error",
           text: err instanceof Error ? err.message : "Failed to update exam.",
         });
-      } finally {
-        setIsSubmitting(false);
       }
     },
-    [formData, examId, validate],
+    [formData, examId, validate, router],
   );
 
   const handleDelete = useCallback(() => {
