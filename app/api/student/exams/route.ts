@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db";
 import { requireStudent } from "@/lib/api-guards";
 import { Exam } from "@/lib/models/exam.model";
 import { Submission } from "@/lib/models/submission.model";
+import { computeExamStatus } from "@/lib/exam-status";
 
 // GET /api/student/exams
 // Lists exams scoped to the logged-in student's class. Exams the student
@@ -16,18 +17,30 @@ export async function GET() {
 
   await connectDB();
 
-  const exams = await Exam.find({
-    class: session.user.class,
-    status: { $in: ["Scheduled", "Ongoing"] },
-  })
+  // Pull ALL exams for this class first, rather than filtering by status
+  // in the query - status is time-derived now (see lib/exam-status.ts),
+  // so a stored value here can't be trusted. Status is computed fresh
+  // below, per exam, using the current time.
+  const exams = await Exam.find({ class: session.user.class })
     .populate("subject", "name code")
     .select("-examCode -questions")
     .sort({ examDate: 1 })
     .lean();
 
+  const now = new Date();
+
+  const examsWithComputedStatus = exams
+    .map((exam) => ({
+      ...exam,
+      computedStatus: computeExamStatus(new Date(exam.examDate), exam.duration, now),
+    }))
+    // Students only ever see Scheduled/Ongoing exams - a Completed exam
+    // (window has closed) has nothing left for them to do here.
+    .filter((exam) => exam.computedStatus === "Scheduled" || exam.computedStatus === "Ongoing");
+
   // Exclude exams this student has already finished - nothing left to do,
   // so no reason to keep showing it in their "available" list.
-  const examIds = exams.map((e) => e._id);
+  const examIds = examsWithComputedStatus.map((e) => e._id);
   const finishedSubmissions = await Submission.find({
     exam: { $in: examIds },
     student: session.user.id,
@@ -37,9 +50,9 @@ export async function GET() {
     .lean();
   const finishedExamIds = new Set(finishedSubmissions.map((s) => s.exam.toString()));
 
-  const now = Date.now();
+  const nowMs = now.getTime();
 
-  const data = exams
+  const data = examsWithComputedStatus
     .filter((exam) => !finishedExamIds.has(exam._id.toString()))
     .map((exam) => ({
       id: exam._id.toString(),
@@ -50,13 +63,13 @@ export async function GET() {
       examDate: exam.examDate,
       duration: exam.duration,
       type: exam.type,
-      status: exam.status,
+      status: exam.computedStatus,
       totalMarks: exam.totalMarks,
       questionCount: exam.questionCount,
       // Lets the UI show "Not Yet Open" / disable Start before the
       // scheduled time without a wasted round trip - /start still
       // enforces this server-side regardless of what the client shows.
-      isAvailable: new Date(exam.examDate).getTime() <= now,
+      isAvailable: new Date(exam.examDate).getTime() <= nowMs,
     }));
 
   return NextResponse.json({ exams: data });

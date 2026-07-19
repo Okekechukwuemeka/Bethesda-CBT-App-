@@ -13,7 +13,6 @@ export const useResults = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterPerformance, setFilterPerformance] = useState<string>("all");
 
   const fetchClasses = useCallback(async () => {
     setIsLoading(true);
@@ -34,16 +33,10 @@ export const useResults = () => {
     fetchClasses();
   }, [fetchClasses]);
 
-  const filteredClasses = useMemo(() => {
-    return classes.filter((cls) => {
-      const matchesSearch = cls.className.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesPerformance =
-        filterPerformance === "all" ||
-        cls.performance?.toLowerCase() === filterPerformance.toLowerCase();
-
-      return matchesSearch && matchesPerformance;
-    });
-  }, [classes, searchTerm, filterPerformance]);
+  const filteredClasses = useMemo(
+    () => classes.filter((c) => c.className.toLowerCase().includes(searchTerm.toLowerCase())),
+    [classes, searchTerm],
+  );
 
   return {
     classes,
@@ -52,8 +45,6 @@ export const useResults = () => {
     error,
     searchTerm,
     setSearchTerm,
-    filterPerformance,
-    setFilterPerformance,
-    refreshClasses: fetchClasses,
+    refetch: fetchClasses,
   };
 };

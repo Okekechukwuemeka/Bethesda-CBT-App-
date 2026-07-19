@@ -180,6 +180,10 @@ function downloadBlob(buffer: ExcelJS.Buffer, type: string, filename: string) {
 }
 
 // ---------- THEORY -> PDF ----------
+// Student name + admission number are the headline (a marking teacher is
+// working through one subject's stack at a time, so the class/subject on
+// every page is redundant context - the student's identity is what they
+// actually need to find quickly).
 function addScriptHeader(
   doc: jsPDF,
   className: string,
@@ -187,18 +191,23 @@ function addScriptHeader(
   student: StudentScript,
 ) {
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text(className, 105, 15, { align: "center" });
+  doc.setFontSize(18);
+  doc.text(student.studentName, 105, 16, { align: "center" });
 
-  doc.setFontSize(13);
-  doc.text(subject.subject, 105, 23, { align: "center" });
+  doc.setFontSize(12);
+  doc.text(`Admission No: ${student.admissionNo}`, 105, 24, { align: "center" });
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.text(`Exam Type: ${subject.examType}`, 14, 33);
-  doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 39);
-  doc.text(`Student: ${student.studentName}`, 14, 45);
-  doc.text(`Admission No: ${student.admissionNo}`, 14, 51);
+  doc.text(`Class: ${className}`, 14, 36);
+  doc.text(`Subject: ${subject.subject}`, 14, 42);
+  doc.text(`Exam Type: ${subject.examType}`, 14, 48);
+  doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 54);
+
+  // Thin rule separating the header from the answer table, since the
+  // header is now taller (name + admission no + 4 detail lines).
+  doc.setDrawColor(200, 200, 200);
+  doc.line(14, 58, 196, 58);
 }
 
 export function generateTheoryScriptPDF(
@@ -210,7 +219,7 @@ export function generateTheoryScriptPDF(
   addScriptHeader(doc, className, subject, student);
 
   autoTable(doc, {
-    startY: 58,
+    startY: 64,
     head: [["Q. No.", "Answer"]],
     body: (student.answers ?? []).map((a) => [a.questionNo, a.answer || "(No answer)"]),
     styles: { fontSize: 10, cellPadding: 3, valign: "top" },
@@ -235,7 +244,7 @@ export function generateAllTheoryScriptsPDF(
     addScriptHeader(doc, className, subject, student);
 
     autoTable(doc, {
-      startY: 58,
+      startY: 64,
       head: [["Q. No.", "Answer"]],
       body: (student.answers ?? []).map((a) => [a.questionNo, a.answer || "(No answer)"]),
       styles: { fontSize: 10, cellPadding: 3, valign: "top" },

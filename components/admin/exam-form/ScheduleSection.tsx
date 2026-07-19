@@ -19,6 +19,13 @@ const ScheduleSection: React.FC<ScheduleSectionProps> = ({
   fieldRefs,
   onChange,
 }) => {
+  // Get today's date in the local timezone and format it as YYYY-MM-DD
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+  const minDate = `${yyyy}-${mm}-${dd}`;
+
   return (
     <Fieldset legend="Schedule">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -51,6 +58,7 @@ const ScheduleSection: React.FC<ScheduleSectionProps> = ({
             value={formData.date}
             onChange={onChange}
             error={!!fieldErrors.date}
+            min={minDate} // Restricts picker from choosing past dates
           />
         </FormField>
 

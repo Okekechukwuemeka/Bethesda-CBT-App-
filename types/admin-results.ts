@@ -6,9 +6,7 @@ export type Performance = "excellent" | "good" | "average" | "poor";
 export interface ClassResult {
   className: string;
   studentCount: number;
-  completedExams: number;
-  averageScore: number;
-  performance: Performance;
+  totalExams: number;
 }
 
 export interface SubjectResult {

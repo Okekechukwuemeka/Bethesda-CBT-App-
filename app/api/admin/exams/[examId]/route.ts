@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-guards";
 import { Exam } from "@/lib/models/exam.model";
+import { syncExamStatus } from "@/lib/exam-status";
 
 // GET /api/admin/exams/[examId]
 export async function GET(_req: NextRequest, context: { params: Promise<{ examId: string }> }) {
@@ -14,17 +15,23 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ examId
   const exam = await Exam.findById(examId).populate("subject", "name code");
   if (!exam) return NextResponse.json({ error: "Exam not found" }, { status: 404 });
 
+  await syncExamStatus(exam);
+
   return NextResponse.json({ exam });
 }
 
 // PATCH /api/admin/exams/[examId]
 // Body: any subset of { title, subject, class, term, academicYear, type,
-// examDate, duration, instructions, status, isCodeActive }
+// examDate, duration, instructions, passingScore, shuffleQuestions,
+// isCodeActive }
 //
-// examCode itself is intentionally not editable here - regenerating it
-// would invalidate a code students may have already been given. Add a
-// dedicated POST /api/admin/exams/[examId]/regenerate-code route if you
-// need that as an explicit, deliberate action later.
+// "status" was removed from EDITABLE_FIELDS - it's now always computed
+// from examDate/duration (see lib/exam-status.ts), so accepting it here
+// would let an admin set a value that gets silently overwritten on the
+// very next read. examCode itself is intentionally not editable here -
+// regenerating it would invalidate a code students may have already been
+// given. Add a dedicated POST /api/admin/exams/[examId]/regenerate-code
+// route if you need that as an explicit, deliberate action later.
 const EDITABLE_FIELDS = [
   "title",
   "subject",
@@ -37,7 +44,6 @@ const EDITABLE_FIELDS = [
   "instructions",
   "passingScore",
   "shuffleQuestions",
-  "status",
   "isCodeActive",
 ] as const;
 
@@ -77,11 +83,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ exam
 }
 
 // PATCH /api/admin/exams/[examId]
-// Body: any subset of { title, subject, class, term, academicYear, type,
-// examDate, duration, instructions, status, isCodeActive }
-//
-// examCode itself is intentionally not editable here - regenerating it
-// would invalidate a code students may have already been given.
+// Body: any subset of the EDITABLE_FIELDS above.
 export async function PATCH(req: NextRequest, context: { params: Promise<{ examId: string }> }) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
@@ -102,6 +104,11 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ examI
     }).populate("subject", "name code");
 
     if (!exam) return NextResponse.json({ error: "Exam not found" }, { status: 404 });
+
+    // If the admin just changed examDate or duration, recompute status
+    // immediately rather than waiting for the next GET - so the response
+    // returned right here already reflects the new schedule.
+    await syncExamStatus(exam);
 
     return NextResponse.json({ exam });
   } catch (error) {

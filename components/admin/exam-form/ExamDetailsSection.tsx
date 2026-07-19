@@ -42,11 +42,6 @@ const ExamDetailsSection: React.FC<ExamDetailsSectionProps> = ({
   return (
     <Fieldset legend="Exam Details">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Title mode toggle lives OUTSIDE FormField - FormField's
-            cloneElement only works with a single child, and putting the
-            toggle + input + helper text all inside it as siblings broke
-            that (children became an array, cloneElement silently produced
-            an element with type: undefined). */}
         <div className="md:col-span-2">
           <div className="flex items-center gap-4 mb-2">
             <label className="flex items-center gap-1.5 text-sm text-[#4A6A8A] cursor-pointer">

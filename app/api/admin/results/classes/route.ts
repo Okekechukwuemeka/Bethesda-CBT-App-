@@ -4,7 +4,6 @@ import { requireAdmin } from "@/lib/api-guards";
 import { Student } from "@/lib/models/student.model";
 import { Exam } from "@/lib/models/exam.model";
 import { CLASS_LEVELS } from "@/lib/models/constants";
-import { bucketPerformance, getClassAverageScore } from "@/lib/results-helpers";
 import type { ClassResult } from "@/types/admin-results";
 
 // GET /api/admin/results/classes
@@ -15,24 +14,19 @@ export async function GET() {
   await connectDB();
 
   const results: ClassResult[] = [];
-
-  // "graduated" isn't a class you'd ever have exam results for.
   const teachableClasses = CLASS_LEVELS.filter((level) => level !== "graduated");
 
   for (const className of teachableClasses) {
     const studentCount = await Student.countDocuments({ class: className, isActive: true });
-    if (studentCount === 0) continue; // nothing to show for a class with no active students
+    if (studentCount === 0) continue;
 
-    const completedExams = await Exam.countDocuments({ class: className, status: "Completed" });
-    const averageScore = await getClassAverageScore(className);
+    // Total exams ever created for this class, regardless of status -
+    // previously this only counted status: "Completed", which is a state
+    // nothing in the app ever actually sets, so it always read 0 even
+    // with real exams scheduled/ongoing for the class.
+    const totalExams = await Exam.countDocuments({ class: className });
 
-    results.push({
-      className,
-      studentCount,
-      completedExams,
-      averageScore,
-      performance: bucketPerformance(averageScore),
-    });
+    results.push({ className, studentCount, totalExams });
   }
 
   return NextResponse.json({ classes: results });
