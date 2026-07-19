@@ -53,11 +53,6 @@ const SubjectResultsTable: React.FC<SubjectResultsTableProps> = ({
               <th
                 scope="col"
                 className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
-                Avg Score
-              </th>
-              <th
-                scope="col"
-                className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
                 High/Low
               </th>
               <th
@@ -92,11 +87,10 @@ const SubjectResultsTable: React.FC<SubjectResultsTableProps> = ({
                   <td className="px-4 py-3">
                     <StatusBadge status={subject.status} />
                   </td>
-                  <td className="px-4 py-3 text-sm font-medium text-[#1A3A5C]">
-                    {subject.averageScore}%
-                  </td>
                   <td className="px-4 py-3 text-sm text-[#4A6A8A]">
-                    {subject.highestScore}% / {subject.lowestScore}%
+                    {subject.completed > 0
+                      ? `${subject.highestScore}/${subject.totalMarks} — ${subject.lowestScore}/${subject.totalMarks}`
+                      : "—"}
                   </td>
                   <td className="px-4 py-3 text-sm text-[#4A6A8A]">
                     {subject.completed}/{subject.totalStudents}

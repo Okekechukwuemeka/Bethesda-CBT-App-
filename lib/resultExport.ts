@@ -73,9 +73,7 @@ export async function generateObjectiveExcel(
 
 // ---------- WHOLE CLASS, ALL SUBJECTS -> Excel ----------
 // One "Summary" sheet with every subject's headline stats, plus one
-// detail sheet per subject listing every student's score - covers the
-// "download an excel sheet for a class" case in a single file, rather
-// than the admin having to export each subject separately.
+// detail sheet per subject listing every student's score.
 export async function generateClassResultsExcel(
   className: string,
   subjects: SubjectResult[],
@@ -92,17 +90,14 @@ export async function generateClassResultsExcel(
   summary.getCell("A2").font = { bold: true };
   summary.addRow([]);
 
-  // Summary sheet stays percentage-only by design - it's comparing across
-  // subjects with different total marks, so percentage is the only
-  // meaningful common unit here. Raw scores belong on the per-subject
-  // detail sheets below, where "out of what" is unambiguous.
+  // Updated headers to clearly indicate both raw score and relative percentage are provided
   const summaryHeader = summary.addRow([
     "Subject",
     "Exam Type",
     "Completed",
     "Average (%)",
-    "Highest (%)",
-    "Lowest (%)",
+    "Highest Score (%)",
+    "Lowest Score (%)",
   ]);
   summaryHeader.font = { bold: true };
   summaryHeader.eachCell((cell) => {
@@ -110,22 +105,33 @@ export async function generateClassResultsExcel(
   });
 
   subjects.forEach((s) => {
+    // Calculate the contextual percentage dynamically using raw scores and total marks
+    const highestPct = s.totalMarks > 0 ? Math.round((s.highestScore / s.totalMarks) * 100) : 0;
+    const lowestPct = s.totalMarks > 0 ? Math.round((s.lowestScore / s.totalMarks) * 100) : 0;
+
+    // Format composite strings matching the pattern: Raw/Total (Pct%)
+    const highestDisplay =
+      s.completed > 0 ? `${s.highestScore}/${s.totalMarks} (${highestPct}%)` : "—";
+    const lowestDisplay =
+      s.completed > 0 ? `${s.lowestScore}/${s.totalMarks} (${lowestPct}%)` : "—";
+
     summary.addRow([
       s.subject,
       s.examType,
       `${s.completed}/${s.totalStudents}`,
       s.averageScore,
-      s.highestScore,
-      s.lowestScore,
+      highestDisplay,
+      lowestDisplay,
     ]);
   });
+
+  // Adjusted column width to 24 to comfortably fit combined text strings without clipping
   summary.columns.forEach((col) => {
-    col.width = 20;
+    col.width = 24;
   });
 
   subjects.forEach((subject) => {
     const rows = scoresBySubject[subject.id] ?? [];
-    // Excel sheet names: max 31 chars, and can't contain : \ / ? * [ ]
     const sheetName =
       subject.subject.replace(/[:\\/?*[\]]/g, "").slice(0, 31) || subject.id.slice(0, 8);
     const sheet = workbook.addWorksheet(sheetName);
@@ -180,10 +186,6 @@ function downloadBlob(buffer: ExcelJS.Buffer, type: string, filename: string) {
 }
 
 // ---------- THEORY -> PDF ----------
-// Student name + admission number are the headline (a marking teacher is
-// working through one subject's stack at a time, so the class/subject on
-// every page is redundant context - the student's identity is what they
-// actually need to find quickly).
 function addScriptHeader(
   doc: jsPDF,
   className: string,
@@ -204,8 +206,6 @@ function addScriptHeader(
   doc.text(`Exam Type: ${subject.examType}`, 14, 48);
   doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 54);
 
-  // Thin rule separating the header from the answer table, since the
-  // header is now taller (name + admission no + 4 detail lines).
   doc.setDrawColor(200, 200, 200);
   doc.line(14, 58, 196, 58);
 }
@@ -236,7 +236,6 @@ export function generateAllTheoryScriptsPDF(
   students: StudentScript[],
 ) {
   const doc = new jsPDF();
-  // Only students who actually submitted have anything worth printing.
   const submitted = students.filter((s) => s.status !== "not-started");
 
   submitted.forEach((student, idx) => {

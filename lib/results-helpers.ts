@@ -46,6 +46,7 @@ export interface ExamLean {
   subject: { name?: string } | string;
   title: string;
   type: string;
+  totalMarks: number;
 }
 
 // One row per exam ("subject" on the Results page). Completion is judged
@@ -61,13 +62,16 @@ export function buildSubjectResult(
 ): SubjectResult {
   const marked = submissions.filter((s) => s.status === "Marked" && s.totalMarks > 0);
   const percentages = marked.map((s) => (s.score / s.totalMarks) * 100);
+  const rawScores = marked.map((s) => s.score);
 
   const averageScore =
     percentages.length > 0
       ? Math.round(percentages.reduce((a, b) => a + b, 0) / percentages.length)
       : 0;
-  const highestScore = percentages.length > 0 ? Math.round(Math.max(...percentages)) : 0;
-  const lowestScore = percentages.length > 0 ? Math.round(Math.min(...percentages)) : 0;
+  // Raw scores, not percentages - the Results table shows "8/10", not
+  // "80%", so a teacher reads it the same way they'd read a mark sheet.
+  const highestScore = rawScores.length > 0 ? Math.max(...rawScores) : 0;
+  const lowestScore = rawScores.length > 0 ? Math.min(...rawScores) : 0;
 
   const markedCount = marked.length;
   let status: ResultStatus = "pending";
@@ -81,6 +85,7 @@ export function buildSubjectResult(
     examTitle: exam.title,
     examType: toLowerExamType(exam.type),
     totalStudents,
+    totalMarks: exam.totalMarks,
     averageScore,
     highestScore,
     lowestScore,

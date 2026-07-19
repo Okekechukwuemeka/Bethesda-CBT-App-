@@ -15,6 +15,7 @@ export interface SubjectResult {
   examTitle: string;
   examType: ExamTypeLower;
   totalStudents: number;
+  totalMarks: number;
   averageScore: number;
   highestScore: number;
   lowestScore: number;
