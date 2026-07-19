@@ -6,8 +6,7 @@ import ResultsGrid from "@/components/admin/results/ResultsGrid";
 import { useResults } from "@/hooks/useResults";
 
 const ResultsPage: React.FC = () => {
-  const { filteredClasses, searchTerm, filterPerformance, setSearchTerm, setFilterPerformance } =
-    useResults();
+  const { filteredClasses, isLoading, error, searchTerm, setSearchTerm } = useResults();
 
   return (
     <div className="space-y-6">
@@ -22,14 +21,22 @@ const ResultsPage: React.FC = () => {
       {/* Filters */}
       <ResultsFilters
         searchTerm={searchTerm}
-        filterPerformance={filterPerformance}
         filteredCount={filteredClasses.length}
         onSearchChange={setSearchTerm}
-        onPerformanceChange={setFilterPerformance}
       />
 
-      {/* Results Grid */}
-      <ResultsGrid classes={filteredClasses} />
+      {isLoading ? (
+        <p className="text-center text-[#5A7A9A] py-12">Loading results...</p>
+      ) : error ? (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="p-4 rounded-lg text-sm font-medium bg-red-100 text-red-800 border border-red-300">
+          {error}
+        </div>
+      ) : (
+        <ResultsGrid classes={filteredClasses} />
+      )}
     </div>
   );
 };
