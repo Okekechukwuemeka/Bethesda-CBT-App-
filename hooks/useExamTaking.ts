@@ -10,7 +10,6 @@ import {
   SubmitResult,
 } from "@/types/exam-session";
 import {
-  ExamSessionRecord,
   getAllAnswers,
   getSession,
   getUnsyncedAnswers,
@@ -158,6 +157,11 @@ export const useExamTaking = () => {
       });
 
       setIsLoading(false);
+
+      // Push anything left over from a prior crashed session (unsynced
+      // answers already sitting in IndexedDB) right away, instead of
+      // waiting up to SYNC_INTERVAL_MS for the first interval tick.
+      flushSync();
     }
 
     bootstrap();

@@ -138,5 +138,3 @@ const LoginPage: React.FC = () => {
 };
 
 export default LoginPage;
-// BHS-2026-001
-// 834069
