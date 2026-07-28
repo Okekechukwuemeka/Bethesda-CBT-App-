@@ -31,6 +31,10 @@ const TheoryQuestion: React.FC<TheoryQuestionProps> = ({
       <p id={`char-count-${question._id}`} className="text-xs text-[#8A9CAE] mt-1">
         {answer?.length || 0} characters typed
       </p>
+      <p className="text-xs text-[#8A9CAE] mt-1">
+        Press Enter to start a new line or paragraph. For letters, write the address, date, and
+        salutation on their own lines as you would on paper — this will be preserved exactly.
+      </p>
     </div>
   );
 };
