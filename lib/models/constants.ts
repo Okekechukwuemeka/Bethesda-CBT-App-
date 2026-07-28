@@ -1,4 +1,18 @@
-export const CLASS_LEVELS = ["JSS1", "JSS2", "JSS3", "SSS1", "SSS2", "SSS3", "graduated"] as const;
+export const CLASS_LEVELS = [
+  "Primary1",
+  "Primary2",
+  "Primary3",
+  "Primary4",
+  "Primary5",
+  "Primary6",
+  "JSS1",
+  "JSS2",
+  "JSS3",
+  "SSS1",
+  "SSS2",
+  "SSS3",
+  "graduated",
+] as const;
 export type ClassLevel = (typeof CLASS_LEVELS)[number];
 
 export const TERMS = ["First Term", "Second Term", "Third Term"] as const;

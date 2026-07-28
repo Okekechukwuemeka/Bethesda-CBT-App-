@@ -44,6 +44,12 @@ const CLASS_CODE_MAP: Record<ClassLevel, string> = {
   JSS3: "04",
   JSS2: "05",
   JSS1: "06",
+  Primary6: "07",
+  Primary5: "08",
+  Primary4: "09",
+  Primary3: "10",
+  Primary2: "11",
+  Primary1: "12",
   graduated: "00",
 };
 

@@ -182,6 +182,13 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
                   <option value="SSS1">SSS1</option>
                   <option value="SSS2">SSS2</option>
                   <option value="SSS3">SSS3</option>
+                  <option value="Primary1">Primary 1</option>
+                  <option value="Primary2">Primary 2</option>
+                  <option value="Primary3">Primary 3</option>
+                  <option value="Primary4">Primary 4</option>
+                  <option value="Primary5">Primary 5</option>
+                  <option value="Primary6">Primary 6</option>
+                  <option value="Graduated">Graduated</option>
                 </select>
                 {fieldErrors.class && (
                   <p id={errorId("class")} className="mt-1 text-sm text-red-600">
