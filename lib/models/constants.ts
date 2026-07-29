@@ -35,3 +35,6 @@ export const SUBMISSION_STATUSES = ["Not Started", "In Progress", "Submitted", "
 export type SubmissionStatus = (typeof SUBMISSION_STATUSES)[number];
 export const GENDERS = ["male", "female"] as const;
 export type Gender = (typeof GENDERS)[number];
+
+export const PASSAGE_KINDS = ["comprehension", "experiment", "data", "diagram"] as const;
+export type PassageKind = (typeof PASSAGE_KINDS)[number];

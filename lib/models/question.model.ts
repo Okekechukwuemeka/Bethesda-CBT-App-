@@ -14,6 +14,12 @@ export interface IQuestion extends Document {
   marks: number;
   options?: string[]; // only used when type === "Objective"
   correctAnswer?: string; // only used when type === "Objective"
+  // A question that belongs to a comprehension/experiment/data-response
+  // group points back at the shared Passage here. Both fields are
+  // optional and travel together - a standalone question (the vast
+  // majority) simply omits both, unchanged from before this existed.
+  passageId?: mongoose.Types.ObjectId;
+  passageOrder?: number; // this question's position within its passage group, e.g. 1, 2, 3
   createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -51,6 +57,14 @@ const questionSchema = new Schema<IQuestion>(
       default: undefined,
     },
     correctAnswer: { type: String, trim: true },
+    passageId: {
+      type: Schema.Types.ObjectId,
+      ref: "Passage",
+    },
+    passageOrder: {
+      type: Number,
+      min: [1, "passageOrder must be at least 1"],
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: "Admin",
@@ -76,11 +90,21 @@ questionSchema.pre("validate", async function (this: IQuestion) {
       throw new Error("Correct answer must be one of the provided options");
     }
   }
+
+  // These two fields describe one relationship - a question either
+  // belongs to a passage group (both set) or doesn't (neither set).
+  // Half-set is always a bug upstream, not a valid state.
+  if (Boolean(this.passageId) !== Boolean(this.passageOrder)) {
+    throw new Error("passageId and passageOrder must be provided together");
+  }
 });
 
 // Supports the bank's main filter combinations (by subject+class, by type).
 questionSchema.index({ subject: 1, class: 1 });
 questionSchema.index({ type: 1 });
+// Reassembling a passage's sub-questions in order - e.g. when populating
+// an exam session or rendering the passage group in the admin bank table.
+questionSchema.index({ passageId: 1, passageOrder: 1 });
 
 export const Question =
   (models.Question as mongoose.Model<IQuestion>) || model<IQuestion>("Question", questionSchema);

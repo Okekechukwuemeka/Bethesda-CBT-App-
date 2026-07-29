@@ -49,7 +49,7 @@ export interface IExam extends Document {
 // 8 characters, excluding easily-confused ones (0/O, 1/I/L) so students can
 // read a code off a whiteboard or printout without ambiguity.
 const CODE_CHARSET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-const CODE_LENGTH = 8;
+const CODE_LENGTH = 6;
 
 function generateExamCode(): string {
   let code = "";
