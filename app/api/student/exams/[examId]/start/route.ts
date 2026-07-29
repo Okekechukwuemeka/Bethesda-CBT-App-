@@ -3,6 +3,10 @@ import { connectDB } from "@/lib/db";
 import { requireStudent } from "@/lib/api-guards";
 import { Exam } from "@/lib/models/exam.model";
 import { Submission } from "@/lib/models/submission.model";
+// Side-effect import: guarantees the "Passage" model is registered before
+// we populate it below. Nothing else in this file references Passage
+// directly.
+import "@/lib/models/passage.model";
 
 function hashToSeed(str: string): number {
   let h = 0;
@@ -36,12 +40,6 @@ function seededShuffle<T>(items: T[], seed: number): T[] {
 
 // POST /api/student/exams/[examId]/start
 // Body: { code?: string }
-//
-// First call for a given (exam, student) pair MUST include the correct
-// access code - that's the actual gate. Every call after that (resuming a
-// reload, a re-opened tab, an offline client resyncing) needs no code at
-// all: an existing Submission tied to this student + exam is proof enough
-// they were already let in once.
 export async function POST(req: NextRequest, context: { params: Promise<{ examId: string }> }) {
   const guard = await requireStudent();
   if (!guard.ok) return guard.response;
@@ -67,7 +65,6 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
     );
   }
 
-  // Can't start before the scheduled exam time, even with a valid code.
   if (Date.now() < new Date(exam.examDate).getTime()) {
     return NextResponse.json(
       {
@@ -87,7 +84,6 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
   }
 
   if (!submission) {
-    // Not started yet - the access code is required.
     if (!exam.isCodeActive) {
       return NextResponse.json(
         { error: "This exam is not currently accepting the access code" },
@@ -115,19 +111,23 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
     });
   }
 
+  // Populate the question's passageId too, not just the question itself -
+  // this is what was missing before: passage text/kind never reached the
+  // client, so a comprehension group rendered as isolated questions with
+  // no shared context.
   const populatedExam = await exam.populate({
     path: "questions.question",
     select: "-correctAnswer",
+    populate: { path: "passageId" },
   });
 
-  // .toObject() flattens the Mongoose document (and nested populated docs)
-  // into plain objects. Spreading a raw Mongoose document instance instead
-  // only copies its internal properties ($__, _doc, isNew) - schema fields
-  // like text/options/marks/_id live on getters and get silently dropped,
-  // which is why the client was seeing blank questions with no _id.
   const examObj = populatedExam.toObject() as unknown as {
     questions: {
-      question: Record<string, unknown> & { _id: { toString(): string } };
+      question: Record<string, unknown> & {
+        _id: { toString(): string };
+        passageId?: { _id: { toString(): string }; title?: string; text: string; kind: string };
+        passageOrder?: number;
+      };
       order: number;
     }[];
   };
@@ -135,23 +135,48 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
   let orderedRefs = [...examObj.questions].sort((a, b) => a.order - b.order);
 
   if (exam.shuffleQuestions) {
+    // Group by passageId, not individual question, so a comprehension
+    // passage's (or any other passage kind's) sub-questions are always
+    // shuffled as ONE unit relative to other groups/standalone questions -
+    // never split apart or reordered relative to each other. A question
+    // with no passageId is its own singleton group, so ordinary
+    // standalone questions still shuffle freely among themselves.
+    const groups = new Map<string, typeof orderedRefs>();
+    for (const ref of orderedRefs) {
+      const key =
+        ref.question.passageId?._id?.toString() ?? `__singleton_${ref.question._id.toString()}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(ref);
+    }
+    // Within a passage group, order by passageOrder (the sequence the
+    // admin authored the sub-questions in), not the exam's own
+    // attach-order - keeps e.g. Q1/Q2/Q3 of a comprehension in sequence.
+    for (const group of groups.values()) {
+      group.sort((a, b) => (a.question.passageOrder ?? 0) - (b.question.passageOrder ?? 0));
+    }
+
     const seed = hashToSeed(`${exam.id}:${session.user.id}`);
-    orderedRefs = seededShuffle(orderedRefs, seed);
+    const shuffledGroups = seededShuffle([...groups.values()], seed);
+    orderedRefs = shuffledGroups.flat();
   }
 
-  // Merge in whatever's already been answered so a reload/resume restores
-  // progress instead of showing a blank exam.
   const answersByQuestion = new Map(submission.answers.map((a) => [a.question.toString(), a]));
 
   const questions = orderedRefs.map((q, i) => {
     const qId = q.question._id.toString();
     const prior = answersByQuestion.get(qId);
+    const { passageId, passageOrder, ...questionFields } = q.question;
+
     return {
-      ...q.question,
+      ...questionFields,
       _id: qId,
       order: i,
       selectedOption: prior?.selectedOption,
       textAnswer: prior?.textAnswer,
+      passageId: passageId?._id?.toString(),
+      passageTitle: passageId?.title,
+      passageText: passageId?.text,
+      passageKind: passageId?.kind,
     };
   });
 

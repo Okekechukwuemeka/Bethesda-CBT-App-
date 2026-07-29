@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import "@/lib/models/subject.model";
+import "@/lib/models/passage.model";
 import { requireAdmin } from "@/lib/api-guards";
 import { Question } from "@/lib/models/question.model";
 import { ClassLevel, QuestionType } from "@/lib/models/constants";
@@ -30,13 +31,15 @@ export async function GET(req: NextRequest) {
 
   const questions = await Question.find(filter)
     .populate("subject", "name code")
+    .populate("passageId")
     .sort({ createdAt: -1 });
 
   return NextResponse.json({ questions });
 }
 
 // POST /api/admin/questions
-// Body: { text, type, subject, class, marks, options?, correctAnswer? }
+// Body: { text, type, subject, class, marks, options?, correctAnswer?,
+// passageId?, passageOrder? }
 // Creates a single bank question. To use it in an exam, attach it via
 // POST /api/admin/exams/[examId]/questions with its returned id.
 export async function POST(req: NextRequest) {
@@ -55,6 +58,8 @@ export async function POST(req: NextRequest) {
       marks: body.marks,
       options: body.options,
       correctAnswer: body.correctAnswer,
+      passageId: body.passageId,
+      passageOrder: body.passageOrder,
       createdBy: guard.session.user.id,
     });
 

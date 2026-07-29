@@ -12,12 +12,13 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
   const { id } = await context.params;
   await connectDB();
 
-  const question = await Question.findById(id).populate("subject", "name code");
+  const question = await Question.findById(id)
+    .populate("subject", "name code")
+    .populate({ path: "questions.question", populate: { path: "passageId" } });
   if (!question) return NextResponse.json({ error: "Question not found" }, { status: 404 });
 
   return NextResponse.json({ question });
 }
-
 const EDITABLE_FIELDS = [
   "text",
   "type",
@@ -26,6 +27,8 @@ const EDITABLE_FIELDS = [
   "marks",
   "options",
   "correctAnswer",
+  "passageId",
+  "passageOrder",
 ] as const;
 
 // PATCH /api/admin/questions/[id]
