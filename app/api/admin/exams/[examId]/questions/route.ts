@@ -36,6 +36,12 @@ interface NewQuestionInput {
   marks?: number;
   options?: string[];
   correctAnswer?: string;
+  // Optional passage link, passed straight through to Question - both
+  // travel together (see the passageId/passageOrder pre-validate check on
+  // the Question model), so it's fine to pass one without the other here;
+  // the model will reject it if the caller got that wrong.
+  passageId?: string;
+  passageOrder?: number;
 }
 
 interface ItemError {
@@ -102,6 +108,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
         marks: input.marks,
         options: input.options,
         correctAnswer: input.correctAnswer,
+        passageId: input.passageId,
+        passageOrder: input.passageOrder,
         // Inherited from the exam - a question created this way is scoped
         // to the same subject/class as the exam it was born in.
         subject: exam.subject,
