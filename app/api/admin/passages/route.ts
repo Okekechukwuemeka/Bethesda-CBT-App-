@@ -2,11 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-guards";
 import { Passage } from "@/lib/models/passage.model";
+import { Question } from "@/lib/models/question.model";
 
 // GET /api/admin/passages?subject=&class=&kind=
 // Lists passages for browsing/attaching from the Question Bank - same
 // subject+class filter shape as the question bank list, so the admin UI
 // can reuse the existing filter bar pattern.
+//
+// Each passage comes back with a questionCount - how many bank questions
+// currently reference it. The admin UI uses this to auto-number a newly
+// attached sub-question's passageOrder (questionCount + 1) instead of
+// asking the admin to track or type a number by eye, which matters more
+// than usual here since the admin bank UI is used non-visually.
 export async function GET(req: NextRequest) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
@@ -25,7 +32,18 @@ export async function GET(req: NextRequest) {
 
   const passages = await Passage.find(filter).sort({ createdAt: -1 });
 
-  return NextResponse.json({ passages });
+  const counts = await Question.aggregate([
+    { $match: { passageId: { $in: passages.map((p) => p._id) } } },
+    { $group: { _id: "$passageId", count: { $sum: 1 } } },
+  ]);
+  const countByPassageId = new Map(counts.map((c) => [c._id.toString(), c.count as number]));
+
+  const passagesWithCounts = passages.map((p) => ({
+    ...p.toObject(),
+    questionCount: countByPassageId.get((p._id as { toString(): string }).toString()) ?? 0,
+  }));
+
+  return NextResponse.json({ passages: passagesWithCounts });
 }
 
 interface NewPassageInput {
