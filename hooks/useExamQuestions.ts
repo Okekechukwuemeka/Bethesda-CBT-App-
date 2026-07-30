@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import type { QuestionInput, Subject } from "@/types/question";
+import type { PopulatedPassage, QuestionInput, Subject } from "@/types/question";
+import type { PassageKind } from "@/lib/models/constants";
 import { ClassLevel } from "@/lib/models/constants";
+import { usePassages } from "./usePassages";
 
 export interface ExamQuestion {
   _id: string;
@@ -13,6 +15,8 @@ export interface ExamQuestion {
   marks: number;
   subject: string | { _id: string; name: string };
   class: ClassLevel;
+  passageId?: string | PopulatedPassage;
+  passageOrder?: number;
 }
 
 export interface ExamSummary {
@@ -32,12 +36,22 @@ export interface BankQuestion {
   marks: number;
   subject: string | { _id: string; name: string };
   class: ClassLevel;
+  passageId?: string | PopulatedPassage;
+  passageOrder?: number;
 }
 
 interface StatusMessage {
   type: "success" | "error" | "warning";
   text: string;
 }
+
+interface NewPassageData {
+  title: string;
+  text: string;
+  kind: PassageKind;
+}
+
+const emptyNewPassageData: NewPassageData = { title: "", text: "", kind: "comprehension" };
 
 const emptyFormData: QuestionInput = {
   text: "",
@@ -47,6 +61,12 @@ const emptyFormData: QuestionInput = {
   marks: 5,
   subject: "",
   class: "",
+  passageId: "",
+};
+
+const passageIdOf = (value: string | PopulatedPassage | undefined): string | undefined => {
+  if (!value) return undefined;
+  return typeof value === "string" ? value : value._id;
 };
 
 export const useExamQuestions = (examId: string) => {
@@ -72,6 +92,27 @@ export const useExamQuestions = (examId: string) => {
 
   const triggerRef = useRef<HTMLElement | null>(null);
   const [formData, setFormData] = useState<QuestionInput>(emptyFormData);
+
+  const showStatus = useCallback((message: StatusMessage, durationMs = 3000) => {
+    setStatusMessage(message);
+    setTimeout(() => setStatusMessage(null), durationMs);
+  }, []);
+
+  // Composed here so passage CRUD (from the passage picker's "create new"
+  // path) shares this hook's showStatus/statusMessage - one status region
+  // on the page, not two.
+  const passagesApi = usePassages(showStatus);
+
+  // --- inline "create a new passage" fields, used only when the question
+  // form's passage picker is set to "__new__" ---
+  const [newPassageData, setNewPassageData] = useState<NewPassageData>(emptyNewPassageData);
+  const handleNewPassageChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      const { name, value } = e.target;
+      setNewPassageData((prev) => ({ ...prev, [name]: value }));
+    },
+    [],
+  );
 
   // --- Bank browsing (new): pick EXISTING bank questions to attach ---
   const [showQuestionBank, setShowQuestionBank] = useState(false);
@@ -215,10 +256,39 @@ export const useExamQuestions = (examId: string) => {
         if (!res.ok) throw new Error(body.error ?? "Failed to attach question");
 
         await loadQuestions();
-        setStatusMessage({ type: "success", text: "Question added to exam." });
-        setTimeout(() => setStatusMessage(null), 3000);
+
+        // Passage-aware nudge: if this question belongs to a passage,
+        // check how many of its siblings (same passageId, visible in the
+        // current bank view) are attached yet. This is a soft heads-up,
+        // not a blocking confirmation - attaching one at a time is a
+        // deliberate action, but it's easy to not realize a comprehension
+        // group has more parts than what's currently on screen.
+        const pid = passageIdOf(question.passageId);
+        if (pid) {
+          const siblingIds = bankQuestions
+            .filter((q) => passageIdOf(q.passageId) === pid)
+            .map((q) => q._id);
+          const stillMissing = siblingIds.filter(
+            (id) => id !== question._id && !attachedIds.has(id),
+          );
+          if (stillMissing.length > 0) {
+            const label =
+              typeof question.passageId === "object" && question.passageId
+                ? question.passageId.title || "this passage"
+                : "this passage";
+            showStatus({
+              type: "warning",
+              text: `Added. ${stillMissing.length} more question${
+                stillMissing.length !== 1 ? "s" : ""
+              } from "${label}" ${stillMissing.length !== 1 ? "are" : "is"} not attached to this exam yet.`,
+            });
+            return;
+          }
+        }
+
+        showStatus({ type: "success", text: "Question added to exam." });
       } catch (err) {
-        setStatusMessage({
+        showStatus({
           type: "error",
           text: err instanceof Error ? err.message : "Failed to attach question.",
         });
@@ -226,7 +296,7 @@ export const useExamQuestions = (examId: string) => {
         setIsAttaching(false);
       }
     },
-    [examId, attachedIds, isAttaching, loadQuestions],
+    [examId, attachedIds, isAttaching, loadQuestions, bankQuestions, showStatus],
   );
 
   const handleInputChange = useCallback(
@@ -274,6 +344,7 @@ export const useExamQuestions = (examId: string) => {
     setSelectedQuestion(null);
     setFormError(null);
     setFormData(emptyFormData);
+    setNewPassageData(emptyNewPassageData);
     setIsModalOpen(true);
   }, []);
 
@@ -291,7 +362,9 @@ export const useExamQuestions = (examId: string) => {
         marks: question.marks,
         subject: typeof question.subject === "string" ? question.subject : question.subject._id,
         class: question.class,
+        passageId: passageIdOf(question.passageId) ?? "",
       });
+      setNewPassageData(emptyNewPassageData);
       setIsModalOpen(true);
     },
     [],
@@ -317,10 +390,9 @@ export const useExamQuestions = (examId: string) => {
       if (!res.ok) throw new Error(body.error ?? "Failed to remove question");
 
       setQuestions((prev) => prev.filter((q) => q._id !== questionPendingDelete._id));
-      setStatusMessage({ type: "warning", text: "Question removed from exam successfully." });
-      setTimeout(() => setStatusMessage(null), 3000);
+      showStatus({ type: "warning", text: "Question removed from exam successfully." });
     } catch (err) {
-      setStatusMessage({
+      showStatus({
         type: "error",
         text: err instanceof Error ? err.message : "Failed to remove question.",
       });
@@ -328,7 +400,7 @@ export const useExamQuestions = (examId: string) => {
       setIsDeleting(false);
       setQuestionPendingDelete(null);
     }
-  }, [examId, questionPendingDelete]);
+  }, [examId, questionPendingDelete, showStatus]);
 
   const closeModal = useCallback(() => {
     if (isSubmitting) return;
@@ -353,6 +425,9 @@ export const useExamQuestions = (examId: string) => {
         return "The correct answer must match one of the options exactly.";
       }
     }
+    if (formData.passageId === "__new__" && !newPassageData.text.trim()) {
+      return "Please enter the new passage's text.";
+    }
     return null;
   };
 
@@ -368,12 +443,56 @@ export const useExamQuestions = (examId: string) => {
       setFormError(null);
       setIsSubmitting(true);
 
-      const payload =
-        formData.type === "Objective"
-          ? { ...formData, options: formData.options?.filter((opt) => opt.trim()) }
-          : { ...formData, options: undefined, correctAnswer: undefined };
-
       try {
+        // Same three-case passage resolution as the question bank's form:
+        // "__new__" creates the Passage first; an existing id either keeps
+        // its current order (unchanged link) or gets auto-numbered
+        // (questionCount + 1) as a new link; "" detaches explicitly (null)
+        // when editing, or is simply omitted when creating.
+        let resolvedPassageId: string | null | undefined;
+        let resolvedPassageOrder: number | null | undefined;
+
+        if (formData.passageId === "__new__") {
+          const passageRes = await fetch("/api/admin/passages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: newPassageData.title.trim() || undefined,
+              text: newPassageData.text,
+              kind: newPassageData.kind,
+              subject: formData.subject,
+              class: formData.class,
+            }),
+          });
+          const passageBody = await passageRes.json().catch(() => ({}));
+          if (!passageRes.ok) throw new Error(passageBody.error ?? "Failed to create the passage");
+          resolvedPassageId = passageBody.passage._id;
+          resolvedPassageOrder = 1;
+        } else if (formData.passageId) {
+          const originalPassageId =
+            isEditing && selectedQuestion ? passageIdOf(selectedQuestion.passageId) : undefined;
+          resolvedPassageId = formData.passageId;
+          if (formData.passageId === originalPassageId) {
+            resolvedPassageOrder = selectedQuestion?.passageOrder;
+          } else {
+            const chosenPassage = passagesApi.passages.find((p) => p._id === formData.passageId);
+            resolvedPassageOrder = (chosenPassage?.questionCount ?? 0) + 1;
+          }
+        } else {
+          resolvedPassageId = isEditing ? null : undefined;
+          resolvedPassageOrder = isEditing ? null : undefined;
+        }
+
+        const basePayload =
+          formData.type === "Objective"
+            ? { ...formData, options: formData.options?.filter((opt) => opt.trim()) }
+            : { ...formData, options: undefined, correctAnswer: undefined };
+        const payload = {
+          ...basePayload,
+          passageId: resolvedPassageId,
+          passageOrder: resolvedPassageOrder,
+        };
+
         if (isEditing && selectedQuestion) {
           const res = await fetch(`/api/admin/questions/${selectedQuestion._id}`, {
             method: "PATCH",
@@ -386,7 +505,7 @@ export const useExamQuestions = (examId: string) => {
           setQuestions((prev) =>
             prev.map((q) => (q._id === selectedQuestion._id ? { ...q, ...body.question } : q)),
           );
-          setStatusMessage({ type: "success", text: "Question updated successfully." });
+          showStatus({ type: "success", text: "Question updated successfully." });
         } else {
           const res = await fetch(`/api/admin/exams/${examId}/questions`, {
             method: "POST",
@@ -399,18 +518,30 @@ export const useExamQuestions = (examId: string) => {
             throw new Error(itemError ?? body.error ?? "Failed to add question");
           }
           await loadQuestions();
-          setStatusMessage({ type: "success", text: "Question added to exam successfully." });
+          showStatus({ type: "success", text: "Question added to exam successfully." });
         }
 
+        if (resolvedPassageId) {
+          passagesApi.fetchPassagesList();
+        }
         setIsModalOpen(false);
-        setTimeout(() => setStatusMessage(null), 3000);
       } catch (err) {
         setFormError(err instanceof Error ? err.message : "Failed to save question.");
       } finally {
         setIsSubmitting(false);
       }
     },
-    [formData, isEditing, selectedQuestion, examId, loadQuestions],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      formData,
+      newPassageData,
+      isEditing,
+      selectedQuestion,
+      examId,
+      loadQuestions,
+      passagesApi,
+      showStatus,
+    ],
   );
 
   const filteredQuestions = useMemo(() => {
@@ -456,6 +587,12 @@ export const useExamQuestions = (examId: string) => {
     confirmDeleteQuestion,
     handleSubmit,
     closeModal,
+
+    // passage picker (inside the question form)
+    passages: passagesApi.passages,
+    isLoadingPassages: passagesApi.isLoadingPassages,
+    newPassageData,
+    handleNewPassageChange,
 
     // bank browsing/attach
     showQuestionBank,

@@ -15,7 +15,10 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ examId
   const { examId } = await context.params;
   await connectDB();
 
-  const exam = await Exam.findById(examId).populate("questions.question");
+  const exam = await Exam.findById(examId).populate({
+    path: "questions.question",
+    populate: { path: "passageId" },
+  });
   if (!exam) return NextResponse.json({ error: "Exam not found" }, { status: 404 });
 
   const questions = [...exam.questions]

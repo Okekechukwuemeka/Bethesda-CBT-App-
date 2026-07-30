@@ -1,6 +1,12 @@
 import React, { useEffect, useRef } from "react";
-import type { QuestionInput, Subject } from "@/types/question";
-import { CLASS_LEVELS } from "@/lib/models/constants";
+import type { Passage, QuestionInput, Subject } from "@/types/question";
+import { CLASS_LEVELS, PASSAGE_KINDS } from "@/lib/models/constants";
+
+interface NewPassageData {
+  title: string;
+  text: string;
+  kind: string;
+}
 
 interface QuestionFormModalProps {
   isOpen: boolean;
@@ -10,7 +16,13 @@ interface QuestionFormModalProps {
   isSubmitting: boolean;
   subjects: Subject[];
   isLoadingSubjects: boolean;
+  passages: Passage[];
+  isLoadingPassages: boolean;
+  newPassageData: NewPassageData;
   onChange: (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
+  ) => void;
+  onNewPassageChange: (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => void;
   onOptionChange: (index: number, value: string) => void;
@@ -20,6 +32,8 @@ interface QuestionFormModalProps {
   onCancel: () => void;
 }
 
+const kindLabel = (kind: string) => kind.charAt(0).toUpperCase() + kind.slice(1);
+
 const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
   isOpen,
   isEditing,
@@ -28,7 +42,11 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
   isSubmitting,
   subjects,
   isLoadingSubjects,
+  passages,
+  isLoadingPassages,
+  newPassageData,
   onChange,
+  onNewPassageChange,
   onOptionChange,
   onAddOption,
   onRemoveOption,
@@ -37,12 +55,23 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const firstInputRef = useRef<HTMLTextAreaElement>(null);
+  const newPassageTitleRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
       firstInputRef.current?.focus();
     }
   }, [isOpen]);
+
+  // When the admin switches the passage picker to "create a new passage",
+  // move focus straight to the new title field - the new fields appear
+  // right there in the form, but a screen-reader user has no visual cue
+  // that they showed up unless focus actually moves to them.
+  useEffect(() => {
+    if (formData.passageId === "__new__") {
+      newPassageTitleRef.current?.focus();
+    }
+  }, [formData.passageId]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -82,6 +111,16 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
   }, [isOpen, isSubmitting, onCancel]);
 
   if (!isOpen) return null;
+
+  // Only passages in the same subject+class as the question being edited
+  // are offered - a passage is scoped to one subject/class at creation
+  // (see PassageManagerModal), so mixing would create a mismatch the
+  // backend doesn't enforce but the UI shouldn't offer in the first place.
+  const relevantPassages = passages.filter(
+    (p) =>
+      (typeof p.subject === "string" ? p.subject : p.subject._id) === formData.subject &&
+      p.class === formData.class,
+  );
 
   return (
     <div
@@ -333,6 +372,109 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
                 </button>
               </div>
             )}
+
+            {/* --- Passage picker --- */}
+            <div className="border-t border-[#E8EEF5] pt-4">
+              <label htmlFor="passageId" className="block text-sm font-medium text-[#1A3A5C] mb-1">
+                Passage
+              </label>
+              <p className="text-xs text-[#8A9CAE] mb-2">
+                If this question shares a reading passage, experiment write-up, or other stimulus
+                with other questions, attach it here so students see the shared text once, followed
+                by all its questions together.
+              </p>
+              <select
+                id="passageId"
+                name="passageId"
+                value={formData.passageId || ""}
+                onChange={onChange}
+                disabled={!formData.subject || !formData.class}
+                className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE] disabled:opacity-60">
+                <option value="">Not part of a passage</option>
+                {isLoadingPassages ? (
+                  <option disabled>Loading passages…</option>
+                ) : (
+                  relevantPassages.map((passage) => (
+                    <option key={passage._id} value={passage._id}>
+                      {passage.title || "Untitled passage"} ({passage.questionCount} question
+                      {passage.questionCount !== 1 ? "s" : ""} so far)
+                    </option>
+                  ))
+                )}
+                <option value="__new__">+ Create a new passage…</option>
+              </select>
+              {(!formData.subject || !formData.class) && (
+                <p className="text-xs text-[#8A9CAE] mt-1">
+                  Select a subject and class above first, so only passages for that subject and
+                  class are offered.
+                </p>
+              )}
+
+              {formData.passageId === "__new__" && (
+                <div className="mt-3 space-y-3 bg-[#F8FAFE] border border-[#C5D8EC] rounded-lg p-4">
+                  <div>
+                    <label
+                      htmlFor="new-passage-title"
+                      className="block text-sm font-medium text-[#1A3A5C] mb-1">
+                      New Passage Title{" "}
+                      <span className="text-xs font-normal text-[#8A9CAE]">(optional)</span>
+                    </label>
+                    <input
+                      ref={newPassageTitleRef}
+                      type="text"
+                      id="new-passage-title"
+                      name="title"
+                      value={newPassageData.title}
+                      onChange={onNewPassageChange}
+                      placeholder="e.g. A VISIT TO THE ZOO"
+                      className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="new-passage-text"
+                      className="block text-sm font-medium text-[#1A3A5C] mb-1">
+                      New Passage Text{" "}
+                      <span className="text-red-500" aria-hidden="true">
+                        *
+                      </span>
+                    </label>
+                    <textarea
+                      id="new-passage-text"
+                      name="text"
+                      value={newPassageData.text}
+                      onChange={onNewPassageChange}
+                      aria-required="true"
+                      rows={6}
+                      className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] focus:border-transparent bg-white resize-y"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="new-passage-kind"
+                      className="block text-sm font-medium text-[#1A3A5C] mb-1">
+                      Kind
+                    </label>
+                    <select
+                      id="new-passage-kind"
+                      name="kind"
+                      value={newPassageData.kind}
+                      onChange={onNewPassageChange}
+                      className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-white">
+                      {PASSAGE_KINDS.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {kindLabel(kind)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-xs text-[#8A9CAE]">
+                    This question will become the first question in the new passage. Add its other
+                    questions afterward by picking this same passage from the list above.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex gap-3 mt-6 pt-4 border-t border-[#E8EEF5]">

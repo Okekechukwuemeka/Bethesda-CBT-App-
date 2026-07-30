@@ -12,6 +12,8 @@ const QuestionBankItem: React.FC<QuestionBankItemProps> = ({ question, isSelecte
   const subjectName =
     typeof question.subject === "string" ? question.subject : question.subject.name;
 
+  const passageLabel = question.passage?.title || (question.passage ? "Untitled passage" : null);
+
   return (
     <div
       className={`flex items-center justify-between p-3 border rounded-lg ${
@@ -22,6 +24,17 @@ const QuestionBankItem: React.FC<QuestionBankItemProps> = ({ question, isSelecte
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <span className="text-sm text-[#1A3A5C] truncate">{question.text}</span>
         <QuestionBadge type={question.type} />
+        {passageLabel && (
+          <span
+            className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-800 flex-shrink-0"
+            title={`Part of the "${passageLabel}" passage, question ${question.passageOrder ?? "?"}`}>
+            <span aria-hidden="true">🔗</span>
+            <span className="max-w-[8rem] truncate">
+              {passageLabel}
+              {question.passageOrder ? ` · Q${question.passageOrder}` : ""}
+            </span>
+          </span>
+        )}
         <span className="text-xs text-[#5A7A9A] flex-shrink-0">{question.marks} marks</span>
         <span className="text-xs text-[#5A7A9A] flex-shrink-0">{subjectName}</span>
         <span className="text-xs text-[#5A7A9A] flex-shrink-0">{question.class}</span>
@@ -36,7 +49,11 @@ const QuestionBankItem: React.FC<QuestionBankItemProps> = ({ question, isSelecte
             : "bg-[#1A3A5C] hover:bg-[#14304D] text-white focus:ring-[#2B6CB0]"
         }`}
         aria-label={
-          isSelected ? "Already added" : `Add question: ${question.text.substring(0, 50)}`
+          isSelected
+            ? "Already added"
+            : `Add question: ${question.text.substring(0, 50)}${
+                passageLabel ? `, part of passage ${passageLabel}` : ""
+              }`
         }>
         {isSelected ? "Added ✓" : "Add"}
       </button>

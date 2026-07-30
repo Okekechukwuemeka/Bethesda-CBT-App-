@@ -93,6 +93,18 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
                 <code>type</code> must be exactly “Objective” or “Theory”; leave all option columns
                 blank for Theory rows
               </li>
+              <li>
+                <strong>Optional passage columns:</strong>{" "}
+                <code>passage_key, passage_title, passage_body, passage_kind</code>. Rows that share
+                the same <code>passage_key</code> become one shared reading passage (or experiment
+                write-up, data table, etc.) with all their questions grouped under it - only the
+                first row of the group needs <code>passage_title</code>/<code>passage_body</code>{" "}
+                filled in, later rows just repeat the same <code>passage_key</code>
+              </li>
+              <li>
+                Leave the passage columns blank entirely for a standalone question - they&apos;re
+                optional and don&apos;t affect rows that don&apos;t use them
+              </li>
             </ul>
           </div>
 

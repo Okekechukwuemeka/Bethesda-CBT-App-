@@ -6,9 +6,14 @@ const ADMIN_PUBLIC_PATHS = ["/admin/login"];
 const ADMIN_PUBLIC_API_PATHS = ["/api/admin/register"];
 const STUDENT_PUBLIC_PATHS = ["/student/login"];
 
-// CHANGE: Renamed from middleware to proxy
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // 1. Explicitly bypass NextAuth endpoints early.
+  // NextAuth needs raw access to /api/auth/session, /api/auth/csrf, etc.
+  if (pathname.startsWith("/api/auth")) {
+    return NextResponse.next();
+  }
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   const role = token?.role as "admin" | "student" | undefined;

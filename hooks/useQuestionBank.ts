@@ -2,11 +2,25 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import type { BlockingExam, Question, QuestionInput, RowError, Subject } from "@/types/question";
+import type { PassageKind } from "@/lib/models/constants";
+import { usePassages } from "./usePassages";
 
 interface StatusMessage {
   type: "success" | "error" | "warning";
   text: string;
 }
+
+// Transient fields for the "create a new passage inline" path in the
+// question form - NOT part of QuestionInput, since they only exist
+// while formData.passageId === "__new__" and get resolved into a real
+// passageId before the question payload is ever built.
+interface NewPassageData {
+  title: string;
+  text: string;
+  kind: PassageKind;
+}
+
+const emptyNewPassageData: NewPassageData = { title: "", text: "", kind: "comprehension" };
 
 interface ApiErrorPayload {
   error?: string;
@@ -22,6 +36,7 @@ const emptyFormData: QuestionInput = {
   marks: 1,
   subject: "",
   class: "",
+  passageId: "",
 };
 
 // Mirrors the parseErrorMessage helper used by useStudents - reads the
@@ -99,6 +114,22 @@ export const useQuestionBank = () => {
     setStatusMessage(message);
     setTimeout(() => setStatusMessage(null), durationMs);
   }, []);
+
+  // Composed here (not called as a sibling hook from the page) so its
+  // status messages (passage created/updated/deleted) share this hook's
+  // showStatus/statusMessage - one message region on the page, not two.
+  const passagesApi = usePassages(showStatus);
+
+  // --- inline "create a new passage" fields, used only when the question
+  // form's passage picker is set to "__new__" ---
+  const [newPassageData, setNewPassageData] = useState<NewPassageData>(emptyNewPassageData);
+  const handleNewPassageChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      const { name, value } = e.target;
+      setNewPassageData((prev) => ({ ...prev, [name]: value }));
+    },
+    [],
+  );
 
   // --- fetch subjects ---
   const fetchSubjectsList = useCallback(async () => {
@@ -201,6 +232,7 @@ export const useQuestionBank = () => {
     setSelectedQuestion(null);
     setFormError(null);
     setFormData(emptyFormData);
+    setNewPassageData(emptyNewPassageData);
     setIsModalOpen(true);
   }, []);
 
@@ -218,7 +250,13 @@ export const useQuestionBank = () => {
         marks: question.marks,
         subject: typeof question.subject === "string" ? question.subject : question.subject._id,
         class: question.class,
+        passageId: question.passageId
+          ? typeof question.passageId === "string"
+            ? question.passageId
+            : question.passageId._id
+          : "",
       });
+      setNewPassageData(emptyNewPassageData);
       setIsModalOpen(true);
     },
     [],
@@ -251,12 +289,77 @@ export const useQuestionBank = () => {
         }
       }
 
+      if (formData.passageId === "__new__" && !newPassageData.text.trim()) {
+        return setFormError("Please enter the new passage's text.");
+      }
+
       setIsSubmitting(true);
       try {
+        // Resolve the passage picker into a real passageId + passageOrder
+        // before touching the question endpoint at all. Three cases:
+        //  - "__new__": create the Passage first, then use its id, order 1.
+        //  - an existing passage id: reuse the SAME order if this question
+        //    was already in that exact passage (editing, unchanged), or
+        //    auto-number it (questionCount + 1) if this is a new link.
+        //  - "" (standalone): explicit null on edit, so it actually
+        //    detaches rather than being silently ignored; omitted on
+        //    create, since there's nothing to detach from yet.
+        let resolvedPassageId: string | null | undefined;
+        let resolvedPassageOrder: number | null | undefined;
+
+        if (formData.passageId === "__new__") {
+          const passageRes = await fetch("/api/admin/passages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: newPassageData.title.trim() || undefined,
+              text: newPassageData.text,
+              kind: newPassageData.kind,
+              subject: formData.subject,
+              class: formData.class,
+            }),
+          });
+          if (!passageRes.ok) {
+            throw new Error(await parseErrorMessage(passageRes, "Failed to create the passage"));
+          }
+          const { passage: createdPassage } = await passageRes.json();
+          resolvedPassageId = createdPassage._id;
+          resolvedPassageOrder = 1;
+        } else if (formData.passageId) {
+          const originalPassageId =
+            isEditing && selectedQuestion?.passageId
+              ? typeof selectedQuestion.passageId === "string"
+                ? selectedQuestion.passageId
+                : selectedQuestion.passageId._id
+              : undefined;
+
+          resolvedPassageId = formData.passageId;
+          if (formData.passageId === originalPassageId) {
+            resolvedPassageOrder = selectedQuestion?.passageOrder;
+          } else {
+            const chosenPassage = passagesApi.passages.find((p) => p._id === formData.passageId);
+            resolvedPassageOrder = (chosenPassage?.questionCount ?? 0) + 1;
+          }
+        } else {
+          resolvedPassageId = isEditing ? null : undefined;
+          resolvedPassageOrder = isEditing ? null : undefined;
+        }
+
         const payload =
           formData.type === "Objective"
-            ? { ...formData, options: formData.options?.filter((opt) => opt.trim()) }
-            : { ...formData, options: undefined, correctAnswer: undefined };
+            ? {
+                ...formData,
+                options: formData.options?.filter((opt) => opt.trim()),
+                passageId: resolvedPassageId,
+                passageOrder: resolvedPassageOrder,
+              }
+            : {
+                ...formData,
+                options: undefined,
+                correctAnswer: undefined,
+                passageId: resolvedPassageId,
+                passageOrder: resolvedPassageOrder,
+              };
 
         const url =
           isEditing && selectedQuestion
@@ -277,13 +380,24 @@ export const useQuestionBank = () => {
         });
         setIsModalOpen(false);
         fetchQuestionsList();
+        if (formData.passageId === "__new__" || formData.passageId) {
+          passagesApi.fetchPassagesList();
+        }
       } catch (err) {
         setFormError(err instanceof Error ? err.message : "Something went wrong.");
       } finally {
         setIsSubmitting(false);
       }
     },
-    [formData, isEditing, selectedQuestion, showStatus, fetchQuestionsList],
+    [
+      formData,
+      newPassageData,
+      isEditing,
+      selectedQuestion,
+      showStatus,
+      fetchQuestionsList,
+      passagesApi,
+    ],
   );
 
   // --- delete confirmation flow (replaces window.confirm) ---
@@ -409,10 +523,34 @@ export const useQuestionBank = () => {
       setIsImporting(false);
     }
   }, [selectedFile, importSubject, importClass, showStatus, fetchQuestionsList]);
+  // Wraps a field in quotes and escapes any internal quotes if it contains
+  // a comma, quote, or newline - without this, a passage body like "Last
+  // term, our class teacher..." would split into extra columns the moment
+  // someone re-uploads this exact template, since a bare comma inside an
+  // unquoted field is indistinguishable from a real column separator.
+  const csvField = (value: string): string => {
+    if (/[",\n]/.test(value)) {
+      return `"${value.replace(/"/g, '""')}"`;
+    }
+    return value;
+  };
 
   const downloadTemplate = useCallback(() => {
-    const headers = ["text", "type", "marks", "option1", "option2", "option3", "option4"];
+    const headers = [
+      "text",
+      "type",
+      "marks",
+      "option1",
+      "option2",
+      "option3",
+      "option4",
+      "passage_key",
+      "passage_title",
+      "passage_body",
+      "passage_kind",
+    ];
 
+    // Standalone objective question - no passage columns needed at all.
     // For this row, option3 ("NaCl") is the last populated option,
     // meaning the API will automatically register "NaCl" as the correct answer.
     const objectiveRow3Options = [
@@ -423,10 +561,14 @@ export const useQuestionBank = () => {
       "CO2",
       "NaCl",
       "", // Left empty
+      "",
+      "",
+      "",
+      "",
     ];
 
-    // For this row, option4 ("HCl") is the last populated option,
-    // so "HCl" becomes its correct answer.
+    // Standalone objective question. For this row, option4 ("HCl") is the
+    // last populated option, so "HCl" becomes its correct answer.
     const objectiveRow4Options = [
       "Which of these is a strong acid?",
       "Objective",
@@ -435,6 +577,10 @@ export const useQuestionBank = () => {
       "CH3COOH",
       "NH3",
       "HCl", // Last populated column -> implicitly the correct answer!
+      "",
+      "",
+      "",
+      "",
     ];
 
     // Theory rows leave all option columns completely blank.
@@ -446,13 +592,50 @@ export const useQuestionBank = () => {
       "",
       "",
       "",
+      "",
+      "",
+      "",
+      "",
+    ];
+
+    // Passage-grouped example: two questions sharing passage_key "zoo1".
+    // Only the FIRST row of the group carries passage_title/passage_body -
+    // later rows in the same group just repeat the same passage_key and
+    // leave title/body blank, exactly as the modal's instructions say.
+    const passageRow1 = [
+      "Who organized the trip to the zoo?",
+      "Objective",
+      "1",
+      "The school principal",
+      "The class teacher",
+      "The bus driver",
+      "The class teacher",
+      "zoo1",
+      "A Visit to the Zoo",
+      "Last term, our class teacher, Mrs. Adebayo, organized a trip for us to the zoo in the city. We were all very excited because it was our first school trip of the year.",
+      "comprehension",
+    ];
+    const passageRow2 = [
+      "How did the students travel to the zoo?",
+      "Objective",
+      "1",
+      "By train",
+      "By car",
+      "By school bus",
+      "By school bus",
+      "zoo1",
+      "",
+      "",
+      "",
     ];
 
     const csvContent = [
-      headers.join(","),
-      objectiveRow3Options.join(","),
-      objectiveRow4Options.join(","),
-      theoryRow.join(","),
+      headers.map(csvField).join(","),
+      objectiveRow3Options.map(csvField).join(","),
+      objectiveRow4Options.map(csvField).join(","),
+      theoryRow.map(csvField).join(","),
+      passageRow1.map(csvField).join(","),
+      passageRow2.map(csvField).join(","),
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -594,5 +777,35 @@ export const useQuestionBank = () => {
     handleSubjectSubmit,
     handleAddOption,
     handleRemoveOption,
+
+    // passage picker (inside the question form)
+    passages: passagesApi.passages,
+    isLoadingPassages: passagesApi.isLoadingPassages,
+    newPassageData,
+    handleNewPassageChange,
+
+    // passage manager modal (standalone "Manage Passages" screen)
+    isPassageManagerOpen: passagesApi.isManagerOpen,
+    passageManagerView: passagesApi.managerView,
+    passagesError: passagesApi.passagesError,
+    passageManagerTriggerRef: passagesApi.managerTriggerRef,
+    openPassageManager: passagesApi.openPassageManager,
+    closePassageManager: passagesApi.closePassageManager,
+    startCreatePassage: passagesApi.startCreatePassage,
+    startEditPassage: passagesApi.startEditPassage,
+    cancelPassageForm: passagesApi.cancelPassageForm,
+    editingPassage: passagesApi.editingPassage,
+    passageFormData: passagesApi.passageFormData,
+    passageFormError: passagesApi.passageFormError,
+    isSavingPassage: passagesApi.isSavingPassage,
+    handlePassageFormChange: passagesApi.handlePassageFormChange,
+    submitPassageForm: passagesApi.submitPassageForm,
+    pendingDeletePassage: passagesApi.pendingDeletePassage,
+    isDeletingPassage: passagesApi.isDeletingPassage,
+    deletePassageError: passagesApi.deletePassageError,
+    deleteBlockedByQuestions: passagesApi.deleteBlockedByQuestions,
+    requestDeletePassage: passagesApi.requestDeletePassage,
+    cancelDeletePassage: passagesApi.cancelDeletePassage,
+    confirmDeletePassage: passagesApi.confirmDeletePassage,
   };
 };

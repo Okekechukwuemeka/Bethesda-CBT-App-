@@ -61,6 +61,12 @@ const ExamQuestionsPage: React.FC = () => {
     setBankFilterClass,
     attachedIds,
     handleAttachBankQuestion,
+
+    // passage picker (inside the question form)
+    passages,
+    isLoadingPassages,
+    newPassageData,
+    handleNewPassageChange,
   } = useExamQuestions(examId);
 
   const subjectName =
@@ -80,6 +86,11 @@ const ExamQuestionsPage: React.FC = () => {
     marks: q.marks,
     options: q.options,
     correctAnswer: q.correctAnswer,
+    passage:
+      q.passageId && typeof q.passageId === "object"
+        ? { id: q.passageId._id, title: q.passageId.title }
+        : undefined,
+    passageOrder: q.passageOrder,
   }));
 
   const selectedQuestionsForComponent: SharedBankQuestion[] = filteredQuestions
@@ -220,7 +231,11 @@ const ExamQuestionsPage: React.FC = () => {
         isSubmitting={isSubmitting}
         subjects={subjects}
         isLoadingSubjects={isLoadingSubjects}
+        passages={passages}
+        isLoadingPassages={isLoadingPassages}
+        newPassageData={newPassageData}
         onChange={handleInputChange}
+        onNewPassageChange={handleNewPassageChange}
         onOptionChange={handleOptionChange}
         onAddOption={handleAddOption}
         onRemoveOption={handleRemoveOption}

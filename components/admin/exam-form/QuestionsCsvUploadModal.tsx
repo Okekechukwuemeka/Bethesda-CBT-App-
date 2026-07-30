@@ -44,8 +44,20 @@ const QuestionsCsvUploadModal: React.FC<QuestionsCsvUploadModalProps> = ({
             questions.
           </p>
           <p className="text-sm text-[#4A6A8A]">
-            These questions will use this exam&apos;s subject and class automatically. The file is
-            uploaded once you click <strong>Create Exam</strong> below - not before.
+            <strong>Optional passage columns:</strong>{" "}
+            <code className="text-xs bg-[#F8FAFE] px-1 py-0.5 rounded">
+              passage_key, passage_title, passage_body, passage_kind
+            </code>
+            . Rows that share the same <code>passage_key</code> become one shared reading passage
+            (or experiment write-up, data table, etc.) with all their questions grouped under it -
+            only the first row of the group needs <code>passage_title</code>/
+            <code>passage_body</code> filled in, later rows just repeat the same{" "}
+            <code>passage_key</code>. Leave these columns blank entirely for standalone questions.
+          </p>
+          <p className="text-sm text-[#4A6A8A]">
+            These questions (and any passages they create) will use this exam&apos;s subject and
+            class automatically. The file is uploaded once you click <strong>Create Exam</strong>{" "}
+            below - not before.
           </p>
 
           <div>

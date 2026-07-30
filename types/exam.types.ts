@@ -28,6 +28,15 @@ export interface Exam {
   shuffleQuestions: boolean;
 }
 
+// Deliberately "id"-keyed, not "_id"-keyed, to match BankQuestion below -
+// this file already has a mixed convention (PopulatedSubject uses _id,
+// BankQuestion uses id), so this follows whichever object it's attached to
+// rather than forcing one convention across the whole file.
+export interface BankQuestionPassage {
+  id: string;
+  title?: string;
+}
+
 export interface BankQuestion {
   id: string;
   text: string;
@@ -37,4 +46,9 @@ export interface BankQuestion {
   marks: number;
   options?: string[];
   correctAnswer?: string;
+  // Present only when this question is part of a shared passage. Absent
+  // (undefined) means it's a standalone question - unchanged from before
+  // passages existed.
+  passage?: BankQuestionPassage;
+  passageOrder?: number;
 }

@@ -9,6 +9,7 @@ import QuestionFormModal from "@/components/admin/questions/QuestionFormModal";
 import BulkImportModal from "@/components/admin/questions/BulkImportModal";
 import ConfirmDeleteModal from "@/components/admin/questions/ConfirmDeleteModal";
 import SubjectFormModal from "@/components/admin/questions/SubjectFormModal";
+import PassageManagerModal from "@/components/admin/questions/PassageManagerModal";
 
 const QuestionsPage: React.FC = () => {
   const {
@@ -83,6 +84,36 @@ const QuestionsPage: React.FC = () => {
     handleSubjectSubmit,
     handleAddOption,
     handleRemoveOption,
+
+    // passage picker (inside the question form)
+    passages,
+    isLoadingPassages,
+    newPassageData,
+    handleNewPassageChange,
+
+    // passage manager modal
+    isPassageManagerOpen,
+    passageManagerView,
+    passagesError,
+    passageManagerTriggerRef,
+    openPassageManager,
+    closePassageManager,
+    startCreatePassage,
+    startEditPassage,
+    cancelPassageForm,
+    editingPassage,
+    passageFormData,
+    passageFormError,
+    isSavingPassage,
+    handlePassageFormChange,
+    submitPassageForm,
+    pendingDeletePassage,
+    isDeletingPassage,
+    deletePassageError,
+    deleteBlockedByQuestions,
+    requestDeletePassage,
+    cancelDeletePassage,
+    confirmDeletePassage,
   } = useQuestionBank();
 
   const formModalRef = React.useRef<HTMLDivElement>(null);
@@ -113,7 +144,21 @@ const QuestionsPage: React.FC = () => {
     !isSubmittingSubject,
   );
 
-  const anyModalOpen = isModalOpen || isImportModalOpen || !!pendingDelete || isSubjectModalOpen;
+  const anyModalOpen =
+    isModalOpen ||
+    isImportModalOpen ||
+    !!pendingDelete ||
+    isSubjectModalOpen ||
+    isPassageManagerOpen;
+
+  // Used both to show the passage-aware note in the delete confirmation
+  // and, indirectly, wherever the currently-pending-delete question's
+  // passage needs a human-readable label rather than just an id.
+  const pendingDeletePassageLabel = pendingDelete?.passageId
+    ? typeof pendingDelete.passageId === "string"
+      ? null // id only, no populated title available - safe to omit the note rather than guess
+      : pendingDelete.passageId.title || "Untitled passage"
+    : null;
 
   return (
     <>
@@ -125,6 +170,24 @@ const QuestionsPage: React.FC = () => {
             <p className="text-[#5A7A9A] text-sm">Create and manage questions for all exams</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={openPassageManager}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-amber-500/50 flex items-center gap-2">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                />
+              </svg>
+              Manage Passages
+            </button>
             <button
               onClick={handleOpenImportModal}
               className="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-green-500/50 flex items-center gap-2">
@@ -223,7 +286,11 @@ const QuestionsPage: React.FC = () => {
         isSubmitting={isSubmitting}
         subjects={subjects}
         isLoadingSubjects={isLoadingSubjects}
+        passages={passages}
+        isLoadingPassages={isLoadingPassages}
+        newPassageData={newPassageData}
         onChange={handleInputChange}
+        onNewPassageChange={handleNewPassageChange}
         onOptionChange={handleOptionChange}
         onSubmit={handleSubmit}
         onCancel={closeFormModal}
@@ -255,6 +322,7 @@ const QuestionsPage: React.FC = () => {
       <ConfirmDeleteModal
         isOpen={!!pendingDelete}
         questionText={pendingDelete?.text ?? null}
+        passageLabel={pendingDeletePassageLabel}
         isProcessing={isDeleting}
         error={deleteError}
         blockedByExams={deleteBlockedExams}
@@ -274,6 +342,34 @@ const QuestionsPage: React.FC = () => {
         onCodeChange={setSubjectCode}
         onSubmit={handleSubjectSubmit}
         onCancel={closeSubjectModal}
+      />
+
+      {/* Manage Passages Modal */}
+      <PassageManagerModal
+        isOpen={isPassageManagerOpen}
+        view={passageManagerView}
+        passages={passages}
+        isLoadingPassages={isLoadingPassages}
+        passagesError={passagesError}
+        subjects={subjects}
+        isLoadingSubjects={isLoadingSubjects}
+        editingPassage={editingPassage}
+        passageFormData={passageFormData}
+        passageFormError={passageFormError}
+        isSavingPassage={isSavingPassage}
+        onFormChange={handlePassageFormChange}
+        onFormSubmit={submitPassageForm}
+        onStartCreate={startCreatePassage}
+        onStartEdit={startEditPassage}
+        onCancelForm={cancelPassageForm}
+        pendingDeletePassage={pendingDeletePassage}
+        isDeletingPassage={isDeletingPassage}
+        deletePassageError={deletePassageError}
+        deleteBlockedByQuestions={deleteBlockedByQuestions}
+        onRequestDelete={requestDeletePassage}
+        onCancelDelete={cancelDeletePassage}
+        onConfirmDelete={confirmDeletePassage}
+        onClose={closePassageManager}
       />
     </>
   );

@@ -4,6 +4,7 @@ import type { BlockingExam } from "@/types/question";
 interface ConfirmDeleteModalProps {
   isOpen: boolean;
   questionText: string | null;
+  passageLabel: string | null;
   isProcessing: boolean;
   error: string | null;
   blockedByExams: BlockingExam[] | null;
@@ -15,6 +16,7 @@ interface ConfirmDeleteModalProps {
 const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
   isOpen,
   questionText,
+  passageLabel,
   isProcessing,
   error,
   blockedByExams,
@@ -94,9 +96,16 @@ const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
           )}
 
           {!blockedByExams ? (
-            <p id="confirm-delete-description" className="text-sm text-[#4A6A8A]">
-              You are about to permanently delete: “{questionText}”. This cannot be undone.
-            </p>
+            <div id="confirm-delete-description" className="text-sm text-[#4A6A8A] space-y-2">
+              <p>You are about to permanently delete: “{questionText}”. This cannot be undone.</p>
+              {passageLabel && (
+                <p className="text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                  This question is part of the “{passageLabel}” passage. Deleting it will leave a
+                  gap in that passage&apos;s question numbering - the passage itself and its other
+                  questions are unaffected.
+                </p>
+              )}
+            </div>
           ) : (
             <div id="confirm-delete-description" className="text-sm text-[#4A6A8A] space-y-2">
               <p>
@@ -108,6 +117,13 @@ const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
                   <li key={exam.id}>{exam.title}</li>
                 ))}
               </ul>
+              {passageLabel && (
+                <p className="text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                  This question is also part of the “{passageLabel}” passage. Deleting it will leave
+                  a gap in that passage&apos;s question numbering - the passage itself is
+                  unaffected.
+                </p>
+              )}
               <p>
                 Deleting it will remove it from all of the exams listed above. This cannot be
                 undone.
