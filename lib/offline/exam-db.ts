@@ -7,6 +7,14 @@ export interface CachedQuestion {
   marks: number;
   options?: string[];
   order: number;
+  // Same denormalized-per-question shape as SessionQuestion - see
+  // types/exam-session.ts for why these live on every sibling question
+  // rather than in a separate lookup table.
+  passageId?: string;
+  passageTitle?: string;
+  passageText?: string;
+  passageKind?: string;
+  passageOrder?: number;
 }
 
 export interface ExamSessionRecord {

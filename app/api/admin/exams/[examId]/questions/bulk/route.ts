@@ -25,11 +25,22 @@ function optionColumnSortKey(header: string): number {
   return 0;
 }
 
-// One entry per unique passage_key seen in the sheet. The ObjectId is
-// generated up front (not by inserting the Passage first) so Question
-// candidates can carry a real passageId while everything is still being
-// validated in memory - nothing is written to the DB until every row AND
-// every passage group has passed validation.
+const SPREADSHEET_DATE_MANGLE_PATTERNS = [
+  /^\d{1,2}-[A-Za-z]{3}$/,
+  /^[A-Za-z]{3}-\d{1,2}$/,
+  /^\d{1,2}\/\d{1,2}\/\d{2,4}$/,
+];
+
+function looksLikeMangledFraction(value: string): boolean {
+  return SPREADSHEET_DATE_MANGLE_PATTERNS.some((pattern) => pattern.test(value.trim()));
+}
+
+const MANGLE_FIX_HINT =
+  "this looks like it may have been auto-converted to a date by Excel/Sheets " +
+  '(e.g. "1/3" becoming "1-Mar"). If this should be a fraction or ratio, ' +
+  "re-enter it with a leading apostrophe (e.g. '1/3) or format the column as " +
+  "Text before typing, then re-export the CSV.";
+
 interface PassageGroup {
   objectId: mongoose.Types.ObjectId;
   title?: string;
@@ -39,16 +50,22 @@ interface PassageGroup {
   nextPassageOrder: number;
 }
 
+interface QuestionCandidate {
+  rowNumber: number;
+  doc: IQuestion;
+}
+interface PassageCandidate {
+  rowNumber: number;
+  doc: IPassage;
+}
+
 // POST /api/admin/exams/[examId]/questions/bulk
 // multipart/form-data with a "file" field containing the CSV.
 //
-// Optional passage-group columns: passage_key, passage_title, passage_body,
-// passage_kind. Rows that share the same passage_key become sub-questions
-// of ONE Passage document - created from whichever row in that group is
-// the first to carry passage_title/passage_body (later rows in the same
-// group can leave those columns blank and just repeat the passage_key).
-// Rows with no passage_key import exactly as before - this is purely
-// additive.
+// See the standalone /api/admin/questions/bulk route for the full format
+// docs (option columns, passage_key grouping, mangled-fraction detection)
+// - identical here, just scoped to one exam's subject/class instead of
+// form fields.
 export async function POST(req: NextRequest, context: { params: Promise<{ examId: string }> }) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
@@ -97,10 +114,6 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
   const errors: RowError[] = [];
 
   // --- Pass 1: collect passage groups -------------------------------
-  // Scanned separately (before the main row loop) so every row's
-  // passageId/passageOrder can be resolved from a fully-known group table,
-  // regardless of whether a given row appears before or after the row
-  // that happens to carry the passage_title/passage_body text.
   const passageGroups = new Map<string, PassageGroup>();
 
   rows.forEach((row, i) => {
@@ -121,12 +134,20 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
     const title = row.passage_title?.trim();
     const bodyText = row.passage_body?.trim();
     const kind = row.passage_kind?.trim();
+
+    if (title && looksLikeMangledFraction(title)) {
+      errors.push({ row: rowNumber, error: `passage_title "${title}" - ${MANGLE_FIX_HINT}` });
+    }
+    if (bodyText && looksLikeMangledFraction(bodyText)) {
+      errors.push({ row: rowNumber, error: `passage_body "${bodyText}" - ${MANGLE_FIX_HINT}` });
+    }
+
     if (title && !group.title) group.title = title;
     if (bodyText && !group.body) group.body = bodyText;
     if (kind && !group.kind) group.kind = kind;
   });
 
-  const passageCandidates: IPassage[] = [];
+  const passageCandidates: PassageCandidate[] = [];
   for (const [key, group] of passageGroups) {
     if (!group.body) {
       errors.push({
@@ -142,8 +163,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
       });
       continue;
     }
-    passageCandidates.push(
-      new Passage({
+    passageCandidates.push({
+      rowNumber: group.firstRowNumber,
+      doc: new Passage({
         _id: group.objectId,
         title: group.title,
         text: group.body,
@@ -152,12 +174,11 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
         class: exam.class,
         createdBy: guard.session.user.id,
       }),
-    );
+    });
   }
 
-  // --- Pass 2: build question candidates, same as before, now also ---
-  // resolving passageId/passageOrder for rows that carry a passage_key.
-  const candidates: IQuestion[] = [];
+  // --- Pass 2: build question candidates -------------------------------
+  const candidates: QuestionCandidate[] = [];
 
   rows.forEach((row, i) => {
     const rowNumber = i + 2;
@@ -177,6 +198,12 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
         row: rowNumber,
         error: `marks must be a number >= 1, got "${row.marks ?? ""}"`,
       });
+      return;
+    }
+
+    const questionText = row.text?.trim();
+    if (questionText && looksLikeMangledFraction(questionText)) {
+      errors.push({ row: rowNumber, error: `text "${questionText}" - ${MANGLE_FIX_HINT}` });
       return;
     }
 
@@ -203,11 +230,28 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
         errors.push({ row: rowNumber, error: "Missing correct answer in the last option column" });
         return;
       }
+      // Checked BEFORE the exact-match check below, so a mangled answer
+      // column gets a diagnosis pointing at the actual cause instead of
+      // just "doesn't match any option" - which is technically true but
+      // unhelpful if the real problem is Excel silently rewriting it.
+      if (looksLikeMangledFraction(correctAnswerRaw)) {
+        errors.push({
+          row: rowNumber,
+          error: `correct answer "${correctAnswerRaw}" - ${MANGLE_FIX_HINT}`,
+        });
+        return;
+      }
       if (!filledOptions.includes(correctAnswerRaw)) {
         errors.push({
           row: rowNumber,
           error: `Correct answer "${correctAnswerRaw}" (last column) must exactly match one of the other option columns`,
         });
+        return;
+      }
+
+      const mangledOption = filledOptions.find(looksLikeMangledFraction);
+      if (mangledOption) {
+        errors.push({ row: rowNumber, error: `option "${mangledOption}" - ${MANGLE_FIX_HINT}` });
         return;
       }
 
@@ -217,16 +261,12 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
 
     const key = row.passage_key?.trim();
     const group = key ? passageGroups.get(key) : undefined;
-    // group can be undefined here only if that key already failed
-    // validation above (missing body / bad kind) - in that case we still
-    // build the candidate so Promise.allSettled below can report ITS
-    // errors too, but we already know the whole import is rejected since
-    // `errors` is non-empty from the group check.
     const passageId = group?.objectId;
     const passageOrder = group ? group.nextPassageOrder++ : undefined;
 
-    candidates.push(
-      new Question({
+    candidates.push({
+      rowNumber,
+      doc: new Question({
         text: row.text?.trim(),
         type,
         marks,
@@ -238,29 +278,25 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
         class: exam.class,
         createdBy: guard.session.user.id,
       }),
-    );
+    });
   });
 
   const [passageValidationResults, questionValidationResults] = await Promise.all([
-    Promise.allSettled(passageCandidates.map((p) => p.validate())),
-    Promise.allSettled(candidates.map((q) => q.validate())),
+    Promise.allSettled(passageCandidates.map((p) => p.doc.validate())),
+    Promise.allSettled(candidates.map((q) => q.doc.validate())),
   ]);
   questionValidationResults.forEach((result, i) => {
     if (result.status === "rejected") {
-      const rowNumber = i + 2;
+      const rowNumber = candidates[i].rowNumber;
       const message = result.reason instanceof Error ? result.reason.message : "Invalid row";
       errors.push({ row: rowNumber, error: message });
     }
   });
-  passageValidationResults.forEach((result) => {
+  passageValidationResults.forEach((result, i) => {
     if (result.status === "rejected") {
+      const rowNumber = passageCandidates[i].rowNumber;
       const message = result.reason instanceof Error ? result.reason.message : "Invalid passage";
-      // Passage-level errors were already pushed with their row number
-      // above (missing body / bad kind) for the cases we pre-check;
-      // this catches anything else the schema itself rejects (e.g. an
-      // empty title trimmed to nothing isn't possible, but future schema
-      // changes might add constraints we haven't pre-checked here).
-      errors.push({ row: 0, error: message });
+      errors.push({ row: rowNumber, error: message });
     }
   });
 
@@ -273,14 +309,14 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
   }
 
   if (passageCandidates.length > 0) {
-    await Passage.insertMany(passageCandidates);
+    await Passage.insertMany(passageCandidates.map((p) => p.doc));
   }
-  await Question.insertMany(candidates);
+  const insertedQuestions = await Question.insertMany(candidates.map((q) => q.doc));
 
   const nextOrderStart = exam.questions.length;
-  candidates.forEach((question, i) => {
+  insertedQuestions.forEach((question, i) => {
     exam.questions.push({
-      question: question._id as unknown as mongoose.Types.ObjectId,
+      question: question._id as mongoose.Types.ObjectId,
       order: nextOrderStart + i,
     });
   });

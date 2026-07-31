@@ -105,6 +105,11 @@ export const usePassages = (showStatus: ShowStatus) => {
     setManagerView("list");
     setEditingPassage(null);
     setPendingDeletePassage(null);
+    // This modal manages its own focus trap (unlike the others, which go
+    // through useModalFocusTrap in page.tsx) - so it's on us here to
+    // restore focus to whatever button opened it, the same way every
+    // other modal on this page does when it closes.
+    managerTriggerRef.current?.focus();
   }, [isSavingPassage, isDeletingPassage]);
 
   // --- manager: create/edit form ---

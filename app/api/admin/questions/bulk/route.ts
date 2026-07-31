@@ -24,6 +24,29 @@ function optionColumnSortKey(header: string): number {
   return 0;
 }
 
+// Excel/Sheets silently reinterpret a bare fraction like "1/3" as a date
+// the moment it's typed into a General-formatted cell (commonly displayed
+// back as "1-Mar" or "3-Jan" depending on locale), and THAT string is what
+// ends up in the exported CSV. The original "1/3" is gone by the time we
+// see the file - we can't recover it, only recognize the tell-tale shape
+// it left behind and reject the row instead of silently importing a wrong
+// answer. This is a heuristic, not a guarantee.
+const SPREADSHEET_DATE_MANGLE_PATTERNS = [
+  /^\d{1,2}-[A-Za-z]{3}$/,
+  /^[A-Za-z]{3}-\d{1,2}$/,
+  /^\d{1,2}\/\d{1,2}\/\d{2,4}$/,
+];
+
+function looksLikeMangledFraction(value: string): boolean {
+  return SPREADSHEET_DATE_MANGLE_PATTERNS.some((pattern) => pattern.test(value.trim()));
+}
+
+const MANGLE_FIX_HINT =
+  "this looks like it may have been auto-converted to a date by Excel/Sheets " +
+  '(e.g. "1/3" becoming "1-Mar"). If this should be a fraction or ratio, ' +
+  "re-enter it with a leading apostrophe (e.g. '1/3) or format the column as " +
+  "Text before typing, then re-export the CSV.";
+
 interface PassageGroup {
   objectId: mongoose.Types.ObjectId;
   title?: string;
@@ -33,12 +56,34 @@ interface PassageGroup {
   nextPassageOrder: number;
 }
 
+// Wrapper types that keep each candidate tied to the CSV row it came from,
+// even after early-guard skips make candidates[i] no longer line up with
+// rows[i] - without this, a validation failure on the 3rd surviving
+// candidate could get reported against the wrong row number entirely.
+interface QuestionCandidate {
+  rowNumber: number;
+  doc: IQuestion;
+}
+interface PassageCandidate {
+  rowNumber: number;
+  doc: IPassage;
+}
+
 // POST /api/admin/questions/bulk
 // multipart/form-data: file=<csv>, subject=<subjectId>, class=<ClassLevel>
 //
 // Optional passage-group columns: passage_key, passage_title, passage_body,
 // passage_kind - same shape as the exam-scoped bulk import. Rows sharing a
 // passage_key become sub-questions of one Passage document.
+//
+// Option columns: text,type,marks,option1,option2,...,optionN - the LAST
+// populated option column is always the correct answer (it repeats the
+// text of whichever earlier option is correct, it is NOT counted as an
+// extra choice). This is deliberate, documented in the import modal and
+// the downloadable template - do not "fix" this into a separate
+// correct_answer column without also updating the modal copy and
+// template, or you'll silently duplicate the correct option into the
+// choices list for every CSV built against the current documented format.
 export async function POST(req: NextRequest) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
@@ -112,12 +157,20 @@ export async function POST(req: NextRequest) {
     const title = row.passage_title?.trim();
     const bodyText = row.passage_body?.trim();
     const kind = row.passage_kind?.trim();
+
+    if (title && looksLikeMangledFraction(title)) {
+      errors.push({ row: rowNumber, error: `passage_title "${title}" - ${MANGLE_FIX_HINT}` });
+    }
+    if (bodyText && looksLikeMangledFraction(bodyText)) {
+      errors.push({ row: rowNumber, error: `passage_body "${bodyText}" - ${MANGLE_FIX_HINT}` });
+    }
+
     if (title && !group.title) group.title = title;
     if (bodyText && !group.body) group.body = bodyText;
     if (kind && !group.kind) group.kind = kind;
   });
 
-  const passageCandidates: IPassage[] = [];
+  const passageCandidates: PassageCandidate[] = [];
   for (const [key, group] of passageGroups) {
     if (!group.body) {
       errors.push({
@@ -133,8 +186,9 @@ export async function POST(req: NextRequest) {
       });
       continue;
     }
-    passageCandidates.push(
-      new Passage({
+    passageCandidates.push({
+      rowNumber: group.firstRowNumber,
+      doc: new Passage({
         _id: group.objectId,
         title: group.title,
         text: group.body,
@@ -143,11 +197,11 @@ export async function POST(req: NextRequest) {
         class: classLevel,
         createdBy: guard.session.user.id,
       }),
-    );
+    });
   }
 
   // --- Pass 2: build question candidates -------------------------------
-  const candidates: IQuestion[] = [];
+  const candidates: QuestionCandidate[] = [];
 
   rows.forEach((row, i) => {
     const rowNumber = i + 2;
@@ -167,6 +221,12 @@ export async function POST(req: NextRequest) {
         row: rowNumber,
         error: `marks must be a number >= 1, got "${row.marks ?? ""}"`,
       });
+      return;
+    }
+
+    const questionText = row.text?.trim();
+    if (questionText && looksLikeMangledFraction(questionText)) {
+      errors.push({ row: rowNumber, error: `text "${questionText}" - ${MANGLE_FIX_HINT}` });
       return;
     }
 
@@ -193,11 +253,28 @@ export async function POST(req: NextRequest) {
         errors.push({ row: rowNumber, error: "Missing correct answer in the last option column" });
         return;
       }
+      // Checked BEFORE the exact-match check below, so a mangled answer
+      // column gets a diagnosis pointing at the actual cause instead of
+      // just "doesn't match any option" - which is technically true but
+      // unhelpful if the real problem is Excel silently rewriting it.
+      if (looksLikeMangledFraction(correctAnswerRaw)) {
+        errors.push({
+          row: rowNumber,
+          error: `correct answer "${correctAnswerRaw}" - ${MANGLE_FIX_HINT}`,
+        });
+        return;
+      }
       if (!filledOptions.includes(correctAnswerRaw)) {
         errors.push({
           row: rowNumber,
           error: `Correct answer "${correctAnswerRaw}" (last column) must exactly match one of the other option columns`,
         });
+        return;
+      }
+
+      const mangledOption = filledOptions.find(looksLikeMangledFraction);
+      if (mangledOption) {
+        errors.push({ row: rowNumber, error: `option "${mangledOption}" - ${MANGLE_FIX_HINT}` });
         return;
       }
 
@@ -210,8 +287,9 @@ export async function POST(req: NextRequest) {
     const passageId = group?.objectId;
     const passageOrder = group ? group.nextPassageOrder++ : undefined;
 
-    candidates.push(
-      new Question({
+    candidates.push({
+      rowNumber,
+      doc: new Question({
         text: row.text?.trim(),
         type,
         subject,
@@ -223,24 +301,28 @@ export async function POST(req: NextRequest) {
         passageOrder,
         createdBy: guard.session.user.id,
       }),
-    );
+    });
   });
 
   const [passageValidationResults, questionValidationResults] = await Promise.all([
-    Promise.allSettled(passageCandidates.map((p) => p.validate())),
-    Promise.allSettled(candidates.map((q) => q.validate())),
+    Promise.allSettled(passageCandidates.map((p) => p.doc.validate())),
+    Promise.allSettled(candidates.map((q) => q.doc.validate())),
   ]);
+  // Each result's index now maps back through the wrapper array, not the
+  // original CSV row index, so this correctly attributes an error to the
+  // exact row it came from even when earlier rows were skipped.
   questionValidationResults.forEach((result, i) => {
     if (result.status === "rejected") {
-      const rowNumber = i + 2;
+      const rowNumber = candidates[i].rowNumber;
       const message = result.reason instanceof Error ? result.reason.message : "Invalid row";
       errors.push({ row: rowNumber, error: message });
     }
   });
-  passageValidationResults.forEach((result) => {
+  passageValidationResults.forEach((result, i) => {
     if (result.status === "rejected") {
+      const rowNumber = passageCandidates[i].rowNumber;
       const message = result.reason instanceof Error ? result.reason.message : "Invalid passage";
-      errors.push({ row: 0, error: message });
+      errors.push({ row: rowNumber, error: message });
     }
   });
 
@@ -253,9 +335,9 @@ export async function POST(req: NextRequest) {
   }
 
   if (passageCandidates.length > 0) {
-    await Passage.insertMany(passageCandidates);
+    await Passage.insertMany(passageCandidates.map((p) => p.doc));
   }
-  await Question.insertMany(candidates);
+  await Question.insertMany(candidates.map((q) => q.doc));
 
   return NextResponse.json(
     { imported: candidates.length, passagesCreated: passageCandidates.length },

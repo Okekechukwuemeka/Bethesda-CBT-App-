@@ -152,6 +152,15 @@ export const useExamTaking = () => {
           marks: q.marks,
           options: q.options,
           order: q.order,
+          // These were being fetched from the server but never actually
+          // written into the offline cache - a page reload while offline
+          // would have silently lost a passage's shared text/grouping,
+          // even though the live (non-cached) render had it.
+          passageId: q.passageId,
+          passageTitle: q.passageTitle,
+          passageText: q.passageText,
+          passageKind: q.passageKind,
+          passageOrder: q.passageOrder,
         })),
         status: "in-progress",
       });

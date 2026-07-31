@@ -10,6 +10,20 @@ export interface SessionQuestion {
   order: number;
   selectedOption?: string;
   textAnswer?: string;
+  // Present only when this question is part of a shared passage - a
+  // comprehension text, an experiment write-up, a data table, etc.
+  // passageText/passageTitle/passageKind are denormalized onto EVERY
+  // sibling question in the group (not fetched separately), so the
+  // taking-flow UI can render a question standalone without an extra
+  // lookup. Absent (undefined) means an ordinary standalone question,
+  // unchanged from before passages existed.
+  passageId?: string;
+  passageTitle?: string;
+  passageText?: string;
+  passageKind?: string;
+  // This question's position within its passage group (1, 2, 3...),
+  // separate from `order` which is its position in the exam as a whole.
+  passageOrder?: number;
 }
 
 export interface ExamSessionMeta {

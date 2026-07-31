@@ -177,6 +177,12 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
       passageTitle: passageId?.title,
       passageText: passageId?.text,
       passageKind: passageId?.kind,
+      // This was being computed above (to exclude it from the spread)
+      // and then silently never added back - without it, a passage's
+      // sub-questions had no reliable way to know their own position
+      // within the group (1st, 2nd, 3rd...), only whatever order they
+      // happened to land in after shuffling.
+      passageOrder,
     };
   });
 
