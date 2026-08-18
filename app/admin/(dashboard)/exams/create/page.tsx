@@ -72,6 +72,8 @@ const CreateExamPage: React.FC = () => {
     showBulkImportModal,
     partialErrorMessage,
     handleInputChange,
+    handleIsGeneralChange,
+    handleClassesToggle,
     handleQuestionsCsvSelect,
     handleSubmit,
     resetForm,
@@ -117,6 +119,8 @@ const CreateExamPage: React.FC = () => {
               isLoadingSubjects={isLoadingSubjects}
               titleMode={titleMode}
               onTitleModeChange={handleTitleModeChange}
+              onIsGeneralChange={handleIsGeneralChange}
+              onClassesToggle={handleClassesToggle}
             />
 
             <ScheduleSection

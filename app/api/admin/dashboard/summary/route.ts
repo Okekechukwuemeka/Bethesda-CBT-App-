@@ -42,12 +42,18 @@ export async function GET() {
   }
 
   const examRows = exams.map((exam) => {
-    const totalStudents = classSize(exam.class);
+    // A general exam has no single `class` - its "total students" is the
+    // sum across every class it's eligible for instead of one lookup.
+    const totalStudents = exam.isGeneral
+      ? (exam.classes ?? []).reduce((sum, c) => sum + classSize(c), 0)
+      : classSize(exam.class ?? "");
     const completedCount = completedByExamId.get(exam._id.toString()) ?? 0;
     return {
       id: exam._id.toString(),
       subject: (exam.subject as unknown as { name?: string })?.name ?? "Unknown subject",
-      class: exam.class,
+      class: exam.isGeneral ? undefined : exam.class,
+      classes: exam.isGeneral ? exam.classes : undefined,
+      isGeneral: exam.isGeneral,
       term: exam.term,
       totalQuestions: exam.questionCount,
       duration: exam.duration,

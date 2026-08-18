@@ -60,8 +60,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       {/* Main Content */}
       <main
         id="main-content"
-        // @ts-expect-error -- `inert` is a valid HTML boolean attribute (React 19+)
-        inert={mainIsInert ? "" : undefined}
+        inert={mainIsInert}
         className={`transition-all duration-300 ${
           isSidebarOpen && !isMobile ? "lg:ml-64" : "ml-0"
         } ${isMobile ? "pt-16" : ""}`}>

@@ -38,6 +38,8 @@ export const useExams = () => {
             code: e.subject?.code ?? "",
           },
           class: e.class,
+          classes: e.classes,
+          isGeneral: e.isGeneral,
           term: e.term,
           academicYear: e.academicYear,
           examDate: e.examDate,

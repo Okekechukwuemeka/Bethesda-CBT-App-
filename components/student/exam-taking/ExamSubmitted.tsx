@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { ExamSessionMeta, SubmitResult } from "@/types/exam-session";
 
 interface ExamSubmittedProps {
@@ -9,6 +9,22 @@ interface ExamSubmittedProps {
 
 const ExamSubmitted: React.FC<ExamSubmittedProps> = ({ exam, result, onDone }) => {
   const isMarked = result?.status === "Marked";
+
+  // Plays both cues together the moment this screen appears - whether the
+  // student hit "Submit Exam" themselves or the timer ran out and
+  // auto-submitted for them. Fired once per mount (empty dependency
+  // array), which is also the only time this component ever mounts.
+  useEffect(() => {
+    const endExam = new Audio("/audio/sfx/end_exam.wav");
+    const goodJob = new Audio("/audio/sfx/good_job.mp3");
+    // Both start together - Promise.all rather than two independent
+    // calls just so a rejection from one (e.g. a browser blocking
+    // autoplay without a preceding user gesture) doesn't produce an
+    // unhandled rejection warning in the console. Either way, a blocked
+    // play() is silently ignored - the student still sees this screen
+    // and its score/status, sound is a nice-to-have on top of that.
+    Promise.all([endExam.play(), goodJob.play()]).catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#E8F0FE] flex items-center justify-center px-4 py-8">

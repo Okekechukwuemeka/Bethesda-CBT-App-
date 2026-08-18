@@ -12,7 +12,13 @@ export interface Exam {
   id: string;
   title: string;
   subject: PopulatedSubject;
-  class: string;
+  // Set for a normal, class-specific exam; empty/undefined for a general
+  // exam (isGeneral: true), which uses `classes` instead.
+  class?: string;
+  // Only set when isGeneral is true - every class eligible to sit this
+  // exam.
+  classes?: string[];
+  isGeneral: boolean;
   term: Term;
   academicYear: string;
   examDate: string; // ISO string

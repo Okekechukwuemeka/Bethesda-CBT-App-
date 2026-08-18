@@ -1,4 +1,5 @@
 import React from "react";
+import { CLASS_OPTIONS, GENERAL_EXAM_CLASS_OPTIONS } from "@/config/exam-form-options";
 
 interface SubjectOption {
   id: string;
@@ -16,6 +17,8 @@ interface ExamDetailsFormSectionProps {
   ) => void;
   subjects: SubjectOption[]; // ← added
   isLoadingSubjects?: boolean; // ← added (optional, edit form doesn't pass one currently)
+  onIsGeneralChange: (isGeneral: boolean) => void;
+  onClassesToggle: (classValue: string) => void;
 }
 
 const ExamDetailsFormSection: React.FC<ExamDetailsFormSectionProps> = ({
@@ -26,6 +29,8 @@ const ExamDetailsFormSection: React.FC<ExamDetailsFormSectionProps> = ({
   onChange,
   subjects,
   isLoadingSubjects,
+  onIsGeneralChange,
+  onClassesToggle,
 }) => {
   const errorId = (field: string) => `${field}-error`;
   const describedBy = (field: string) => (fieldErrors[field] ? errorId(field) : undefined);
@@ -99,37 +104,102 @@ const ExamDetailsFormSection: React.FC<ExamDetailsFormSectionProps> = ({
           )}
         </div>
 
-        <div>
-          <label htmlFor="class" className="block text-sm font-medium text-[#1A3A5C] mb-1">
-            Class{" "}
-            <span className="text-red-500" aria-hidden="true">
-              *
-            </span>
-          </label>
-          <select
-            ref={(el) => {
-              fieldRefs.current.class = el;
-            }}
-            id="class"
-            name="class"
-            value={formData.class}
-            onChange={onChange}
-            aria-required="true"
-            aria-invalid={!!fieldErrors.class}
-            aria-describedby={describedBy("class")}
-            className="w-full px-4 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE]">
-            <option value="">Select Class</option>
-            <option value="JSS1">JSS1</option>
-            <option value="JSS2">JSS2</option>
-            <option value="JSS3">JSS3</option>
-            <option value="SS1">SS1</option>
-            <option value="SS2">SS2</option>
-            <option value="SS3">SS3</option>
-          </select>
-          {fieldErrors.class && (
-            <p id={errorId("class")} className="mt-1 text-sm text-red-600">
-              {fieldErrors.class}
-            </p>
+        <div className="md:col-span-2">
+          <div className="flex items-center gap-4 mb-2">
+            <label className="flex items-center gap-1.5 text-sm text-[#4A6A8A] cursor-pointer">
+              <input
+                type="radio"
+                name="examScope"
+                checked={!formData.isGeneral}
+                onChange={() => onIsGeneralChange(false)}
+                className="text-[#1A3A5C] focus:ring-[#2B6CB0]"
+              />
+              Single class
+            </label>
+            <label className="flex items-center gap-1.5 text-sm text-[#4A6A8A] cursor-pointer">
+              <input
+                type="radio"
+                name="examScope"
+                checked={formData.isGeneral}
+                onChange={() => onIsGeneralChange(true)}
+                className="text-[#1A3A5C] focus:ring-[#2B6CB0]"
+              />
+              General exam (multiple classes)
+            </label>
+          </div>
+
+          {formData.isGeneral ? (
+            <div>
+              <label className="block text-sm font-medium text-[#1A3A5C] mb-1">
+                Eligible Classes{" "}
+                <span className="text-red-500" aria-hidden="true">
+                  *
+                </span>
+              </label>
+              <div
+                ref={(el) => {
+                  fieldRefs.current.class = el;
+                }}
+                role="group"
+                aria-label="Eligible classes"
+                tabIndex={-1}
+                aria-invalid={!!fieldErrors.class}
+                aria-describedby={describedBy("class")}
+                className={`grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 border rounded-lg bg-[#F8FAFE] ${
+                  fieldErrors.class ? "border-red-300" : "border-[#C5D8EC]"
+                }`}>
+                {GENERAL_EXAM_CLASS_OPTIONS.map((option) => (
+                  <label
+                    key={option.value}
+                    className="flex items-center gap-2 text-sm text-[#1A3A5C] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.classes.includes(option.value)}
+                      onChange={() => onClassesToggle(option.value)}
+                      className="w-4 h-4 text-[#1A3A5C] focus:ring-2 focus:ring-[#2B6CB0] rounded"
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+              {fieldErrors.class && (
+                <p id={errorId("class")} className="mt-1 text-sm text-red-600">
+                  {fieldErrors.class}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div>
+              <label htmlFor="class" className="block text-sm font-medium text-[#1A3A5C] mb-1">
+                Class{" "}
+                <span className="text-red-500" aria-hidden="true">
+                  *
+                </span>
+              </label>
+              <select
+                ref={(el) => {
+                  fieldRefs.current.class = el;
+                }}
+                id="class"
+                name="class"
+                value={formData.class}
+                onChange={onChange}
+                aria-required="true"
+                aria-invalid={!!fieldErrors.class}
+                aria-describedby={describedBy("class")}
+                className="w-full px-4 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE]">
+                {CLASS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              {fieldErrors.class && (
+                <p id={errorId("class")} className="mt-1 text-sm text-red-600">
+                  {fieldErrors.class}
+                </p>
+              )}
+            </div>
           )}
         </div>
 

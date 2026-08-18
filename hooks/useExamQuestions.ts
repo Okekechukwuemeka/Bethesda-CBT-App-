@@ -22,7 +22,10 @@ export interface ExamQuestion {
 export interface ExamSummary {
   title: string;
   subject: string | { _id: string; name: string };
-  class: string;
+  // Unset for a general exam (isGeneral: true), which has no single class.
+  class?: string;
+  classes?: string[];
+  isGeneral?: boolean;
 }
 
 // Separate shape from ExamQuestion - this is a bank question NOT yet
@@ -138,6 +141,8 @@ export const useExamQuestions = (examId: string) => {
               title: apiExam.title,
               subject: apiExam.subject,
               class: apiExam.class,
+              classes: apiExam.classes,
+              isGeneral: apiExam.isGeneral,
             });
           }
         }

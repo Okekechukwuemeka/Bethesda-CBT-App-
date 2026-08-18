@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
-import { Exam } from "@/lib/models/exam.model";
+import { Exam, examClassFilter } from "@/lib/models/exam.model";
 import { Student } from "@/lib/models/student.model";
 import { Submission } from "@/lib/models/submission.model";
 import type { ClassLevel } from "@/lib/models/constants";
@@ -101,7 +101,12 @@ export async function getClassActiveStudentCount(className: ClassLevel): Promise
 
 export async function getExamsForClass(className: ClassLevel) {
   await connectDB();
-  return Exam.find({ class: className }).populate("subject", "name").sort({ examDate: -1 }).lean();
+  // Includes general exams this class is eligible for, alongside exams
+  // created specifically for this class - see examClassFilter.
+  return Exam.find(examClassFilter(className))
+    .populate("subject", "name")
+    .sort({ examDate: -1 })
+    .lean();
 }
 
 export async function getSubjectResultsForClass(className: ClassLevel): Promise<SubjectResult[]> {
@@ -127,7 +132,7 @@ export async function getSubjectResultsForClass(className: ClassLevel): Promise<
 export async function getClassAverageScore(className: ClassLevel): Promise<number> {
   await connectDB();
 
-  const classExams = await Exam.find({ class: className }).select("_id");
+  const classExams = await Exam.find(examClassFilter(className)).select("_id");
   const classExamIds = classExams.map((e) => e._id);
   if (classExamIds.length === 0) return 0;
 

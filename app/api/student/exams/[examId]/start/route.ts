@@ -58,7 +58,15 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
     return NextResponse.json({ error: "Exam not found" }, { status: 404 });
   }
 
-  if (exam.class !== session.user.class) {
+  // A class-specific exam must match the student's class exactly; a
+  // general exam (isGeneral: true) is eligible if the student's class is
+  // among exam.classes - mirrors examClassFilter's $or logic, just
+  // evaluated in-memory here since we already have the loaded document.
+  const isEligible = exam.isGeneral
+    ? (exam.classes ?? []).includes(session.user.class)
+    : exam.class === session.user.class;
+
+  if (!isEligible) {
     return NextResponse.json(
       { error: "This exam is not available for your class" },
       { status: 403 },

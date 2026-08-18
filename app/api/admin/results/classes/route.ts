@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-guards";
 import { Student } from "@/lib/models/student.model";
-import { Exam } from "@/lib/models/exam.model";
+import { Exam, examClassFilter } from "@/lib/models/exam.model";
 import { CLASS_LEVELS } from "@/lib/models/constants";
 import type { ClassResult } from "@/types/admin-results";
 
@@ -23,8 +23,9 @@ export async function GET() {
     // Total exams ever created for this class, regardless of status -
     // previously this only counted status: "Completed", which is a state
     // nothing in the app ever actually sets, so it always read 0 even
-    // with real exams scheduled/ongoing for the class.
-    const totalExams = await Exam.countDocuments({ class: className });
+    // with real exams scheduled/ongoing for the class. Includes general
+    // exams this class is eligible for, not just class-specific ones.
+    const totalExams = await Exam.countDocuments(examClassFilter(className));
 
     results.push({ className, studentCount, totalExams });
   }

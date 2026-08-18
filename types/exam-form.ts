@@ -4,7 +4,11 @@ export type FieldErrors = Partial<Record<RequiredField, string>>;
 export interface ExamFormData {
   title: string;
   subject: string;
+  // Used when isGeneral is false (the default) - a single class.
   class: string;
+  // Used when isGeneral is true - every class eligible to sit the exam.
+  classes: string[];
+  isGeneral: boolean;
   term: string;
   date: string;
   time: string;
@@ -19,6 +23,8 @@ export const initialFormData: ExamFormData = {
   title: "",
   subject: "",
   class: "",
+  classes: [],
+  isGeneral: false,
   term: "",
   date: "",
   time: "",

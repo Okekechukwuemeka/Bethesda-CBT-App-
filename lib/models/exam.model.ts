@@ -20,7 +20,14 @@ export interface IExamQuestionRef {
 export interface IExam extends Document {
   title: string;
   subject: mongoose.Types.ObjectId;
-  class: ClassLevel;
+  // Populated for a normal, class-specific exam. Left unset for a general
+  // exam (isGeneral: true) - see `classes` below instead.
+  class?: ClassLevel;
+  // General exams (e.g. an inter-class aptitude test, a scholarship exam)
+  // aren't tied to a single class - the admin instead picks every class
+  // that's eligible to sit it. Only populated when isGeneral is true.
+  classes?: ClassLevel[];
+  isGeneral: boolean;
   term: Term;
   academicYear: string; // e.g. "2024/2025"
   type: ExamType;
@@ -71,11 +78,30 @@ const examSchema = new Schema<IExam>(
       ref: "Subject",
       required: [true, "Subject is required"],
     },
+    // Required for a class-specific exam, left empty for a general exam -
+    // enforced as a function so it doesn't fire when isGeneral is true.
     class: {
       type: String,
-      required: [true, "Class is required"],
+      required: [
+        function (this: IExam) {
+          return !this.isGeneral;
+        },
+        "Class is required for a class-specific exam",
+      ],
       enum: { values: CLASS_LEVELS, message: "{VALUE} is not a valid class level" },
     },
+    // Required (non-empty) for a general exam, left empty for a
+    // class-specific exam - the mirror image of `class` above. The
+    // "must be non-empty when general" check itself lives in the
+    // pre("validate") hook below rather than here, since combining an
+    // array type with `enum` and a custom `validate` on the same field
+    // confuses mongoose's TS overload resolution.
+    classes: {
+      type: [String],
+      enum: { values: CLASS_LEVELS, message: "{VALUE} is not a valid class level" },
+      default: undefined,
+    },
+    isGeneral: { type: Boolean, default: false },
     term: {
       type: String,
       required: [true, "Term is required"],
@@ -143,6 +169,21 @@ const examSchema = new Schema<IExam>(
   { timestamps: true },
 );
 
+// Keeps `class` and `classes` from both being populated at once - whichever
+// one doesn't apply to this exam's mode is cleared out, so a general exam
+// never carries a stale single class (or vice versa) from before it was
+// switched.
+examSchema.pre("validate", function (this: IExam) {
+  if (this.isGeneral) {
+    this.class = undefined;
+    if (!this.classes || this.classes.length === 0) {
+      this.invalidate("classes", "Select at least one class for a general exam");
+    }
+  } else {
+    this.classes = undefined;
+  }
+});
+
 // Auto-generate a unique access code when one isn't supplied, retrying on
 // the rare collision. `this.constructor` is used instead of the exported
 // `Exam` binding to sidestep referencing a const before it's initialized.
@@ -164,11 +205,31 @@ examSchema.pre("save", async function (this: IExam) {
 // One "row" per subject+class+term+type on the Exams page, so guard against
 // accidental duplicates (e.g. two "Objective" Chemistry exams for JSS1 First
 // Term). Remove this if you'll ever legitimately need more than one.
+// Partial so it only applies to class-specific exams - general exams don't
+// have a single `class` value to key off of (see the index below instead).
 examSchema.index(
   { subject: 1, class: 1, term: 1, academicYear: 1, type: 1, title: 1 },
-  { unique: true },
+  { unique: true, partialFilterExpression: { isGeneral: { $ne: true } } },
+);
+// Mirrors the index above for general exams, keyed off title instead of a
+// single class since general exams can span several classes at once.
+examSchema.index(
+  { subject: 1, term: 1, academicYear: 1, type: 1, title: 1 },
+  { unique: true, partialFilterExpression: { isGeneral: true } },
 );
 examSchema.index({ class: 1, status: 1 });
+examSchema.index({ classes: 1, status: 1 });
+
+// Shared "does this exam apply to className" query filter - a class-specific
+// exam matches on its single `class`, a general exam matches if className is
+// among its `classes`. Used anywhere exams need to be scoped to one class:
+// the student exam list, the admin exam list's class filter, and the
+// results pages.
+export function examClassFilter(className: ClassLevel) {
+  return {
+    $or: [{ class: className }, { isGeneral: true, classes: className }],
+  };
+}
 
 // Recomputes questionCount/totalMarks from whichever bank questions are
 // currently attached. Called explicitly (not via a hook) from the

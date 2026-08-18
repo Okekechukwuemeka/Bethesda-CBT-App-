@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 interface StatusMessage {
   type: "success" | "error" | "warning";
@@ -14,7 +14,14 @@ type TitleMode = "auto" | "custom";
 interface FormData {
   title: string;
   subject: string;
+  // Used when isGeneral is false (the default) - a single class.
   class: string;
+  // Used when isGeneral is true - every class eligible to sit the exam.
+  classes: string[];
+  // A general exam isn't tied to one class - the admin picks any number
+  // of classes (via `classes` above) that can all take it, e.g. a
+  // school-wide aptitude test or scholarship exam.
+  isGeneral: boolean;
   term: string;
   date: string;
   time: string;
@@ -47,6 +54,8 @@ export function useCreateExamWithQuestions() {
     title: "",
     subject: "",
     class: "",
+    classes: [],
+    isGeneral: false,
     term: "",
     date: "",
     time: "",
@@ -112,11 +121,28 @@ export function useCreateExamWithQuestions() {
   useEffect(() => {
     if (titleMode !== "auto") return;
     const subjectName = subjects.find((s) => s.id === formData.subject)?.name;
-    const parts = [formData.class, formData.term, subjectName].filter(Boolean);
-    const computed = parts.length > 0 ? `${parts.join(" ")} Examination` : "";
+    // A general exam has no single class to lead the title with, so it's
+    // prefixed with "General" instead (e.g. "General First Term
+    // Mathematics Examination") once there's at least a term or subject
+    // to go with it.
+    const meaningfulParts = [formData.term, subjectName].filter(Boolean);
+    let computed = "";
+    if (formData.isGeneral) {
+      if (meaningfulParts.length > 0) computed = `General ${meaningfulParts.join(" ")} Examination`;
+    } else {
+      const parts = [formData.class, ...meaningfulParts].filter(Boolean);
+      if (parts.length > 0) computed = `${parts.join(" ")} Examination`;
+    }
     setFormData((prev) => (prev.title === computed ? prev : { ...prev, title: computed }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [titleMode, formData.class, formData.term, formData.subject, subjects]);
+  }, [
+    titleMode,
+    formData.class,
+    formData.isGeneral,
+    formData.term,
+    formData.subject,
+    subjects,
+  ]);
 
   const handleTitleModeChange = useCallback((mode: TitleMode) => {
     setTitleMode(mode);
@@ -144,6 +170,38 @@ export function useCreateExamWithQuestions() {
     [fieldErrors],
   );
 
+  // Switching modes clears whichever field doesn't apply anymore - a
+  // general exam has no single `class`, a class-specific exam has no
+  // `classes` list - so the form never submits stale data from the mode
+  // it just left.
+  const handleIsGeneralChange = useCallback((isGeneral: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      isGeneral,
+      class: isGeneral ? "" : prev.class,
+      classes: isGeneral ? prev.classes : [],
+    }));
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.class;
+      return next;
+    });
+  }, []);
+
+  const handleClassesToggle = useCallback((classValue: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      classes: prev.classes.includes(classValue)
+        ? prev.classes.filter((c) => c !== classValue)
+        : [...prev.classes, classValue],
+    }));
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.class;
+      return next;
+    });
+  }, []);
+
   const handleQuestionsCsvSelect = useCallback((file: File | null) => {
     setQuestionsCsvFile(file);
   }, []);
@@ -154,7 +212,13 @@ export function useCreateExamWithQuestions() {
     const errors: FieldErrors = {};
     if (!formData.title.trim()) errors.title = "Exam title is required.";
     if (!formData.subject) errors.subject = "Please select a subject.";
-    if (!formData.class) errors.class = "Please select a class.";
+    if (formData.isGeneral) {
+      if (formData.classes.length === 0) {
+        errors.class = "Please select at least one class.";
+      }
+    } else if (!formData.class) {
+      errors.class = "Please select a class.";
+    }
     if (!formData.term) errors.term = "Please select a term.";
     if (!formData.date) errors.date = "Exam date is required.";
     if (!formData.time) errors.time = "Exam time is required.";
@@ -187,7 +251,9 @@ export function useCreateExamWithQuestions() {
           body: JSON.stringify({
             title: formData.title,
             subject: formData.subject,
-            class: formData.class,
+            isGeneral: formData.isGeneral,
+            class: formData.isGeneral ? undefined : formData.class,
+            classes: formData.isGeneral ? formData.classes : undefined,
             term: formData.term,
             academicYear,
             type: toBackendType(formData.type),
@@ -244,6 +310,8 @@ export function useCreateExamWithQuestions() {
       title: "",
       subject: "",
       class: "",
+      classes: [],
+      isGeneral: false,
       term: "",
       date: "",
       time: "",
@@ -286,6 +354,8 @@ export function useCreateExamWithQuestions() {
     showBulkImportModal,
     partialErrorMessage,
     handleInputChange,
+    handleIsGeneralChange,
+    handleClassesToggle,
     handleQuestionsCsvSelect,
     clearQuestionsCsvFile,
     handleSubmit,

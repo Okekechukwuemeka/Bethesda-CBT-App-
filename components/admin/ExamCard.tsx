@@ -33,7 +33,10 @@ const ExamCard: React.FC<ExamCardProps> = ({ exam, onDelete }) => {
             {exam?.title}
           </h2>
           <p className="text-sm text-[#4A6A8A]">
-            {exam?.subject?.name} &bull; {exam.class}
+            {exam?.subject?.name} &bull;{" "}
+            {exam.isGeneral
+              ? `General${exam.classes?.length ? ` (${exam.classes.join(", ")})` : ""}`
+              : exam.class}
           </p>
         </div>
         <Badge value={exam.status} getColor={getStatusBadgeColor} getLabel={getStatusLabel} />

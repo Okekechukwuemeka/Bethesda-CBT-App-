@@ -125,7 +125,9 @@ const ExamQuestionsPage: React.FC = () => {
                 <>
                   Managing questions for <strong>{exam.title}</strong>
                   {subjectName && ` • ${subjectName}`}
-                  {exam.class && ` • ${exam.class}`}
+                  {exam.isGeneral
+                    ? ` • General${exam.classes?.length ? ` (${exam.classes.join(", ")})` : ""}`
+                    : exam.class && ` • ${exam.class}`}
                 </>
               ) : (
                 "Loading exam details…"

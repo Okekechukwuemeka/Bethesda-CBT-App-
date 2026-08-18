@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { requireStudent } from "@/lib/api-guards";
-import { Exam } from "@/lib/models/exam.model";
+import { Exam, examClassFilter } from "@/lib/models/exam.model";
 import { Submission } from "@/lib/models/submission.model";
 import { computeExamStatus } from "@/lib/exam-status";
 
@@ -21,7 +21,10 @@ export async function GET() {
   // in the query - status is time-derived now (see lib/exam-status.ts),
   // so a stored value here can't be trusted. Status is computed fresh
   // below, per exam, using the current time.
-  const exams = await Exam.find({ class: session.user.class })
+  // Matches exams scoped to this student's class directly, PLUS general
+  // exams (isGeneral: true) that list this class among their eligible
+  // `classes` - see examClassFilter.
+  const exams = await Exam.find(examClassFilter(session.user.class))
     .populate("subject", "name code")
     .select("-examCode -questions")
     .sort({ examDate: 1 })

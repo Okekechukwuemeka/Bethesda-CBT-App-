@@ -14,7 +14,11 @@ type FieldErrors = Partial<Record<RequiredField, string>>;
 interface FormData {
   title: string;
   subject: string; // Subject _id
+  // Used when isGeneral is false (the default) - a single class.
   class: string;
+  // Used when isGeneral is true - every class eligible to sit the exam.
+  classes: string[];
+  isGeneral: boolean;
   term: string;
   date: string;
   time: string;
@@ -63,6 +67,8 @@ export function useEditExam(examId: string) {
     title: "",
     subject: "",
     class: "",
+    classes: [],
+    isGeneral: false,
     term: "",
     date: "",
     time: "",
@@ -100,7 +106,9 @@ export function useEditExam(examId: string) {
         setFormData({
           title: exam.title,
           subject: exam.subject?._id ?? exam.subject,
-          class: exam.class,
+          class: exam.class ?? "",
+          classes: exam.classes ?? [],
+          isGeneral: exam.isGeneral ?? false,
           term: exam.term,
           date: examDate.toISOString().split("T")[0],
           time: examDate.toISOString().split("T")[1].slice(0, 5),
@@ -150,11 +158,47 @@ export function useEditExam(examId: string) {
     [fieldErrors],
   );
 
+  // Switching modes clears whichever field doesn't apply anymore - see the
+  // matching comment in useCreateExamWithQuestions.
+  const handleIsGeneralChange = useCallback((isGeneral: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      isGeneral,
+      class: isGeneral ? "" : prev.class,
+      classes: isGeneral ? prev.classes : [],
+    }));
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.class;
+      return next;
+    });
+  }, []);
+
+  const handleClassesToggle = useCallback((classValue: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      classes: prev.classes.includes(classValue)
+        ? prev.classes.filter((c) => c !== classValue)
+        : [...prev.classes, classValue],
+    }));
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.class;
+      return next;
+    });
+  }, []);
+
   const validate = useCallback((): FieldErrors => {
     const errors: FieldErrors = {};
     if (!formData.title.trim()) errors.title = "Exam title is required.";
     if (!formData.subject) errors.subject = "Please select a subject.";
-    if (!formData.class) errors.class = "Please select a class.";
+    if (formData.isGeneral) {
+      if (formData.classes.length === 0) {
+        errors.class = "Please select at least one class.";
+      }
+    } else if (!formData.class) {
+      errors.class = "Please select a class.";
+    }
     if (!formData.term) errors.term = "Please select a term.";
     if (!formData.date) errors.date = "Exam date is required.";
     if (!formData.time) errors.time = "Exam time is required.";
@@ -186,7 +230,9 @@ export function useEditExam(examId: string) {
           body: JSON.stringify({
             title: formData.title,
             subject: formData.subject,
-            class: formData.class,
+            isGeneral: formData.isGeneral,
+            class: formData.isGeneral ? undefined : formData.class,
+            classes: formData.isGeneral ? formData.classes : undefined,
             term: formData.term,
             type: toBackendType(formData.type),
             examDate,
@@ -273,6 +319,8 @@ export function useEditExam(examId: string) {
     titleInputRef,
     fieldRefs,
     handleInputChange,
+    handleIsGeneralChange,
+    handleClassesToggle,
     handleSubmit,
     handleDelete,
     cancelDeleteConfirm,

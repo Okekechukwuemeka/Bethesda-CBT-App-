@@ -33,6 +33,8 @@ const EditExamPage: React.FC = () => {
     titleInputRef,
     fieldRefs,
     handleInputChange,
+    handleIsGeneralChange,
+    handleClassesToggle,
     handleSubmit,
     handleDelete,
     cancelDeleteConfirm,
@@ -163,6 +165,8 @@ const EditExamPage: React.FC = () => {
               fieldRefs={fieldRefs}
               onChange={handleInputChange}
               subjects={subjects}
+              onIsGeneralChange={handleIsGeneralChange}
+              onClassesToggle={handleClassesToggle}
             />
 
             <ScheduleStatusFormSection
@@ -198,7 +202,13 @@ const EditExamPage: React.FC = () => {
         isOpen={showDeleteConfirm && !forceDeleteWarning}
         examTitle={formData.title}
         examSubject={subjectName}
-        examClass={formData.class}
+        examClass={
+          formData.isGeneral
+            ? formData.classes.length > 0
+              ? `General (${formData.classes.join(", ")})`
+              : "General (all selected classes)"
+            : formData.class
+        }
         isProcessing={isSubmitting}
         onConfirm={() => performDelete(false)}
         onCancel={cancelDeleteConfirm}

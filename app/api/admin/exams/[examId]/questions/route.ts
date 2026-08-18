@@ -45,6 +45,11 @@ interface NewQuestionInput {
   // the model will reject it if the caller got that wrong.
   passageId?: string;
   passageOrder?: number;
+  // Only needed when this exam is general (exam.class is unset, since a
+  // general exam has no single class) - the admin must say which class
+  // this particular new question belongs to. Ignored for a class-specific
+  // exam, which always inherits exam.class instead.
+  class?: string;
 }
 
 interface ItemError {
@@ -114,9 +119,12 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
         passageId: input.passageId,
         passageOrder: input.passageOrder,
         // Inherited from the exam - a question created this way is scoped
-        // to the same subject/class as the exam it was born in.
+        // to the same subject/class as the exam it was born in. A general
+        // exam has no single exam.class, so the caller must supply one
+        // per question instead (surfaces as a validation error below if
+        // they didn't).
         subject: exam.subject,
-        class: exam.class,
+        class: exam.isGeneral ? input.class : exam.class,
         createdBy: guard.session.user.id,
       }),
   );

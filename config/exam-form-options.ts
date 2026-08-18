@@ -15,6 +15,14 @@ export const CLASS_OPTIONS = [
   { value: "Graduated", label: "Graduated" },
 ];
 
+// Same classes as CLASS_OPTIONS, minus the "Select Class" placeholder and
+// "Graduated" (a general exam is for currently-enrolled classes, not
+// alumni) - used for the "which classes can take this?" checkbox list on
+// a general exam.
+export const GENERAL_EXAM_CLASS_OPTIONS = CLASS_OPTIONS.filter(
+  (option) => option.value !== "" && option.value !== "Graduated",
+);
+
 export const TERM_OPTIONS = [
   { value: "", label: "Select Term" },
   { value: "First Term", label: "First Term" },
