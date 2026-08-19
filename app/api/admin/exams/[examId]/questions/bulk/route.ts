@@ -6,7 +6,7 @@ import { requireAdmin } from "@/lib/api-guards";
 import { Exam, recomputeExamTotals } from "@/lib/models/exam.model";
 import { Question, IQuestion } from "@/lib/models/question.model";
 import { Passage, IPassage } from "@/lib/models/passage.model";
-import { PASSAGE_KINDS } from "@/lib/models/constants";
+import { PASSAGE_KINDS, ClassLevel } from "@/lib/models/constants";
 
 interface RowError {
   row: number;
@@ -54,18 +54,12 @@ interface QuestionCandidate {
   rowNumber: number;
   doc: IQuestion;
 }
+
 interface PassageCandidate {
   rowNumber: number;
   doc: IPassage;
 }
 
-// POST /api/admin/exams/[examId]/questions/bulk
-// multipart/form-data with a "file" field containing the CSV.
-//
-// See the standalone /api/admin/questions/bulk route for the full format
-// docs (option columns, passage_key grouping, mangled-fraction detection)
-// - identical here, just scoped to one exam's subject/class instead of
-// form fields.
 export async function POST(req: NextRequest, context: { params: Promise<{ examId: string }> }) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
@@ -81,6 +75,46 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
   if (!(file instanceof File)) {
     return NextResponse.json(
       { error: "A CSV file is required in the 'file' field" },
+      { status: 400 },
+    );
+  }
+
+  // Ensure subject is safely stringified for Mongoose validation
+  const subjectId = exam.subject ? exam.subject.toString() : null;
+  if (!subjectId) {
+    return NextResponse.json(
+      { error: "Exam does not have a valid subject assigned to it" },
+      { status: 400 },
+    );
+  }
+
+  let resolvedClass: string;
+  if (exam.isGeneral) {
+    const classField = formData.get("class");
+    if (typeof classField !== "string" || !classField) {
+      return NextResponse.json(
+        {
+          error: `This is a general exam - a "class" form field is required, one of: ${(exam.classes ?? []).join(", ")}`,
+        },
+        { status: 400 },
+      );
+    }
+    if (!(exam.classes ?? []).includes(classField as ClassLevel)) {
+      return NextResponse.json(
+        {
+          error: `class "${classField}" is not one of this exam's eligible classes (${(exam.classes ?? []).join(", ")})`,
+        },
+        { status: 400 },
+      );
+    }
+    resolvedClass = classField;
+  } else {
+    resolvedClass = exam.class as string;
+  }
+
+  if (!resolvedClass) {
+    return NextResponse.json(
+      { error: "Exam does not have a valid class level assigned to it" },
       { status: 400 },
     );
   }
@@ -170,8 +204,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
         title: group.title,
         text: group.body,
         kind: group.kind || "comprehension",
-        subject: exam.subject,
-        class: exam.class,
+        subject: subjectId,
+        class: resolvedClass,
         createdBy: guard.session.user.id,
       }),
     });
@@ -230,10 +264,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
         errors.push({ row: rowNumber, error: "Missing correct answer in the last option column" });
         return;
       }
-      // Checked BEFORE the exact-match check below, so a mangled answer
-      // column gets a diagnosis pointing at the actual cause instead of
-      // just "doesn't match any option" - which is technically true but
-      // unhelpful if the real problem is Excel silently rewriting it.
+
       if (looksLikeMangledFraction(correctAnswerRaw)) {
         errors.push({
           row: rowNumber,
@@ -274,8 +305,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
         correctAnswer,
         passageId,
         passageOrder,
-        subject: exam.subject,
-        class: exam.class,
+        subject: subjectId,
+        class: resolvedClass,
         createdBy: guard.session.user.id,
       }),
     });
@@ -285,6 +316,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
     Promise.allSettled(passageCandidates.map((p) => p.doc.validate())),
     Promise.allSettled(candidates.map((q) => q.doc.validate())),
   ]);
+
   questionValidationResults.forEach((result, i) => {
     if (result.status === "rejected") {
       const rowNumber = candidates[i].rowNumber;
@@ -292,6 +324,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
       errors.push({ row: rowNumber, error: message });
     }
   });
+
   passageValidationResults.forEach((result, i) => {
     if (result.status === "rejected") {
       const rowNumber = passageCandidates[i].rowNumber;
@@ -308,27 +341,34 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
     );
   }
 
-  if (passageCandidates.length > 0) {
-    await Passage.insertMany(passageCandidates.map((p) => p.doc));
-  }
-  const insertedQuestions = await Question.insertMany(candidates.map((q) => q.doc));
+  // --- Database Persistence ---
+  try {
+    if (passageCandidates.length > 0) {
+      await Passage.insertMany(passageCandidates.map((p) => p.doc));
+    }
+    const insertedQuestions = await Question.insertMany(candidates.map((q) => q.doc));
 
-  const nextOrderStart = exam.questions.length;
-  insertedQuestions.forEach((question, i) => {
-    exam.questions.push({
-      question: question._id as mongoose.Types.ObjectId,
-      order: nextOrderStart + i,
+    const nextOrderStart = exam.questions.length;
+    insertedQuestions.forEach((question, i) => {
+      exam.questions.push({
+        question: question._id as mongoose.Types.ObjectId,
+        order: nextOrderStart + i,
+      });
     });
-  });
-  await exam.save();
-  await recomputeExamTotals(exam.id);
 
-  return NextResponse.json(
-    {
-      imported: candidates.length,
-      passagesCreated: passageCandidates.length,
-      totalQuestions: exam.questions.length,
-    },
-    { status: 201 },
-  );
+    await exam.save();
+    await recomputeExamTotals(exam.id);
+
+    return NextResponse.json(
+      {
+        imported: candidates.length,
+        passagesCreated: passageCandidates.length,
+        totalQuestions: exam.questions.length,
+      },
+      { status: 201 },
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Database error while attaching questions";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

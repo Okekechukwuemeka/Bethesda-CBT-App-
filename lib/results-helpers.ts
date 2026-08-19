@@ -99,6 +99,20 @@ export async function getClassActiveStudentCount(className: ClassLevel): Promise
   return Student.countDocuments({ class: className, isActive: true });
 }
 
+// Active students' own ids for one class - used to scope a Submission
+// query down to "this class's students" specifically. Needed because a
+// Submission only references its student, not that student's class, so
+// `Submission.find({ exam: examId })` alone returns every class's
+// submissions once a single exam (a general exam) can be shared across
+// several classes - fine when an exam belongs to exactly one class (the
+// only students who could ever submit to it are that class's), but wrong
+// the moment more than one class can submit to the same exam.
+async function getActiveStudentIds(className: ClassLevel): Promise<mongoose.Types.ObjectId[]> {
+  await connectDB();
+  const students = await Student.find({ class: className, isActive: true }).select("_id").lean();
+  return students.map((s) => s._id as mongoose.Types.ObjectId);
+}
+
 export async function getExamsForClass(className: ClassLevel) {
   await connectDB();
   // Includes general exams this class is eligible for, alongside exams
@@ -110,14 +124,23 @@ export async function getExamsForClass(className: ClassLevel) {
 }
 
 export async function getSubjectResultsForClass(className: ClassLevel): Promise<SubjectResult[]> {
-  const [exams, totalStudents] = await Promise.all([
+  const [exams, totalStudents, studentIds] = await Promise.all([
     getExamsForClass(className),
     getClassActiveStudentCount(className),
+    getActiveStudentIds(className),
   ]);
 
   return Promise.all(
     exams.map(async (exam) => {
-      const submissions = await Submission.find({ exam: exam._id })
+      // Scoped to this class's own students (see getActiveStudentIds) -
+      // without this, a general exam shared with other classes would
+      // pull every one of those classes' submissions into THIS class's
+      // average/highest/lowest/completed-count, even though most of them
+      // have nothing to do with this class's results page.
+      const submissions = await Submission.find({
+        exam: exam._id,
+        student: { $in: studentIds },
+      })
         .select("status score totalMarks")
         .lean();
       return buildSubjectResult(exam as unknown as ExamLean, submissions, totalStudents);
@@ -136,8 +159,14 @@ export async function getClassAverageScore(className: ClassLevel): Promise<numbe
   const classExamIds = classExams.map((e) => e._id);
   if (classExamIds.length === 0) return 0;
 
+  const studentIds = await getActiveStudentIds(className);
+
   const markedSubmissions = await Submission.find({
     exam: { $in: classExamIds },
+    // Same scoping as getSubjectResultsForClass above - without this, a
+    // general exam shared with other classes would blend those classes'
+    // scores into this class's headline average.
+    student: { $in: studentIds },
     status: "Marked",
   }).select("score totalMarks");
 

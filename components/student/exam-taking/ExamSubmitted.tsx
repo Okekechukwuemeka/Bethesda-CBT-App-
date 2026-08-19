@@ -16,7 +16,11 @@ const ExamSubmitted: React.FC<ExamSubmittedProps> = ({ exam, result, onDone }) =
   // array), which is also the only time this component ever mounts.
   useEffect(() => {
     const endExam = new Audio("/audio/sfx/end_exam.wav");
-    const goodJob = new Audio("/audio/sfx/good_job.mp3");
+    // Filename matches the actual asset exactly (capital G) - this is a
+    // case-sensitive path once deployed (most hosts serve on a
+    // case-sensitive filesystem even though local dev on macOS/Windows
+    // wouldn't have caught a mismatch here).
+    const goodJob = new Audio("/audio/sfx/goodjob.mp3");
     // Both start together - Promise.all rather than two independent
     // calls just so a rejection from one (e.g. a browser blocking
     // autoplay without a preceding user gesture) doesn't produce an

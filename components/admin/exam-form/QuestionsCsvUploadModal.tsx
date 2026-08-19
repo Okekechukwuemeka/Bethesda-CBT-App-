@@ -2,11 +2,26 @@
 
 import React, { useRef } from "react";
 
+interface ClassOption {
+  value: string;
+  label: string;
+}
+
 interface QuestionsCsvUploadModalProps {
   isOpen: boolean;
   currentFile: File | null;
   onSelectFile: (file: File | null) => void;
   onClose: () => void;
+  // Changes the "will use this exam's subject and class automatically"
+  // copy below, and shows/hides the class picker - a general exam has no
+  // single class to inherit, so the admin must pick one for this upload.
+  isGeneral: boolean;
+  // The exam's own eligible classes (formData.classes) - only these are
+  // offered, so a typo/mismatch can't attach a question no student on
+  // this exam could ever be shown.
+  classOptions: ClassOption[];
+  selectedClass: string;
+  onSelectedClassChange: (value: string) => void;
 }
 
 const QuestionsCsvUploadModal: React.FC<QuestionsCsvUploadModalProps> = ({
@@ -14,6 +29,10 @@ const QuestionsCsvUploadModal: React.FC<QuestionsCsvUploadModalProps> = ({
   currentFile,
   onSelectFile,
   onClose,
+  isGeneral,
+  classOptions,
+  selectedClass,
+  onSelectedClassChange,
 }) => {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -55,10 +74,47 @@ const QuestionsCsvUploadModal: React.FC<QuestionsCsvUploadModalProps> = ({
             <code>passage_key</code>. Leave these columns blank entirely for standalone questions.
           </p>
           <p className="text-sm text-[#4A6A8A]">
-            These questions (and any passages they create) will use this exam&apos;s subject and
-            class automatically. The file is uploaded once you click <strong>Create Exam</strong>{" "}
-            below - not before.
+            These questions (and any passages they create) will use this exam&apos;s subject{" "}
+            {isGeneral ? (
+              <>
+                automatically. Since this is a <strong>general exam</strong> (no single class), pick
+                below which of its classes this file&apos;s questions are for - if you need
+                questions for more than one class, upload the same or a different CSV again with a
+                different class picked each time.
+              </>
+            ) : (
+              <>and class automatically.</>
+            )}{" "}
+            The file is uploaded once you click <strong>Create Exam</strong> below - not before.
           </p>
+
+          {isGeneral && (
+            <div>
+              <label htmlFor="csv-class" className="block text-sm font-medium text-[#1A3A5C] mb-1">
+                Class for this file{" "}
+                <span className="text-red-500" aria-hidden="true">
+                  *
+                </span>
+              </label>
+              <select
+                id="csv-class"
+                value={selectedClass}
+                onChange={(e) => onSelectedClassChange(e.target.value)}
+                className="w-full px-4 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE]">
+                <option value="">Select a class</option>
+                {classOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              {classOptions.length === 0 && (
+                <p className="text-xs text-red-600 mt-1">
+                  Select at least one eligible class above before uploading a CSV.
+                </p>
+              )}
+            </div>
+          )}
 
           <div>
             <label

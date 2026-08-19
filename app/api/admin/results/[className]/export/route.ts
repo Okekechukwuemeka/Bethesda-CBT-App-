@@ -42,15 +42,26 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
   ]);
   const subjects: SubjectResult[] = [];
   const scoresBySubject: Record<string, ClassExportRow[]> = {};
+  const studentIds = new Set(students.map((s) => s._id.toString()));
 
   for (const exam of exams) {
     const submissions = await Submission.find({ exam: exam._id })
       .select("student status score totalMarks")
       .lean();
+    // Scoped to this class's own students before it feeds into
+    // buildSubjectResult below - without this, a general exam shared
+    // with other classes would blend those classes' scores into this
+    // class's average/highest/lowest/completed-count. The per-student
+    // scoresBySubject rows further down are already safe regardless
+    // (they only ever map over `students`, this class's list), but the
+    // subject-level aggregate isn't unless it's filtered too.
+    const classSubmissions = submissions.filter((s) => studentIds.has(s.student.toString()));
 
-    subjects.push(buildSubjectResult(exam as unknown as ExamLean, submissions, totalStudents));
+    subjects.push(
+      buildSubjectResult(exam as unknown as ExamLean, classSubmissions, totalStudents),
+    );
 
-    const submissionByStudent = new Map(submissions.map((s) => [s.student.toString(), s]));
+    const submissionByStudent = new Map(classSubmissions.map((s) => [s.student.toString(), s]));
     scoresBySubject[exam._id.toString()] = students.map((student) => {
       const submission = submissionByStudent.get(student._id.toString());
       const isMarked = submission?.status === "Marked";

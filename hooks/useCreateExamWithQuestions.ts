@@ -88,6 +88,13 @@ export function useCreateExamWithQuestions() {
   // (/admin/exams/[id]/questions) after the exam exists - bulk CSV import
   // is the only way to seed questions at creation time.
   const [questionsCsvFile, setQuestionsCsvFile] = useState<File | null>(null);
+  // Which of the exam's eligible classes this CSV's questions belong to -
+  // only meaningful/shown when formData.isGeneral is true, mirroring the
+  // standalone question-bank importer's subject+class form fields rather
+  // than a per-row CSV column: one upload = one class, same file just gets
+  // re-uploaded (with a different class picked here) if a general exam
+  // needs questions for more than one class.
+  const [questionsCsvClass, setQuestionsCsvClass] = useState("");
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [partialErrorMessage, setPartialErrorMessage] = useState<string | null>(null);
 
@@ -135,14 +142,7 @@ export function useCreateExamWithQuestions() {
     }
     setFormData((prev) => (prev.title === computed ? prev : { ...prev, title: computed }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    titleMode,
-    formData.class,
-    formData.isGeneral,
-    formData.term,
-    formData.subject,
-    subjects,
-  ]);
+  }, [titleMode, formData.class, formData.isGeneral, formData.term, formData.subject, subjects]);
 
   const handleTitleModeChange = useCallback((mode: TitleMode) => {
     setTitleMode(mode);
@@ -173,7 +173,9 @@ export function useCreateExamWithQuestions() {
   // Switching modes clears whichever field doesn't apply anymore - a
   // general exam has no single `class`, a class-specific exam has no
   // `classes` list - so the form never submits stale data from the mode
-  // it just left.
+  // it just left. Also clears any already-picked CSV class, since it's
+  // only relevant in general mode and its options (formData.classes)
+  // just changed shape.
   const handleIsGeneralChange = useCallback((isGeneral: boolean) => {
     setFormData((prev) => ({
       ...prev,
@@ -181,6 +183,7 @@ export function useCreateExamWithQuestions() {
       class: isGeneral ? "" : prev.class,
       classes: isGeneral ? prev.classes : [],
     }));
+    setQuestionsCsvClass("");
     setFieldErrors((prev) => {
       const next = { ...prev };
       delete next.class;
@@ -195,6 +198,10 @@ export function useCreateExamWithQuestions() {
         ? prev.classes.filter((c) => c !== classValue)
         : [...prev.classes, classValue],
     }));
+    // If the class the CSV was targeting just got unchecked, the picker
+    // no longer has a valid selection - clear it rather than silently
+    // submitting a class the exam is no longer eligible for.
+    setQuestionsCsvClass((prev) => (prev === classValue ? "" : prev));
     setFieldErrors((prev) => {
       const next = { ...prev };
       delete next.class;
@@ -204,6 +211,10 @@ export function useCreateExamWithQuestions() {
 
   const handleQuestionsCsvSelect = useCallback((file: File | null) => {
     setQuestionsCsvFile(file);
+  }, []);
+
+  const handleQuestionsCsvClassChange = useCallback((classValue: string) => {
+    setQuestionsCsvClass(classValue);
   }, []);
 
   const clearQuestionsCsvFile = useCallback(() => setQuestionsCsvFile(null), []);
@@ -237,6 +248,19 @@ export function useCreateExamWithQuestions() {
           text: `Please fix ${errorFields.length} field${errorFields.length > 1 ? "s" : ""} before submitting.`,
         });
         fieldRefs.current[errorFields[0]]?.focus();
+        return;
+      }
+
+      // A general exam has no single class for the CSV import route to
+      // fall back on, so this has to be caught here instead - there's no
+      // RequiredField slot for it since it only applies when both
+      // isGeneral and a CSV file are true at once.
+      if (formData.isGeneral && questionsCsvFile && !questionsCsvClass) {
+        setStatusMessage({
+          type: "error",
+          text: "Please pick which class the uploaded CSV's questions are for.",
+        });
+        setShowBulkImportModal(true);
         return;
       }
 
@@ -274,6 +298,10 @@ export function useCreateExamWithQuestions() {
         if (questionsCsvFile) {
           const csvForm = new FormData();
           csvForm.append("file", questionsCsvFile);
+          // Only meaningful (and only required) for a general exam - a
+          // class-specific exam's own exam.class is used automatically
+          // server-side, same as before.
+          if (formData.isGeneral) csvForm.append("class", questionsCsvClass);
           const csvRes = await fetch(`/api/admin/exams/${examId}/questions/bulk`, {
             method: "POST",
             body: csvForm,
@@ -302,7 +330,7 @@ export function useCreateExamWithQuestions() {
         setIsSubmitting(false);
       }
     },
-    [formData, academicYear, questionsCsvFile, validate],
+    [formData, academicYear, questionsCsvFile, questionsCsvClass, validate],
   );
 
   const resetForm = useCallback(() => {
@@ -324,6 +352,7 @@ export function useCreateExamWithQuestions() {
     setTitleMode("auto");
     setAcademicYear(currentAcademicYear());
     setQuestionsCsvFile(null);
+    setQuestionsCsvClass("");
     setImportedQuestionCount(0);
     setCreatedExamId(null);
     setPartialErrorMessage(null);
@@ -351,12 +380,14 @@ export function useCreateExamWithQuestions() {
     titleInputRef,
     fieldRefs,
     questionsCsvFile,
+    questionsCsvClass,
     showBulkImportModal,
     partialErrorMessage,
     handleInputChange,
     handleIsGeneralChange,
     handleClassesToggle,
     handleQuestionsCsvSelect,
+    handleQuestionsCsvClassChange,
     clearQuestionsCsvFile,
     handleSubmit,
     resetForm,

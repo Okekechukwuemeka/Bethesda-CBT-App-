@@ -9,6 +9,7 @@ import ScheduleSection from "@/components/admin/exam-form/ScheduleSection";
 import ScoringSection from "@/components/admin/exam-form/ScoringSection";
 import InstructionsSection from "@/components/admin/exam-form/InstructionsSection";
 import QuestionsCsvUploadModal from "@/components/admin/exam-form/QuestionsCsvUploadModal";
+import { CLASS_OPTIONS } from "@/config/exam-form-options";
 import { useCreateExamWithQuestions } from "@/hooks/useCreateExamWithQuestions";
 import SuccessStateWithQuestions from "@/components/admin/exam-form/SuccessStateWithQuestions";
 import ExamDetailsSection from "@/components/admin/exam-form/ExamDetailsSection";
@@ -42,17 +43,6 @@ const UploadIcon = () => (
 );
 
 const CreateExamPage: React.FC = () => {
-  // console.log({
-  //   PageHeader,
-  //   StatusMessage,
-  //   ConfirmDialog,
-  //   ScheduleSection,
-  //   ScoringSection,
-  //   InstructionsSection,
-  //   QuestionsCsvUploadModal,
-  //   SuccessStateWithQuestions,
-  //   ExamDetailsSection,
-  // });
   const {
     formData,
     isSubmitting,
@@ -69,12 +59,14 @@ const CreateExamPage: React.FC = () => {
     titleInputRef,
     fieldRefs,
     questionsCsvFile,
+    questionsCsvClass,
     showBulkImportModal,
     partialErrorMessage,
     handleInputChange,
     handleIsGeneralChange,
     handleClassesToggle,
     handleQuestionsCsvSelect,
+    handleQuestionsCsvClassChange,
     handleSubmit,
     resetForm,
     setShowBulkImportModal,
@@ -178,6 +170,10 @@ const CreateExamPage: React.FC = () => {
         currentFile={questionsCsvFile}
         onSelectFile={handleQuestionsCsvSelect}
         onClose={() => setShowBulkImportModal(false)}
+        isGeneral={formData.isGeneral}
+        classOptions={CLASS_OPTIONS.filter((o) => formData.classes.includes(o.value))}
+        selectedClass={questionsCsvClass}
+        onSelectedClassChange={handleQuestionsCsvClassChange}
       />
 
       <ConfirmDialog

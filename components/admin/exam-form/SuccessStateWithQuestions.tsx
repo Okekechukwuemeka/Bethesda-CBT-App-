@@ -53,7 +53,7 @@ const SuccessStateWithQuestions: React.FC<SuccessStateWithQuestionsProps> = ({
             </button>
           </div>
           <p className="text-xs text-[#8A9CAE] mt-2">
-            Share this with students in the class this exam is set for. You can find it again on the
+            Share this with the students eligible to take this exam. You can find it again on the
             exam&apos;s edit page later.
           </p>
         </div>
