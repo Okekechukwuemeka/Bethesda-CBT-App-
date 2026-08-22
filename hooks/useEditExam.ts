@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { toLocalDateInputValue, toLocalTimeInputValue } from "@/lib/exam-format";
 
 interface StatusMessage {
   type: "success" | "error" | "warning";
@@ -110,8 +111,8 @@ export function useEditExam(examId: string) {
           classes: exam.classes ?? [],
           isGeneral: exam.isGeneral ?? false,
           term: exam.term,
-          date: examDate.toISOString().split("T")[0],
-          time: examDate.toISOString().split("T")[1].slice(0, 5),
+          date: toLocalDateInputValue(examDate),
+          time: toLocalTimeInputValue(examDate),
           duration: exam.duration,
           type: fromBackendEnum(exam.type),
           instructions: exam.instructions ?? "",

@@ -44,8 +44,8 @@ const QuestionBankFilters: React.FC<QuestionBankFiltersProps> = ({
           className="px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE] text-sm"
           aria-label="Filter by type">
           <option value="">All Types</option>
-          <option value="objective">Objective</option>
-          <option value="theory">Theory</option>
+          <option value="Objective">Objective</option>
+          <option value="Theory">Theory</option>
         </select>
         <select
           value={filterSubject}

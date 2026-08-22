@@ -58,6 +58,20 @@ export const useExamTaking = () => {
   const submitInFlightRef = useRef(false); // true from the moment we decide to submit, even before the server confirms
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // examIdRef was previously only ever set once, at first render
+  // (useRef(examId) captures the initial value and nothing after that
+  // updates it). Every sync/submit call below reads examIdRef.current
+  // rather than the reactive `examId`, so if this page ever renders for a
+  // second exam without a full remount (e.g. navigating from one exam's
+  // /take page straight to another's), every subsequent sync/submit would
+  // silently keep hitting the FIRST exam's endpoints while the rest of
+  // the hook (fetched questions, submissionId, etc.) had already moved on
+  // to the new one - a stale, mismatched exam id talking to a fresh
+  // submission id.
+  useEffect(() => {
+    examIdRef.current = examId;
+  }, [examId]);
+
   // --- load: sessionStorage handoff -> IDB pending-submit resume ->
   // IDB in-progress resume -> fresh /start (server resume path) ---
   useEffect(() => {
@@ -66,6 +80,32 @@ export const useExamTaking = () => {
     async function bootstrap() {
       setIsLoading(true);
       setLoadError(null);
+
+      // Defensive reset for a new exam session - guards against carrying
+      // over another exam's finished/submitted state (isSubmitted,
+      // result), guards (hasFinalizedRef, submitInFlightRef), or stale
+      // answers if this hook instance is ever reused across two different
+      // exams rather than getting a fresh mount. Without this, landing on
+      // a second exam right after finishing a first one could briefly
+      // show the first exam's result screen, or have its sync/submit
+      // calls silently no-op because hasFinalizedRef was still true from
+      // the previous exam.
+      hasFinalizedRef.current = false;
+      submitInFlightRef.current = false;
+      submissionIdRef.current = null;
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+      setIsSubmitted(false);
+      setResult(null);
+      setAnswers({});
+      setQuestions([]);
+      setExamMeta(null);
+      setRemainingSeconds(0);
+      setStatusMessage(null);
+      setShowSubmitDialog(false);
+      setIsSubmitting(false);
 
       // 1. A submit was in flight when the tab last closed - don't
       // re-render the exam at all, just retry the submit.
@@ -305,6 +345,12 @@ export const useExamTaking = () => {
   // --- submit, with indefinite retry until it actually lands ---
   const submitNow = useCallback(async (isAuto: boolean) => {
     if (hasFinalizedRef.current) return;
+    // Bind this submit attempt to the exam it was started for. If the
+    // student navigates to a different exam while a retry loop is still
+    // waiting to fire (see the retry() closure below), that loop must
+    // stop rather than eventually submitting this exam's stale answers
+    // against whatever exam happens to be current by the time it fires.
+    const sessionExamId = examIdRef.current;
     submitInFlightRef.current = true;
     setIsSubmitting(true);
     setShowSubmitDialog(false);
@@ -373,6 +419,13 @@ export const useExamTaking = () => {
       });
       const retry = () => {
         retryTimeoutRef.current = setTimeout(async () => {
+          if (examIdRef.current !== sessionExamId) {
+            // Navigated to a different exam since this retry was queued -
+            // this submit is abandoned, not failed. bootstrap() already
+            // cleared retryTimeoutRef for the new session; don't resurrect
+            // this one.
+            return;
+          }
           const ok = await attempt();
           if (!ok) retry();
         }, SUBMIT_RETRY_MS);
