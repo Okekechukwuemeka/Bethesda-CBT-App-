@@ -6,6 +6,9 @@ interface QuestionBankTableProps {
   isLoading: boolean;
   onEdit: (question: Question, e: React.MouseEvent<HTMLButtonElement>) => void;
   onDelete: (question: Question, e: React.MouseEvent<HTMLButtonElement>) => void;
+  selectedIds: Set<string>;
+  onToggleSelect: (id: string) => void;
+  onToggleSelectAll: () => void;
 }
 
 const getTypeBadgeColor = (type: string) =>
@@ -31,13 +34,19 @@ const passageLabel = (question: Question): string | null => {
 
 const columnHeaders = ["Question", "Type", "Subject", "Class", "Marks", "Passage", "Actions"];
 
-const TableShell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+const TableShell: React.FC<{ children: React.ReactNode; selectAllCell?: React.ReactNode }> = ({
+  children,
+  selectAllCell,
+}) => (
   <div className="bg-white rounded-xl border border-[#C5D8EC] overflow-hidden shadow-sm">
     <div className="overflow-x-auto">
       <table className="w-full">
         <caption className="sr-only">Questions list</caption>
         <thead className="bg-[#F8FAFE] border-b border-[#E8EEF5]">
           <tr>
+            <th scope="col" className="px-4 py-3 w-10">
+              {selectAllCell}
+            </th>
             {columnHeaders.map((header) => (
               <th
                 key={header}
@@ -59,6 +68,9 @@ const QuestionBankTable: React.FC<QuestionBankTableProps> = ({
   isLoading,
   onEdit,
   onDelete,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
 }) => {
   // Rows sharing a passage sit next to each other, in passageOrder, rather
   // than scattered wherever the API's createdAt sort happened to put them
@@ -106,7 +118,7 @@ const QuestionBankTable: React.FC<QuestionBankTableProps> = ({
       <TableShell>
         <tbody>
           <tr>
-            <td colSpan={columnHeaders.length} className="px-4 py-12 text-center text-[#8A9CAE]">
+            <td colSpan={columnHeaders.length + 1} className="px-4 py-12 text-center text-[#8A9CAE]">
               <p role="status" aria-live="polite">
                 Loading questions…
               </p>
@@ -122,7 +134,7 @@ const QuestionBankTable: React.FC<QuestionBankTableProps> = ({
       <TableShell>
         <tbody>
           <tr>
-            <td colSpan={columnHeaders.length} className="px-4 py-12 text-center text-[#8A9CAE]">
+            <td colSpan={columnHeaders.length + 1} className="px-4 py-12 text-center text-[#8A9CAE]">
               <div className="text-4xl mb-2" aria-hidden="true">
                 📝
               </div>
@@ -136,12 +148,33 @@ const QuestionBankTable: React.FC<QuestionBankTableProps> = ({
   }
 
   return (
-    <TableShell>
+    <TableShell
+      selectAllCell={
+        <input
+          type="checkbox"
+          checked={questions.length > 0 && selectedIds.size === questions.length}
+          ref={(el) => {
+            if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < questions.length;
+          }}
+          onChange={onToggleSelectAll}
+          aria-label="Select all questions"
+          className="w-4 h-4 text-[#1A3A5C] focus:ring-2 focus:ring-[#2B6CB0] rounded"
+        />
+      }>
       <tbody className="divide-y divide-[#E8EEF5]">
         {sortedQuestions.map((question, index) => {
           const label = passageLabel(question);
           return (
             <tr key={question._id} className="hover:bg-[#F8FAFE] transition">
+              <td className="px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(question._id)}
+                  onChange={() => onToggleSelect(question._id)}
+                  aria-label={`Select question: ${truncate(question.text, 40)}`}
+                  className="w-4 h-4 text-[#1A3A5C] focus:ring-2 focus:ring-[#2B6CB0] rounded"
+                />
+              </td>
               <td
                 className="px-4 py-3 text-sm text-[#4A6A8A] max-w-xs truncate"
                 title={question.text}>
@@ -221,7 +254,7 @@ const QuestionBankTable: React.FC<QuestionBankTableProps> = ({
       </tbody>
       <tfoot>
         <tr>
-          <td colSpan={columnHeaders.length} className="px-4 py-3 border-t border-[#E8EEF5]">
+          <td colSpan={columnHeaders.length + 1} className="px-4 py-3 border-t border-[#E8EEF5]">
             <p className="text-sm text-[#5A7A9A]">Total: {questions.length} questions</p>
           </td>
         </tr>

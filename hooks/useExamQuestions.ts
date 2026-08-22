@@ -304,6 +304,111 @@ export const useExamQuestions = (examId: string) => {
     [examId, attachedIds, isAttaching, loadQuestions, bankQuestions, showStatus],
   );
 
+  // --- bulk select in the bank (to attach many at once) ----------------
+  const [selectedBankIds, setSelectedBankIds] = useState<Set<string>>(new Set());
+
+  const toggleBankSelect = useCallback((id: string) => {
+    setSelectedBankIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clearBankSelection = useCallback(() => setSelectedBankIds(new Set()), []);
+
+  const handleAttachSelected = useCallback(async () => {
+    const idsToAttach = Array.from(selectedBankIds).filter((id) => !attachedIds.has(id));
+    if (idsToAttach.length === 0) return;
+    setIsAttaching(true);
+    try {
+      const res = await fetch(`/api/admin/exams/${examId}/questions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionIds: idsToAttach }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? "Failed to attach questions");
+
+      await loadQuestions();
+      clearBankSelection();
+      showStatus({
+        type: "success",
+        text: `Added ${body.attached ?? idsToAttach.length} question${idsToAttach.length !== 1 ? "s" : ""} to exam.`,
+      });
+    } catch (err) {
+      showStatus({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to attach questions.",
+      });
+    } finally {
+      setIsAttaching(false);
+    }
+  }, [selectedBankIds, attachedIds, examId, loadQuestions, clearBankSelection, showStatus]);
+
+  // --- bulk select among questions already attached to this exam (to
+  // remove many at once - they stay in the bank, only detached here) ----
+  const [selectedAttachedIds, setSelectedAttachedIds] = useState<Set<string>>(new Set());
+  const [isBulkRemoveModalOpen, setIsBulkRemoveModalOpen] = useState(false);
+  const [isBulkRemoving, setIsBulkRemoving] = useState(false);
+
+  const toggleAttachedSelect = useCallback((id: string) => {
+    setSelectedAttachedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleAttachedSelectAll = useCallback(() => {
+    setSelectedAttachedIds((prev) =>
+      prev.size === questions.length ? new Set() : new Set(questions.map((q) => q._id)),
+    );
+  }, [questions]);
+
+  const clearAttachedSelection = useCallback(() => setSelectedAttachedIds(new Set()), []);
+
+  const requestBulkRemove = useCallback(() => {
+    if (selectedAttachedIds.size === 0) return;
+    setIsBulkRemoveModalOpen(true);
+  }, [selectedAttachedIds]);
+
+  const closeBulkRemoveModal = useCallback(() => {
+    if (isBulkRemoving) return;
+    setIsBulkRemoveModalOpen(false);
+  }, [isBulkRemoving]);
+
+  const confirmBulkRemove = useCallback(async () => {
+    if (selectedAttachedIds.size === 0) return;
+    setIsBulkRemoving(true);
+    try {
+      const res = await fetch(`/api/admin/exams/${examId}/questions/bulk-remove`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionIds: Array.from(selectedAttachedIds) }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? "Failed to remove questions");
+
+      setQuestions((prev) => prev.filter((q) => !selectedAttachedIds.has(q._id)));
+      showStatus({
+        type: "warning",
+        text: `Removed ${body.removed ?? selectedAttachedIds.size} question(s) from exam.`,
+      });
+      clearAttachedSelection();
+      setIsBulkRemoveModalOpen(false);
+    } catch (err) {
+      showStatus({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to remove questions.",
+      });
+    } finally {
+      setIsBulkRemoving(false);
+    }
+  }, [selectedAttachedIds, examId, showStatus, clearAttachedSelection]);
+
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       const { name, value, type } = e.target;
@@ -615,5 +720,22 @@ export const useExamQuestions = (examId: string) => {
     attachedIds,
     isAttaching,
     handleAttachBankQuestion,
+
+    // bulk attach from bank
+    selectedBankIds,
+    toggleBankSelect,
+    clearBankSelection,
+    handleAttachSelected,
+
+    // bulk remove from this exam (stays in bank)
+    selectedAttachedIds,
+    toggleAttachedSelect,
+    toggleAttachedSelectAll,
+    clearAttachedSelection,
+    isBulkRemoveModalOpen,
+    isBulkRemoving,
+    requestBulkRemove,
+    closeBulkRemoveModal,
+    confirmBulkRemove,
   };
 };

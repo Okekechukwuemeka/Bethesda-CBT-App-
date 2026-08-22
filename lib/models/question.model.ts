@@ -21,6 +21,11 @@ export interface IQuestion extends Document {
   passageId?: mongoose.Types.ObjectId;
   passageOrder?: number; // this question's position within its passage group, e.g. 1, 2, 3
   createdBy: mongoose.Types.ObjectId;
+  // Which collection createdBy points into - "Admin" for questions added
+  // from the admin question bank, "Staff" for ones a teacher added/imported
+  // from their own scoped question management screen. Older documents
+  // predate this field and were all Admin-created, so it defaults there.
+  createdByModel: "Admin" | "Staff";
   createdAt: Date;
   updatedAt: Date;
 }
@@ -65,9 +70,14 @@ const questionSchema = new Schema<IQuestion>(
       type: Number,
       min: [1, "passageOrder must be at least 1"],
     },
+    createdByModel: {
+      type: String,
+      enum: ["Admin", "Staff"],
+      default: "Admin",
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
-      ref: "Admin",
+      refPath: "createdByModel",
       required: [true, "createdBy is required"],
     },
   },

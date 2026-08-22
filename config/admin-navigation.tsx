@@ -51,6 +51,27 @@ export const adminNavItems: NavItem[] = [
     ),
   },
   {
+    id: "staff",
+    label: "Staff",
+    href: "/admin/staff",
+    icon: (
+      <svg
+        className="w-5 h-5"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        focusable="false">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a4 4 0 10-4-4"
+        />
+      </svg>
+    ),
+  },
+  {
     id: "questions",
     label: "Questions",
     href: "/admin/questions",

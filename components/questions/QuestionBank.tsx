@@ -19,6 +19,10 @@ interface QuestionBankProps {
   onSubjectChange: (value: string) => void;
   onClassChange: (value: string) => void;
   onAddQuestion: (question: BankQuestion) => void;
+  checkedIds?: Set<string>;
+  onToggleCheck?: (id: string) => void;
+  onAttachSelected?: () => void;
+  isAttachingSelected?: boolean;
 }
 
 const QuestionBank: React.FC<QuestionBankProps> = ({
@@ -36,6 +40,10 @@ const QuestionBank: React.FC<QuestionBankProps> = ({
   onSubjectChange,
   onClassChange,
   onAddQuestion,
+  checkedIds,
+  onToggleCheck,
+  onAttachSelected,
+  isAttachingSelected,
 }) => {
   return (
     <div>
@@ -85,11 +93,28 @@ const QuestionBank: React.FC<QuestionBankProps> = ({
                     question={q}
                     isSelected={isSelected}
                     onAdd={onAddQuestion}
+                    isChecked={checkedIds?.has(q.id)}
+                    onToggleCheck={onToggleCheck}
                   />
                 );
               })
             )}
           </div>
+
+          {onAttachSelected && checkedIds && checkedIds.size > 0 && (
+            <div className="mt-3 bg-[#1A3A5C] text-white rounded-lg px-3 py-2 flex items-center justify-between">
+              <p className="text-sm font-medium">
+                {checkedIds.size} question{checkedIds.size !== 1 ? "s" : ""} selected
+              </p>
+              <button
+                type="button"
+                onClick={onAttachSelected}
+                disabled={isAttachingSelected}
+                className="bg-white text-[#1A3A5C] text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-[#E8F0FE] transition disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-white">
+                {isAttachingSelected ? "Attaching…" : "Attach Selected"}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

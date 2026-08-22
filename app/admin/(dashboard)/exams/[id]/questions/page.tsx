@@ -62,6 +62,22 @@ const ExamQuestionsPage: React.FC = () => {
     attachedIds,
     handleAttachBankQuestion,
 
+    // bulk attach from bank
+    selectedBankIds,
+    toggleBankSelect,
+    handleAttachSelected,
+    isAttaching,
+
+    // bulk remove from this exam
+    selectedAttachedIds,
+    toggleAttachedSelect,
+    toggleAttachedSelectAll,
+    isBulkRemoveModalOpen,
+    isBulkRemoving,
+    requestBulkRemove,
+    closeBulkRemoveModal,
+    confirmBulkRemove,
+
     // passage picker (inside the question form)
     passages,
     isLoadingPassages,
@@ -207,6 +223,10 @@ const ExamQuestionsPage: React.FC = () => {
             onSubjectChange={setBankFilterSubject}
             onClassChange={setBankFilterClass}
             onAddQuestion={handleAddFromBank}
+            checkedIds={selectedBankIds}
+            onToggleCheck={toggleBankSelect}
+            onAttachSelected={handleAttachSelected}
+            isAttachingSelected={isAttaching}
           />
         </div>
 
@@ -217,11 +237,29 @@ const ExamQuestionsPage: React.FC = () => {
           onTypeChange={setFilterType}
         />
 
+        {selectedAttachedIds.size > 0 && (
+          <div className="bg-[#1A3A5C] text-white rounded-xl px-4 py-3 flex items-center justify-between">
+            <p className="text-sm font-medium">
+              {selectedAttachedIds.size} question{selectedAttachedIds.size !== 1 ? "s" : ""}{" "}
+              selected
+            </p>
+            <button
+              type="button"
+              onClick={requestBulkRemove}
+              className="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-red-500/50">
+              Remove Selected From Exam
+            </button>
+          </div>
+        )}
+
         <QuestionsTable
           questions={filteredQuestions}
           isLoading={isLoadingQuestions}
           onEdit={handleEditQuestion}
           onDelete={requestDeleteQuestion}
+          selectedIds={selectedAttachedIds}
+          onToggleSelect={toggleAttachedSelect}
+          onToggleSelectAll={toggleAttachedSelectAll}
         />
       </div>
 
@@ -260,6 +298,17 @@ const ExamQuestionsPage: React.FC = () => {
         isProcessing={isDeleting}
         onConfirm={confirmDeleteQuestion}
         onCancel={cancelDeleteQuestion}
+      />
+
+      <ConfirmDialog
+        isOpen={isBulkRemoveModalOpen}
+        title={`Remove ${selectedAttachedIds.size} question${selectedAttachedIds.size !== 1 ? "s" : ""} from this exam?`}
+        description="These questions will be detached from this exam only. They stay in the question bank and can be re-added later."
+        confirmLabel="Remove Selected"
+        isDangerous
+        isProcessing={isBulkRemoving}
+        onConfirm={confirmBulkRemove}
+        onCancel={closeBulkRemoveModal}
       />
     </>
   );

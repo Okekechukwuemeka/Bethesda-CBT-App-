@@ -332,7 +332,26 @@ export const useExamTaking = () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ submissionId: submissionIdRef.current, answers: payload }),
         });
-        if (!res.ok) return false;
+        if (!res.ok) {
+          // A definitive rejection from the server (bad submission id,
+          // exam deleted, etc.) will never succeed no matter how many
+          // times it's retried - only a network-level failure (caught
+          // below) should trigger the indefinite retry loop. Surfacing
+          // this immediately also means the student isn't told "we'll
+          // keep trying" for something that fundamentally can't work.
+          if (res.status >= 400 && res.status < 500) {
+            hasFinalizedRef.current = true;
+            setStatusMessage({
+              type: "error",
+              text: await parseErrorMessage(
+                res,
+                "Your exam could not be submitted. Please contact your teacher or administrator - your answers are still saved on this device.",
+              ),
+            });
+            return true; // stop retrying; this counts as "handled", not "keep trying"
+          }
+          return false;
+        }
         const data = (await res.json()) as SubmitResult;
         hasFinalizedRef.current = true;
         setResult(data);

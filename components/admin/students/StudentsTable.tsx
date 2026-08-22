@@ -6,9 +6,19 @@ interface StudentsTableProps {
   students: Student[];
   onEdit: (student: Student, e: React.MouseEvent<HTMLButtonElement>) => void;
   onDelete: (student: Student, e: React.MouseEvent<HTMLButtonElement>) => void;
+  selectedIds: Set<string>;
+  onToggleSelect: (id: string) => void;
+  onToggleSelectAll: () => void;
 }
 
-const StudentsTable: React.FC<StudentsTableProps> = ({ students, onEdit, onDelete }) => {
+const StudentsTable: React.FC<StudentsTableProps> = ({
+  students,
+  onEdit,
+  onDelete,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
+}) => {
   if (students.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-[#C5D8EC] overflow-hidden shadow-sm">
@@ -16,6 +26,7 @@ const StudentsTable: React.FC<StudentsTableProps> = ({ students, onEdit, onDelet
           <caption className="sr-only">Students list</caption>
           <thead className="bg-[#F8FAFE] border-b border-[#E8EEF5]">
             <tr>
+              <th scope="col" className="px-4 py-3 w-10" />
               <th
                 scope="col"
                 className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
@@ -50,7 +61,7 @@ const StudentsTable: React.FC<StudentsTableProps> = ({ students, onEdit, onDelet
           </thead>
           <tbody>
             <tr>
-              <td colSpan={6} className="px-4 py-12 text-center text-[#8A9CAE]">
+              <td colSpan={7} className="px-4 py-12 text-center text-[#8A9CAE]">
                 <div className="text-4xl mb-2" aria-hidden="true">
                   📚
                 </div>
@@ -71,6 +82,19 @@ const StudentsTable: React.FC<StudentsTableProps> = ({ students, onEdit, onDelet
           <caption className="sr-only">Students list</caption>
           <thead className="bg-[#F8FAFE] border-b border-[#E8EEF5]">
             <tr>
+              <th scope="col" className="px-4 py-3 w-10">
+                <input
+                  type="checkbox"
+                  checked={students.length > 0 && selectedIds.size === students.length}
+                  ref={(el) => {
+                    if (el)
+                      el.indeterminate = selectedIds.size > 0 && selectedIds.size < students.length;
+                  }}
+                  onChange={onToggleSelectAll}
+                  aria-label="Select all students"
+                  className="w-4 h-4 text-[#1A3A5C] focus:ring-2 focus:ring-[#2B6CB0] rounded"
+                />
+              </th>
               <th
                 scope="col"
                 className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
@@ -106,6 +130,15 @@ const StudentsTable: React.FC<StudentsTableProps> = ({ students, onEdit, onDelet
           <tbody className="divide-y divide-[#E8EEF5]">
             {students.map((student) => (
               <tr key={student.id} className="hover:bg-[#F8FAFE] transition">
+                <td className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(student.id)}
+                    onChange={() => onToggleSelect(student.id)}
+                    aria-label={`Select ${student.firstName} ${student.lastName}`}
+                    className="w-4 h-4 text-[#1A3A5C] focus:ring-2 focus:ring-[#2B6CB0] rounded"
+                  />
+                </td>
                 <td className="px-4 py-3 text-sm font-medium text-[#1A3A5C]">
                   {student.admissionNo}
                 </td>

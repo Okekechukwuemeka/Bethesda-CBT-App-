@@ -9,6 +9,7 @@ export default async function Home() {
 
   if (session?.user?.role === "admin") redirect("/admin");
   if (session?.user?.role === "student") redirect("/student");
+  if (session?.user?.role === "staff") redirect("/staff");
 
   return (
     <main className="flex-1 flex items-center justify-center p-6">
@@ -30,6 +31,11 @@ export default async function Home() {
             href="/student/login"
             className="block bg-white border-2 border-[#1A3A5C] text-[#1A3A5C] rounded-xl px-6 py-8 font-medium hover:bg-[#E8F0FE] transition focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[#2B6CB0]">
             Student Login
+          </Link>
+          <Link
+            href="/staff/login"
+            className="block bg-white border-2 border-[#1A3A5C] text-[#1A3A5C] rounded-xl px-6 py-8 font-medium hover:bg-[#E8F0FE] transition focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[#2B6CB0] sm:col-span-2">
+            Staff Login
           </Link>
         </nav>
 

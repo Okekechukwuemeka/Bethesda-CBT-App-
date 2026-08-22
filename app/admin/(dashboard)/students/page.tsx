@@ -10,6 +10,7 @@ import DeleteStudentModal from "@/components/admin/students/DeleteStudentModal";
 import BulkImportModal from "@/components/admin/students/BulkImportModal";
 import StudentCreatedModal from "@/components/admin/students/StudentCreatedModal";
 import BulkImportResultsModal from "@/components/admin/students/BulkImportResultsModal";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useStudents } from "@/hooks/useStudents";
 
 const StudentsPage: React.FC = () => {
@@ -61,6 +62,16 @@ const StudentsPage: React.FC = () => {
     importPreview,
     selectedFileName,
     isImporting,
+
+    // bulk selection / bulk delete
+    selectedIds,
+    toggleSelect,
+    toggleSelectAll,
+    isBulkDeleteModalOpen,
+    isBulkDeleting,
+    requestBulkDelete,
+    closeBulkDeleteModal,
+    confirmBulkDelete,
   } = useStudents();
 
   const formModalRef = React.useRef<HTMLDivElement>(null);
@@ -98,7 +109,8 @@ const StudentsPage: React.FC = () => {
     isDeleteModalOpen ||
     isImportModalOpen ||
     isCreatedModalOpen ||
-    isBulkResultsModalOpen;
+    isBulkResultsModalOpen ||
+    isBulkDeleteModalOpen;
 
   if (isLoading) {
     return (
@@ -186,10 +198,27 @@ const StudentsPage: React.FC = () => {
           onStatusChange={setFilterStatus}
         />
 
+        {selectedIds.size > 0 && (
+          <div className="bg-[#1A3A5C] text-white rounded-xl px-4 py-3 flex items-center justify-between">
+            <p className="text-sm font-medium">
+              {selectedIds.size} student{selectedIds.size !== 1 ? "s" : ""} selected
+            </p>
+            <button
+              type="button"
+              onClick={requestBulkDelete}
+              className="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-red-500/50">
+              Delete Selected
+            </button>
+          </div>
+        )}
+
         <StudentsTable
           students={currentStudents}
           onEdit={handleEditStudent}
           onDelete={handleDeleteStudent}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
+          onToggleSelectAll={toggleSelectAll}
         />
 
         {filteredStudents.length > 0 && (
@@ -244,6 +273,17 @@ const StudentsPage: React.FC = () => {
         isOpen={isBulkResultsModalOpen}
         results={bulkImportResults}
         onClose={closeBulkResultsModal}
+      />
+
+      <ConfirmDialog
+        isOpen={isBulkDeleteModalOpen}
+        title={`Delete ${selectedIds.size} student${selectedIds.size !== 1 ? "s" : ""}?`}
+        description="This will permanently remove the selected student records and their login access. This cannot be undone."
+        confirmLabel="Delete"
+        isDangerous
+        isProcessing={isBulkDeleting}
+        onConfirm={confirmBulkDelete}
+        onCancel={closeBulkDeleteModal}
       />
     </>
   );

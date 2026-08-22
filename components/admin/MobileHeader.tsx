@@ -6,6 +6,7 @@ interface MobileHeaderProps {
   onToggleSidebar: () => void;
   onLogout: () => void;
   toggleButtonRef: React.RefObject<HTMLButtonElement | null>;
+  title?: string;
 }
 
 const MobileHeader: React.FC<MobileHeaderProps> = ({
@@ -14,6 +15,7 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({
   onToggleSidebar,
   onLogout,
   toggleButtonRef,
+  title = "Admin Panel",
 }) => {
   return (
     <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-[#1A3A5C] px-4 py-3 flex items-center justify-between">
@@ -39,7 +41,7 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({
           />
         </svg>
       </button>
-      <span className="text-white font-bold text-sm">Admin Panel</span>
+      <span className="text-white font-bold text-sm">{title}</span>
       <button
         onClick={onLogout}
         disabled={isLoading}

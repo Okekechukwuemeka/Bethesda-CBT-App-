@@ -93,7 +93,16 @@ export const useExams = () => {
         if (res.status === 409 && !force) {
           // Backend refused because submissions exist - surface that as an
           // explicit second confirmation rather than silently failing.
-          setForceDeleteWarning(body.error ?? "This exam has student submissions attached to it.");
+          // Built from submissionCount rather than passing body.error
+          // straight through: the API message is written for a developer
+          // ("Pass ?force=true to delete anyway") and isn't something an
+          // admin using the UI should ever see verbatim.
+          const count = typeof body.submissionCount === "number" ? body.submissionCount : null;
+          setForceDeleteWarning(
+            count !== null
+              ? `This exam has ${count} student submission${count !== 1 ? "s" : ""}.`
+              : "This exam has student submissions attached to it.",
+          );
           setIsDeleting(false);
           return;
         }

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-guards";
 import { Exam, examClassFilter } from "@/lib/models/exam.model";
+import { Subject } from "@/lib/models/subject.model";
 import { ClassLevel, ExamType, ExamStatus, Term } from "@/lib/models/constants";
 import { syncExamStatus } from "@/lib/exam-status";
 
@@ -30,15 +32,57 @@ export async function GET(req: NextRequest) {
   if (termFilter) filter.term = termFilter;
   if (typeFilter) filter.type = typeFilter;
 
-  const exams = await Exam.find(filter).populate("subject", "name code").sort({ examDate: -1 });
+  // Deliberately .lean() + resolve subject names ourselves here, instead
+  // of .populate("subject", "name code"): populate (like any normal
+  // query) casts every document's `subject` to ObjectId as it hydrates
+  // results, and throws for the ENTIRE list if even one legacy/corrupt
+  // document has a raw string there instead of a real ref. .lean() skips
+  // that hydration step entirely, so one bad row degrades gracefully
+  // instead of taking down the whole exams page.
+  const exams = await Exam.find(filter).sort({ examDate: -1 }).lean();
+
+  const validSubjectIds = Array.from(
+    new Set(
+      exams
+        .map((e) => e.subject)
+        .filter((s): s is mongoose.Types.ObjectId =>
+          mongoose.Types.ObjectId.isValid(s as unknown as string),
+        )
+        .map((s) => s.toString()),
+    ),
+  );
+  const subjectDocs = await Subject.find({ _id: { $in: validSubjectIds } })
+    .select("name code")
+    .lean();
+  const subjectById = new Map(subjectDocs.map((s) => [s._id.toString(), s]));
+
+  const examsWithResolvedSubject = exams.map((exam) => {
+    const raw = exam.subject as unknown;
+    const asString = String(raw ?? "");
+    const resolved = mongoose.Types.ObjectId.isValid(asString)
+      ? (subjectById.get(asString) ?? null)
+      : null;
+    return {
+      ...exam,
+      subject: resolved ?? { name: asString || "Unknown subject", code: "" },
+    };
+  });
 
   // Recompute + persist each exam's status from examDate/duration before
   // returning - keeps status accurate for readers without needing a cron
   // job, and self-heals any exam whose status went stale since the last
-  // time someone loaded it.
-  await Promise.all(exams.map((exam) => syncExamStatus(exam)));
+  // time someone loaded it. A malformed legacy exam (missing examDate or
+  // duration) is left with whatever status it already has - see
+  // syncExamStatus.
+  await Promise.all(
+    examsWithResolvedSubject.map(async (exam) => {
+      exam.status = await syncExamStatus(exam);
+    }),
+  );
 
-  const result = statusFilter ? exams.filter((e) => e.status === statusFilter) : exams;
+  const result = statusFilter
+    ? examsWithResolvedSubject.filter((e) => e.status === statusFilter)
+    : examsWithResolvedSubject;
 
   return NextResponse.json({ exams: result });
 }

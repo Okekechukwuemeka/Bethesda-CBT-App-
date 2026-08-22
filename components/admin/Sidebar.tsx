@@ -12,15 +12,33 @@ interface SidebarProps {
   isLoading: boolean;
   onClose: () => void;
   onLogout: () => void;
+  title?: string;
+  subtitle?: string;
+  homeHref?: string;
+  navAriaLabel?: string;
 }
 
 const Sidebar = forwardRef<HTMLElement, SidebarProps>(
-  ({ navItems, isOpen, isMobile, isLoading, onClose, onLogout }, ref) => {
+  (
+    {
+      navItems,
+      isOpen,
+      isMobile,
+      isLoading,
+      onClose,
+      onLogout,
+      title = "Admin Panel",
+      subtitle = "Bethesda Home & School",
+      homeHref = "/admin",
+      navAriaLabel = "Admin navigation",
+    },
+    ref,
+  ) => {
     const pathname = usePathname();
 
     const isNavItemActive = (item: NavItem) => {
-      if (item.href === "/admin") {
-        return pathname === "/admin" || pathname === "/admin/";
+      if (item.href === homeHref) {
+        return pathname === homeHref || pathname === homeHref + "/";
       }
       return pathname === item.href || pathname?.startsWith(item.href + "/");
     };
@@ -35,12 +53,12 @@ const Sidebar = forwardRef<HTMLElement, SidebarProps>(
         tabIndex={-1}>
         {/* Sidebar Header */}
         <div className="px-6 py-6 border-b border-white/10">
-          <h1 className="text-xl font-bold text-white tracking-wide">Admin Panel</h1>
-          <p className="text-[#8BB8E8] text-xs mt-1">Bethesda Home & School</p>
+          <h1 className="text-xl font-bold text-white tracking-wide">{title}</h1>
+          <p className="text-[#8BB8E8] text-xs mt-1">{subtitle}</p>
         </div>
 
         {/* Navigation */}
-        <nav className="px-3 py-4" aria-label="Admin navigation">
+        <nav className="px-3 py-4" aria-label={navAriaLabel}>
           <ul className="space-y-1">
             {navItems.map((item) => {
               const isActive = isNavItemActive(item);
@@ -70,7 +88,7 @@ const Sidebar = forwardRef<HTMLElement, SidebarProps>(
             onClick={onLogout}
             disabled={isLoading}
             className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition duration-200 focus:outline-none focus:ring-2 focus:ring-[#8BB8E8] disabled:opacity-50"
-            aria-label={isLoading ? "Logging out, please wait" : "Logout from admin panel"}>
+            aria-label={isLoading ? "Logging out, please wait" : `Logout from ${title.toLowerCase()}`}>
             <svg
               className="w-5 h-5"
               fill="none"

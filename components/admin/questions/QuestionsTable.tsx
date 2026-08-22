@@ -6,6 +6,9 @@ interface QuestionsTableProps {
   isLoading: boolean;
   onEdit: (question: ExamQuestion, e: React.MouseEvent<HTMLButtonElement>) => void;
   onDelete: (question: ExamQuestion) => void;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onToggleSelectAll?: () => void;
 }
 
 const getTypeBadgeColor = (type: string) =>
@@ -14,9 +17,16 @@ const getTypeBadgeColor = (type: string) =>
 const truncate = (text: string, len: number) =>
   text.length > len ? `${text.slice(0, len)}…` : text;
 
-const TableHead = () => (
+const TableHead: React.FC<{
+  selectAllCell?: React.ReactNode;
+}> = ({ selectAllCell }) => (
   <thead className="bg-[#F8FAFE] border-b border-[#E8EEF5]">
     <tr>
+      {selectAllCell !== undefined && (
+        <th scope="col" className="px-4 py-3 w-10">
+          {selectAllCell}
+        </th>
+      )}
       <th
         scope="col"
         className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
@@ -51,17 +61,21 @@ const QuestionsTable: React.FC<QuestionsTableProps> = ({
   isLoading,
   onEdit,
   onDelete,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
 }) => {
   const totalMarks = questions.reduce((sum, q) => sum + q.marks, 0);
+  const selectable = !!selectedIds && !!onToggleSelect && !!onToggleSelectAll;
 
   if (isLoading) {
     return (
       <div className="bg-white rounded-xl border border-[#C5D8EC] overflow-hidden shadow-sm">
         <table className="w-full" aria-label="Questions list">
-          <TableHead />
+          <TableHead selectAllCell={selectable ? null : undefined} />
           <tbody>
             <tr>
-              <td colSpan={5} className="px-4 py-12 text-center text-[#8A9CAE]">
+              <td colSpan={selectable ? 6 : 5} className="px-4 py-12 text-center text-[#8A9CAE]">
                 Loading questions…
               </td>
             </tr>
@@ -75,10 +89,10 @@ const QuestionsTable: React.FC<QuestionsTableProps> = ({
     return (
       <div className="bg-white rounded-xl border border-[#C5D8EC] overflow-hidden shadow-sm">
         <table className="w-full" aria-label="Questions list">
-          <TableHead />
+          <TableHead selectAllCell={selectable ? null : undefined} />
           <tbody>
             <tr>
-              <td colSpan={5} className="px-4 py-12 text-center text-[#8A9CAE]">
+              <td colSpan={selectable ? 6 : 5} className="px-4 py-12 text-center text-[#8A9CAE]">
                 <div className="text-4xl mb-2" aria-hidden="true">
                   📝
                 </div>
@@ -96,10 +110,38 @@ const QuestionsTable: React.FC<QuestionsTableProps> = ({
     <div className="bg-white rounded-xl border border-[#C5D8EC] overflow-hidden shadow-sm">
       <div className="overflow-x-auto">
         <table className="w-full" aria-label="Questions list">
-          <TableHead />
+          <TableHead
+            selectAllCell={
+              selectable ? (
+                <input
+                  type="checkbox"
+                  checked={questions.length > 0 && selectedIds!.size === questions.length}
+                  ref={(el) => {
+                    if (el)
+                      el.indeterminate =
+                        selectedIds!.size > 0 && selectedIds!.size < questions.length;
+                  }}
+                  onChange={onToggleSelectAll}
+                  aria-label="Select all questions in this exam"
+                  className="w-4 h-4 text-[#1A3A5C] focus:ring-2 focus:ring-[#2B6CB0] rounded"
+                />
+              ) : undefined
+            }
+          />
           <tbody className="divide-y divide-[#E8EEF5]">
             {questions.map((question, index) => (
               <tr key={question._id} className="hover:bg-[#F8FAFE] transition">
+                {selectable && (
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds!.has(question._id)}
+                      onChange={() => onToggleSelect!(question._id)}
+                      aria-label={`Select question: ${truncate(question.text, 40)}`}
+                      className="w-4 h-4 text-[#1A3A5C] focus:ring-2 focus:ring-[#2B6CB0] rounded"
+                    />
+                  </td>
+                )}
                 <td className="px-4 py-3 text-sm text-[#4A6A8A]">{index + 1}</td>
                 <td className="px-4 py-3 text-sm text-[#4A6A8A] max-w-md">
                   {question.text}

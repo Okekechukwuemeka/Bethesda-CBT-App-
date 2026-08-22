@@ -38,3 +38,10 @@ export type Gender = (typeof GENDERS)[number];
 
 export const PASSAGE_KINDS = ["comprehension", "experiment", "data", "diagram"] as const;
 export type PassageKind = (typeof PASSAGE_KINDS)[number];
+
+// "teacher" can be assigned subjects/classes and gets the Question Bank +
+// Results sections of the staff portal. "non_teaching" (admin assistants,
+// bursary, etc.) only gets the plain staff dashboard - see requireTeacher
+// in lib/api-guards.ts for where this is enforced.
+export const STAFF_ROLES = ["teacher", "non_teaching"] as const;
+export type StaffRole = (typeof STAFF_ROLES)[number];

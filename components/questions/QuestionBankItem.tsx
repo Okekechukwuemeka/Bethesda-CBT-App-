@@ -6,9 +6,17 @@ interface QuestionBankItemProps {
   question: BankQuestion;
   isSelected: boolean;
   onAdd: (question: BankQuestion) => void;
+  isChecked?: boolean;
+  onToggleCheck?: (id: string) => void;
 }
 
-const QuestionBankItem: React.FC<QuestionBankItemProps> = ({ question, isSelected, onAdd }) => {
+const QuestionBankItem: React.FC<QuestionBankItemProps> = ({
+  question,
+  isSelected,
+  onAdd,
+  isChecked = false,
+  onToggleCheck,
+}) => {
   const subjectName =
     typeof question.subject === "string" ? question.subject : question.subject.name;
 
@@ -22,6 +30,16 @@ const QuestionBankItem: React.FC<QuestionBankItemProps> = ({ question, isSelecte
           : "bg-white border-[#C5D8EC] hover:border-[#2B6CB0]"
       } transition`}>
       <div className="flex items-center gap-3 flex-1 min-w-0">
+        {onToggleCheck && (
+          <input
+            type="checkbox"
+            checked={isChecked}
+            disabled={isSelected}
+            onChange={() => onToggleCheck(question.id)}
+            aria-label={`Select for bulk attach: ${question.text.substring(0, 50)}`}
+            className="w-4 h-4 flex-shrink-0 text-[#1A3A5C] focus:ring-2 focus:ring-[#2B6CB0] rounded disabled:opacity-40"
+          />
+        )}
         <span className="text-sm text-[#1A3A5C] truncate">{question.text}</span>
         <QuestionBadge type={question.type} />
         {passageLabel && (

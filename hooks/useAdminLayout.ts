@@ -5,7 +5,11 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { NavItem } from "@/config/admin-navigation";
 
-export const useAdminLayout = (navItems: NavItem[]) => {
+export const useAdminLayout = (
+  navItems: NavItem[],
+  homeHref: string = "/admin",
+  loginHref: string = "/admin/login",
+) => {
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
@@ -35,13 +39,13 @@ export const useAdminLayout = (navItems: NavItem[]) => {
     }
 
     const matched = navItems.find((item) =>
-      item.href === "/admin"
-        ? pathname === "/admin" || pathname === "/admin/"
+      item.href === homeHref
+        ? pathname === homeHref || pathname === homeHref + "/"
         : pathname === item.href || pathname?.startsWith(item.href + "/"),
     );
 
     setRouteAnnouncement(matched ? `${matched.label} page loaded` : "Page loaded");
-  }, [pathname, isMobile, navItems]);
+  }, [pathname, isMobile, navItems, homeHref]);
 
   // Handle Escape key
   useEffect(() => {
@@ -71,12 +75,12 @@ export const useAdminLayout = (navItems: NavItem[]) => {
   const confirmLogout = useCallback(() => {
     setShowLogoutConfirm(false);
     setIsLoading(true);
-    signOut({ redirect: true, callbackUrl: "/admin/login" }).catch(() => {
+    signOut({ redirect: true, callbackUrl: loginHref }).catch(() => {
       // Only reached if signOut itself throws before it can redirect -
       // otherwise the browser navigates away and this component unmounts.
       setIsLoading(false);
     });
-  }, []);
+  }, [loginHref]);
 
   const toggleSidebar = useCallback(() => {
     setIsSidebarOpen((prev) => !prev);

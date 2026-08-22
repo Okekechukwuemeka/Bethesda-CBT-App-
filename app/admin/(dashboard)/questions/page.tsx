@@ -8,6 +8,7 @@ import QuestionBankTable from "@/components/admin/questions/QuestionBankTable";
 import QuestionFormModal from "@/components/admin/questions/QuestionFormModal";
 import BulkImportModal from "@/components/admin/questions/BulkImportModal";
 import ConfirmDeleteModal from "@/components/admin/questions/ConfirmDeleteModal";
+import BulkDeleteQuestionsModal from "@/components/admin/questions/BulkDeleteQuestionsModal";
 import SubjectFormModal from "@/components/admin/questions/SubjectFormModal";
 import PassageManagerModal from "@/components/admin/questions/PassageManagerModal";
 
@@ -114,6 +115,20 @@ const QuestionsPage: React.FC = () => {
     requestDeletePassage,
     cancelDeletePassage,
     confirmDeletePassage,
+
+    // bulk selection / bulk delete
+    selectedIds,
+    toggleSelect,
+    toggleSelectAll,
+    isBulkDeleteModalOpen,
+    isBulkDeleting,
+    bulkDeleteError,
+    bulkDeleteBlocked,
+    bulkDeleteTriggerRef,
+    requestBulkDelete,
+    closeBulkDeleteModal,
+    confirmBulkDelete,
+    forceConfirmBulkDelete,
   } = useQuestionBank();
 
   const formModalRef = React.useRef<HTMLDivElement>(null);
@@ -143,13 +158,22 @@ const QuestionsPage: React.FC = () => {
     closeSubjectModal,
     !isSubmittingSubject,
   );
+  const bulkDeleteModalRef = React.useRef<HTMLDivElement>(null);
+  useModalFocusTrap(
+    isBulkDeleteModalOpen,
+    bulkDeleteModalRef,
+    bulkDeleteTriggerRef,
+    closeBulkDeleteModal,
+    !isBulkDeleting,
+  );
 
   const anyModalOpen =
     isModalOpen ||
     isImportModalOpen ||
     !!pendingDelete ||
     isSubjectModalOpen ||
-    isPassageManagerOpen;
+    isPassageManagerOpen ||
+    isBulkDeleteModalOpen;
 
   // Used both to show the passage-aware note in the delete confirmation
   // and, indirectly, wherever the currently-pending-delete question's
@@ -268,12 +292,30 @@ const QuestionsPage: React.FC = () => {
           onAddSubject={handleOpenSubjectModal}
         />
 
+        {/* Bulk actions bar */}
+        {selectedIds.size > 0 && (
+          <div className="bg-[#1A3A5C] text-white rounded-xl px-4 py-3 flex items-center justify-between">
+            <p className="text-sm font-medium">
+              {selectedIds.size} question{selectedIds.size !== 1 ? "s" : ""} selected
+            </p>
+            <button
+              type="button"
+              onClick={requestBulkDelete}
+              className="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-red-500/50">
+              Delete Selected
+            </button>
+          </div>
+        )}
+
         {/* Questions Table */}
         <QuestionBankTable
           questions={questions}
           isLoading={isLoadingQuestions}
           onEdit={handleEditQuestion}
           onDelete={handleDeleteQuestion}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
+          onToggleSelectAll={toggleSelectAll}
         />
       </div>
 
@@ -329,6 +371,18 @@ const QuestionsPage: React.FC = () => {
         onConfirm={confirmDelete}
         onForceConfirm={forceConfirmDelete}
         onCancel={closeDeleteModal}
+      />
+
+      {/* Bulk Delete Confirmation Modal */}
+      <BulkDeleteQuestionsModal
+        isOpen={isBulkDeleteModalOpen}
+        selectedCount={selectedIds.size}
+        isProcessing={isBulkDeleting}
+        error={bulkDeleteError}
+        blocked={bulkDeleteBlocked}
+        onConfirm={confirmBulkDelete}
+        onForceConfirm={forceConfirmBulkDelete}
+        onCancel={closeBulkDeleteModal}
       />
 
       {/* Add Subject Modal */}

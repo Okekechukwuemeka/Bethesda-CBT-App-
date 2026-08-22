@@ -123,10 +123,11 @@ export const useStudents = () => {
   const filteredStudents = useMemo(
     () =>
       students.filter((student) => {
+        const term = searchTerm.toLowerCase();
         const matchesSearch =
-          student.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          student.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          student.admissionNo.toLowerCase().includes(searchTerm.toLowerCase());
+          (student.firstName ?? "").toLowerCase().includes(term) ||
+          (student.lastName ?? "").toLowerCase().includes(term) ||
+          (student.admissionNo ?? "").toLowerCase().includes(term);
         const matchesClass = filterClass === "all" || student.class === filterClass;
         const matchesStatus = filterStatus === "all" || student.status === filterStatus;
         return matchesSearch && matchesClass && matchesStatus;
@@ -327,6 +328,86 @@ export const useStudents = () => {
       setSelectedStudent(null);
     }
   }, [selectedStudent]);
+
+  // --- bulk selection / bulk delete -----------------------------------
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
+  useEffect(() => {
+    const visibleIds = new Set(students.map((s) => s.id));
+    setSelectedIds((prev) => {
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (visibleIds.has(id)) next.add(id);
+      });
+      return next.size === prev.size ? prev : next;
+    });
+  }, [students]);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      const allCurrentSelected = currentStudents.every((s) => prev.has(s.id));
+      const next = new Set(prev);
+      if (allCurrentSelected) {
+        currentStudents.forEach((s) => next.delete(s.id));
+      } else {
+        currentStudents.forEach((s) => next.add(s.id));
+      }
+      return next;
+    });
+  }, [currentStudents]);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const requestBulkDelete = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    setIsBulkDeleteModalOpen(true);
+  }, [selectedIds]);
+
+  const closeBulkDeleteModal = useCallback(() => {
+    if (isBulkDeleting) return;
+    setIsBulkDeleteModalOpen(false);
+  }, [isBulkDeleting]);
+
+  const confirmBulkDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setIsBulkDeleting(true);
+    try {
+      const res = await fetch("/api/admin/students/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to delete students");
+
+      const deletedIds = selectedIds;
+      setStudents((prev) => prev.filter((s) => !deletedIds.has(s.id)));
+      setStatusMessage({
+        type: "warning",
+        text: `${data.deletedCount ?? deletedIds.size} student(s) have been deleted.`,
+      });
+      clearSelection();
+    } catch (err) {
+      setStatusMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to delete students.",
+      });
+    } finally {
+      setIsBulkDeleting(false);
+      setIsBulkDeleteModalOpen(false);
+    }
+  }, [selectedIds, clearSelection]);
 
   const handleOpenImportModal = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
     importTriggerRef.current = e.currentTarget;
@@ -533,5 +614,15 @@ export const useStudents = () => {
     handleFileUpload,
     confirmImport,
     downloadTemplate,
+
+    // bulk selection / bulk delete
+    selectedIds,
+    toggleSelect,
+    toggleSelectAll,
+    isBulkDeleteModalOpen,
+    isBulkDeleting,
+    requestBulkDelete,
+    closeBulkDeleteModal,
+    confirmBulkDelete,
   };
 };

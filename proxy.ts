@@ -5,6 +5,7 @@ import { getToken } from "next-auth/jwt";
 const ADMIN_PUBLIC_PATHS = ["/admin/login"];
 const ADMIN_PUBLIC_API_PATHS = ["/api/admin/register"];
 const STUDENT_PUBLIC_PATHS = ["/student/login"];
+const STAFF_PUBLIC_PATHS = ["/staff/login"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -16,7 +17,7 @@ export async function proxy(req: NextRequest) {
   }
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-  const role = token?.role as "admin" | "student" | undefined;
+  const role = token?.role as "admin" | "student" | "staff" | undefined;
 
   const isApiRoute = pathname.startsWith("/api/");
 
@@ -29,6 +30,10 @@ export async function proxy(req: NextRequest) {
     (pathname.startsWith("/student") || pathname.startsWith("/api/student")) &&
     !STUDENT_PUBLIC_PATHS.includes(pathname);
 
+  const isStaffRoute =
+    (pathname.startsWith("/staff") || pathname.startsWith("/api/staff")) &&
+    !STAFF_PUBLIC_PATHS.includes(pathname);
+
   if (isAdminRoute && role !== "admin") {
     if (isApiRoute) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     return NextResponse.redirect(new URL("/admin/login", req.url));
@@ -39,11 +44,19 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL("/student/login", req.url));
   }
 
+  if (isStaffRoute && role !== "staff") {
+    if (isApiRoute) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.redirect(new URL("/staff/login", req.url));
+  }
+
   if (pathname === "/admin/login" && role === "admin") {
     return NextResponse.redirect(new URL("/admin", req.url));
   }
   if (pathname === "/student/login" && role === "student") {
     return NextResponse.redirect(new URL("/student", req.url));
+  }
+  if (pathname === "/staff/login" && role === "staff") {
+    return NextResponse.redirect(new URL("/staff", req.url));
   }
 
   return NextResponse.next();

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-guards";
 import { Exam } from "@/lib/models/exam.model";
+import { Subject } from "@/lib/models/subject.model";
 import { syncExamStatus } from "@/lib/exam-status";
 
 // GET /api/admin/exams/[examId]
@@ -12,12 +14,29 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ examId
   const { examId } = await context.params;
   await connectDB();
 
-  const exam = await Exam.findById(examId).populate("subject", "name code");
+  // .lean() + manual subject resolution instead of .populate("subject",
+  // "name code") - see the identical comment in the exams list route
+  // (GET /api/admin/exams): populate casts `subject` to ObjectId while
+  // hydrating, which throws if a legacy document has a raw string there.
+  const exam = await Exam.findById(examId).lean();
   if (!exam) return NextResponse.json({ error: "Exam not found" }, { status: 404 });
 
-  await syncExamStatus(exam);
+  const rawSubject = exam.subject as unknown;
+  const asString = String(rawSubject ?? "");
+  let resolvedSubject: { name: string; code: string } | { _id: string; name: string; code: string };
+  if (mongoose.Types.ObjectId.isValid(asString)) {
+    const subjectDoc = await Subject.findById(asString).select("name code").lean();
+    resolvedSubject = subjectDoc
+      ? { _id: subjectDoc._id.toString(), name: subjectDoc.name, code: subjectDoc.code }
+      : { name: "Unknown subject", code: "" };
+  } else {
+    resolvedSubject = { name: asString || "Unknown subject", code: "" };
+  }
 
-  return NextResponse.json({ exam });
+  const examWithResolvedSubject = { ...exam, subject: resolvedSubject };
+  examWithResolvedSubject.status = await syncExamStatus(examWithResolvedSubject);
+
+  return NextResponse.json({ exam: examWithResolvedSubject });
 }
 
 // PATCH /api/admin/exams/[examId]

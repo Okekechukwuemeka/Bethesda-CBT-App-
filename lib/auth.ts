@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import { connectDB } from "./db";
 import { Admin } from "./models/admin.model";
 import { Student } from "./models/student.model";
+import { Staff } from "./models/staff.model";
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
@@ -65,6 +66,39 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
+    Credentials({
+      id: "staff-login",
+      name: "Staff",
+      credentials: {
+        username: { label: "Username", type: "text" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        const username = credentials?.username;
+        const password = credentials?.password;
+        if (typeof username !== "string" || typeof password !== "string") return null;
+
+        await connectDB();
+        const staff = await Staff.findOne({ username: username.toLowerCase() }).select(
+          "+password",
+        );
+        if (!staff || !staff.isActive) return null;
+
+        const valid = await staff.comparePassword(password);
+        if (!valid) return null;
+
+        staff.lastLogin = new Date();
+        await staff.save();
+
+        return {
+          id: staff.id,
+          role: "staff",
+          staffRole: staff.role,
+          name: `${staff.firstName} ${staff.lastName}`,
+          username: staff.username,
+        };
+      },
+    }),
   ],
   callbacks: {
     // `user` is only defined on the initial sign-in call, so bake
@@ -76,15 +110,17 @@ export const authOptions: NextAuthOptions = {
         token.username = user.username;
         token.admissionNumber = user.admissionNumber;
         token.class = user.class;
+        token.staffRole = user.staffRole;
       }
       return token;
     },
     async session({ session, token }) {
       session.user.id = token.id as string;
-      session.user.role = token.role as "admin" | "student";
+      session.user.role = token.role as "admin" | "student" | "staff";
       session.user.username = token.username;
       session.user.admissionNumber = token.admissionNumber;
       session.user.class = token.class;
+      session.user.staffRole = token.staffRole;
       return session;
     },
   },

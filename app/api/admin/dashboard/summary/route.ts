@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-guards";
 import { Exam } from "@/lib/models/exam.model";
+import { Subject } from "@/lib/models/subject.model";
 import { Student } from "@/lib/models/student.model";
 import { Submission } from "@/lib/models/submission.model";
 
@@ -16,10 +18,42 @@ export async function GET() {
 
   await connectDB();
 
+  // Deliberately not using .populate("subject", "name") here: Mongoose
+  // casts every document's `subject` to ObjectId as part of building the
+  // populate query, and throws for the *entire* request if even one
+  // legacy/bad document has a raw string (e.g. "Mathematics") there
+  // instead of a real ref. Resolving subject names ourselves means one
+  // bad row degrades gracefully instead of taking down the dashboard.
   const [exams, students] = await Promise.all([
-    Exam.find().populate("subject", "name").sort({ examDate: -1 }).lean(),
+    Exam.find().sort({ examDate: -1 }).lean(),
     Student.find().lean(),
   ]);
+
+  const validSubjectIds = Array.from(
+    new Set(
+      exams
+        .map((e) => e.subject)
+        .filter((s): s is mongoose.Types.ObjectId =>
+          mongoose.Types.ObjectId.isValid(s as unknown as string),
+        )
+        .map((s) => s.toString()),
+    ),
+  );
+  const subjectDocs = await Subject.find({ _id: { $in: validSubjectIds } })
+    .select("name")
+    .lean();
+  const subjectNameById = new Map(subjectDocs.map((s) => [s._id.toString(), s.name]));
+
+  function resolveSubjectName(raw: unknown): string {
+    const asString = String(raw ?? "");
+    if (mongoose.Types.ObjectId.isValid(asString)) {
+      return subjectNameById.get(asString) ?? "Unknown subject";
+    }
+    // Legacy row: the subject field itself already holds a plain name
+    // string rather than an ObjectId ref - use it as-is instead of
+    // showing "Unknown subject" for data that's actually fine to display.
+    return asString || "Unknown subject";
+  }
 
   // One query for completion counts across every exam, grouped by exam id,
   // instead of N queries (one per exam) - matters once there are dozens
@@ -50,7 +84,7 @@ export async function GET() {
     const completedCount = completedByExamId.get(exam._id.toString()) ?? 0;
     return {
       id: exam._id.toString(),
-      subject: (exam.subject as unknown as { name?: string })?.name ?? "Unknown subject",
+      subject: resolveSubjectName(exam.subject),
       class: exam.isGeneral ? undefined : exam.class,
       classes: exam.isGeneral ? exam.classes : undefined,
       isGeneral: exam.isGeneral,

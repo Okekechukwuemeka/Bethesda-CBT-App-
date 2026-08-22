@@ -699,6 +699,101 @@ export const useQuestionBank = () => {
 
   const filteredCount = useMemo(() => questions.length, [questions]);
 
+  // --- bulk selection / bulk delete -----------------------------------
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Selection is keyed on the currently visible (filtered) list, so
+  // changing filters/search doesn't leave stale ids selected that the
+  // admin can no longer see.
+  useEffect(() => {
+    const visibleIds = new Set(questions.map((q) => q._id));
+    setSelectedIds((prev) => {
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (visibleIds.has(id)) next.add(id);
+      });
+      return next.size === prev.size ? prev : next;
+    });
+  }, [questions]);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) =>
+      prev.size === questions.length ? new Set() : new Set(questions.map((q) => q._id)),
+    );
+  }, [questions]);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null);
+  const [bulkDeleteBlocked, setBulkDeleteBlocked] = useState<
+    { questionId: string; exams: BlockingExam[] }[] | null
+  >(null);
+  const bulkDeleteTriggerRef = useRef<HTMLElement | null>(null);
+
+  const requestBulkDelete = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    bulkDeleteTriggerRef.current = e.currentTarget;
+    setBulkDeleteError(null);
+    setBulkDeleteBlocked(null);
+    setIsBulkDeleteModalOpen(true);
+  }, []);
+
+  const closeBulkDeleteModal = useCallback(() => {
+    if (isBulkDeleting) return;
+    setIsBulkDeleteModalOpen(false);
+    setBulkDeleteError(null);
+    setBulkDeleteBlocked(null);
+  }, [isBulkDeleting]);
+
+  const runBulkDelete = useCallback(
+    async (force: boolean) => {
+      if (selectedIds.size === 0) return;
+      setIsBulkDeleting(true);
+      setBulkDeleteError(null);
+      try {
+        const res = await fetch("/api/admin/questions/bulk-delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: Array.from(selectedIds), force }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (res.status === 409 && data.blocked) {
+            setBulkDeleteBlocked(data.blocked);
+            return;
+          }
+          throw new Error(data.error ?? "Failed to delete questions");
+        }
+        showStatus({
+          type: "warning",
+          text: `Deleted ${data.deletedCount} question(s) successfully.`,
+        });
+        setIsBulkDeleteModalOpen(false);
+        setBulkDeleteBlocked(null);
+        clearSelection();
+        fetchQuestionsList();
+      } catch (err) {
+        setBulkDeleteError(err instanceof Error ? err.message : "Failed to delete questions.");
+      } finally {
+        setIsBulkDeleting(false);
+      }
+    },
+    [selectedIds, showStatus, clearSelection, fetchQuestionsList],
+  );
+
+  const confirmBulkDelete = useCallback(() => runBulkDelete(false), [runBulkDelete]);
+  const forceConfirmBulkDelete = useCallback(() => runBulkDelete(true), [runBulkDelete]);
+
   return {
     // data
     questions,
@@ -807,5 +902,20 @@ export const useQuestionBank = () => {
     requestDeletePassage: passagesApi.requestDeletePassage,
     cancelDeletePassage: passagesApi.cancelDeletePassage,
     confirmDeletePassage: passagesApi.confirmDeletePassage,
+
+    // bulk selection / bulk delete
+    selectedIds,
+    toggleSelect,
+    toggleSelectAll,
+    clearSelection,
+    isBulkDeleteModalOpen,
+    isBulkDeleting,
+    bulkDeleteError,
+    bulkDeleteBlocked,
+    bulkDeleteTriggerRef,
+    requestBulkDelete,
+    closeBulkDeleteModal,
+    confirmBulkDelete,
+    forceConfirmBulkDelete,
   };
 };

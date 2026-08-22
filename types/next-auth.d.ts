@@ -1,8 +1,8 @@
 import { DefaultSession, DefaultUser } from "next-auth";
 import { DefaultJWT } from "next-auth/jwt";
-import { ClassLevel } from "../models/constants";
+import { ClassLevel, StaffRole } from "../models/constants";
 
-export type UserRole = "admin" | "student";
+export type UserRole = "admin" | "student" | "staff";
 
 interface AppUserFields {
   id: string;
@@ -10,6 +10,10 @@ interface AppUserFields {
   username?: string;
   admissionNumber?: string;
   class?: ClassLevel;
+  // Only set when role === "staff" - distinguishes a teacher (can be
+  // assigned subjects/classes, gets Questions + Results) from other staff
+  // (dashboard only). See requireTeacher in lib/api-guards.ts.
+  staffRole?: StaffRole;
 }
 
 declare module "next-auth" {
