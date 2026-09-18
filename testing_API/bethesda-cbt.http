@@ -2,8 +2,8 @@
 @baseUrl = http://localhost:3000
 
 # --- credentials used throughout this file ---
-@adminUsername = principal
-@adminPassword = TestPassword123
+@adminUsername = Bethesda
+@adminPassword = Exam123$
 @adminSetupSecret = eafe19f7a26606744e2616fd14e6ae92baadb5af4c111d9665face943207939d
 
 @subjectName = Chemistry
@@ -23,8 +23,8 @@ Content-Type: application/json
 {
   "username": "{{adminUsername}}",
   "password": "{{adminPassword}}",
-  "firstName": "Test",
-  "lastName": "Admin",
+  "firstName": "Admin",
+  "lastName": "Bethesda",
   "setupSecret": "{{adminSetupSecret}}"
 }
 
