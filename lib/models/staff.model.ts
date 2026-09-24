@@ -29,7 +29,7 @@ export interface IStaff extends Document {
 // Mirrors the Student model's admission-number scheme (see student.model.ts)
 // but with a single global sequence - staff headcount never approaches the
 // volume that would need per-class/per-role scoping.
-const STAFF_ID_PREFIX = "BHS-STAFF-";
+const STAFF_ID_PREFIX = "BHB-STAFF-";
 
 function generateStaffPassword(firstName: string, lastName: string): string {
   const initials = `${firstName.trim().charAt(0)}${lastName.trim().charAt(0)}`.toUpperCase();

@@ -115,7 +115,7 @@ studentSchema.pre("validate", async function (this: IStudent) {
   if (this.isNew && !this.admissionNumber) {
     const year = new Date().getFullYear();
     const classCode = CLASS_CODE_MAP[this.class] ?? "00";
-    const prefix = `BHS-${year}-${classCode}-`;
+    const prefix = `BHB-${year}-${classCode}-`;
     const count = await Student.countDocuments({
       admissionNumber: { $regex: `^${prefix}` },
     });
