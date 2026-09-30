@@ -30,6 +30,8 @@ export interface Exam {
   examCode: string;
   isCodeActive: boolean;
   instructions?: string;
+  objectiveInstructions?: string;
+  theoryInstructions?: string;
   passingScore: number;
   shuffleQuestions: boolean;
 }

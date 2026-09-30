@@ -66,6 +66,8 @@ const EDITABLE_FIELDS = [
   "examDate",
   "duration",
   "instructions",
+  "objectiveInstructions",
+  "theoryInstructions",
   "passingScore",
   "shuffleQuestions",
   "isCodeActive",

@@ -35,6 +35,36 @@ export function bucketPerformance(avg: number): Performance {
   return "poor";
 }
 
+// ---- Mixed exams: MCQ portion ------------------------------------------
+// A Mixed exam stays "Submitted" until a human marks the theory part, so
+// submission.status/score can't be used to show results. But the MCQ part
+// is auto-graded at answer time (marksAwarded/isCorrect on each answer), so
+// it's available immediately. These helpers surface it.
+
+interface AnswerLean {
+  isCorrect?: boolean;
+  marksAwarded?: number;
+}
+
+// Sum of marks across the exam's Objective questions. Expects
+// exam.questions populated with at least { type, marks } on `question`.
+export function objectiveTotalMarks(
+  examQuestions: { question?: { type?: string; marks?: number } | null }[] | undefined,
+): number {
+  return (examQuestions ?? []).reduce(
+    (sum, q) => (q.question?.type === "Objective" ? sum + (q.question.marks ?? 0) : sum),
+    0,
+  );
+}
+
+// Sum of marks the auto-grader awarded on this submission's MCQ answers.
+export function objectiveScoreFromAnswers(answers: AnswerLean[] | undefined): number {
+  return (answers ?? []).reduce(
+    (sum, a) => (typeof a.isCorrect === "boolean" ? sum + (a.marksAwarded ?? 0) : sum),
+    0,
+  );
+}
+
 interface SubmissionLean {
   status: string;
   score: number;

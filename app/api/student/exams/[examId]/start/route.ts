@@ -207,6 +207,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
       duration: exam.duration,
       totalMarks: exam.totalMarks,
       instructions: exam.instructions,
+      objectiveInstructions: exam.objectiveInstructions,
+      theoryInstructions: exam.theoryInstructions,
     },
     submissionId: submission.id,
     startedAt: submission.startedAt,

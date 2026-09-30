@@ -10,6 +10,76 @@ const STATUS_LABELS: Record<string, string> = {
   "not-started": "Did Not Take Exam",
 };
 
+// ---------- Row layout shared by every results sheet ----------
+// Objective / Theory exams: Score is only meaningful once a script is
+// "Marked". Mixed exams are different - they stay at "Awaiting Marking"
+// until theory is graded by hand, but the MCQ part is auto-graded on
+// submit, so it gets its own columns and shows up straight away instead of
+// a blank "—" that made a fully-scored MCQ section look unscored.
+type ResultRowLike = Pick<
+  ClassExportRow,
+  | "admissionNo"
+  | "studentName"
+  | "score"
+  | "totalMarks"
+  | "percentage"
+  | "status"
+  | "objectiveScore"
+  | "objectiveTotal"
+>;
+
+function resultColumns(subject: SubjectResult): string[] {
+  if (subject.examType === "mixed") {
+    return [
+      "Admission No.",
+      "Student Name",
+      "MCQ Score",
+      "MCQ (%)",
+      "Theory",
+      "Total Score",
+      "Status",
+    ];
+  }
+  return ["Admission No.", "Student Name", "Score", "Percentage (%)", "Status"];
+}
+
+function resultRowValues(subject: SubjectResult, r: ResultRowLike): (string | number)[] {
+  const status = STATUS_LABELS[r.status] ?? r.status;
+
+  if (subject.examType !== "mixed") {
+    return [
+      r.admissionNo,
+      r.studentName,
+      r.status === "marked" ? `${r.score}/${r.totalMarks}` : "—",
+      r.status === "marked" ? r.percentage : "",
+      status,
+    ];
+  }
+
+  const hasMcq = r.objectiveScore !== undefined && r.objectiveTotal !== undefined;
+  const mcqScore = hasMcq ? `${r.objectiveScore}/${r.objectiveTotal}` : "—";
+  const mcqPct =
+    hasMcq && (r.objectiveTotal ?? 0) > 0
+      ? Math.round(((r.objectiveScore ?? 0) / (r.objectiveTotal ?? 1)) * 100)
+      : "";
+
+  let theory = "—";
+  if (r.status === "marked") theory = "Marked";
+  else if (r.status === "pending") theory = "Script submitted - awaiting marking";
+  else if (r.status === "in-progress") theory = "In Progress";
+  else if (r.status === "not-started") theory = "Did Not Take Exam";
+
+  return [
+    r.admissionNo,
+    r.studentName,
+    mcqScore,
+    mcqPct,
+    theory,
+    r.status === "marked" ? `${r.score}/${r.totalMarks}` : "Pending theory marking",
+    status,
+  ];
+}
+
 // ---------- OBJECTIVE / MIXED -> Excel (single subject) ----------
 export async function generateObjectiveExcel(
   className: string,
@@ -19,44 +89,32 @@ export async function generateObjectiveExcel(
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Results");
 
-  sheet.mergeCells("A1:E1");
+  sheet.mergeCells("A1:G1");
   sheet.getCell("A1").value = className;
   sheet.getCell("A1").font = { bold: true, size: 14 };
 
-  sheet.mergeCells("A2:E2");
+  sheet.mergeCells("A2:G2");
   sheet.getCell("A2").value = subject.subject;
   sheet.getCell("A2").font = { bold: true, size: 12 };
 
-  sheet.mergeCells("A3:E3");
+  sheet.mergeCells("A3:G3");
   sheet.getCell("A3").value = `Exam Type: ${subject.examType}`;
   sheet.getCell("A3").font = { bold: true };
 
-  sheet.mergeCells("A4:E4");
+  sheet.mergeCells("A4:G4");
   sheet.getCell("A4").value = `Date: ${new Date().toLocaleDateString()}`;
   sheet.getCell("A4").font = { bold: true };
 
   sheet.addRow([]);
 
-  const headerRow = sheet.addRow([
-    "Admission No.",
-    "Student Name",
-    "Score",
-    "Percentage (%)",
-    "Status",
-  ]);
+  const headerRow = sheet.addRow(resultColumns(subject));
   headerRow.font = { bold: true };
   headerRow.eachCell((cell) => {
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8EEF5" } };
   });
 
   students.forEach((s) => {
-    sheet.addRow([
-      s.admissionNo,
-      s.studentName,
-      s.status === "marked" ? `${s.score}/${s.totalMarks}` : "—",
-      s.status === "marked" ? s.percentage : "",
-      STATUS_LABELS[s.status] ?? s.status,
-    ]);
+    sheet.addRow(resultRowValues(subject, s));
   });
 
   sheet.columns.forEach((col) => {
@@ -136,31 +194,19 @@ export async function generateClassResultsExcel(
       subject.subject.replace(/[:\\/?*[\]]/g, "").slice(0, 31) || subject.id.slice(0, 8);
     const sheet = workbook.addWorksheet(sheetName);
 
-    sheet.mergeCells("A1:E1");
+    sheet.mergeCells("A1:G1");
     sheet.getCell("A1").value = subject.subject;
     sheet.getCell("A1").font = { bold: true, size: 12 };
     sheet.addRow([]);
 
-    const head = sheet.addRow([
-      "Admission No.",
-      "Student Name",
-      "Score",
-      "Percentage (%)",
-      "Status",
-    ]);
+    const head = sheet.addRow(resultColumns(subject));
     head.font = { bold: true };
     head.eachCell((cell) => {
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8EEF5" } };
     });
 
     rows.forEach((r) => {
-      sheet.addRow([
-        r.admissionNo,
-        r.studentName,
-        r.status === "marked" ? `${r.score}/${r.totalMarks}` : "—",
-        r.status === "marked" ? r.percentage : "",
-        STATUS_LABELS[r.status] ?? r.status,
-      ]);
+      sheet.addRow(resultRowValues(subject, r));
     });
     sheet.columns.forEach((col) => {
       col.width = 20;

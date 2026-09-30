@@ -5,6 +5,10 @@ import { groupQuestionsByPassage } from "./groupQuestionsByPassage";
 
 interface QuestionsListProps {
   questions: SessionQuestion[];
+  // Admin-written section directions for a Mixed exam. Blank/undefined
+  // falls back to the default wording in SECTION_INSTRUCTIONS below.
+  objectiveInstructions?: string;
+  theoryInstructions?: string;
   answers: Record<string, string>;
   onAnswerChange: (questionId: string, value: string, isObjective: boolean) => void;
 }
@@ -21,15 +25,103 @@ const PASSAGE_KIND_INTRO: Record<string, string> = {
   diagram: "Read the description below, then answer the questions that follow.",
 };
 
-const QuestionsList: React.FC<QuestionsListProps> = ({ questions, answers, onAnswerChange }) => {
-  const blocks = groupQuestionsByPassage(questions);
+// Per-section directions for a Mixed exam. Each section is a labelled
+// region with its own heading, so a screen-reader user can jump between
+// Section A and Section B with the heading keys and always hears what
+// that part expects of them before the first question.
+const SECTION_INSTRUCTIONS = {
+  Objective:
+    "Choose the ONE correct option for each question. Your answers in this section are scored automatically when you submit.",
+  Theory:
+    "Type your full answer in the box under each question. Your answers in this section are marked by your teacher after you submit, so your theory score will not appear straight away.",
+} as const;
+
+const QuestionsList: React.FC<QuestionsListProps> = ({
+  questions,
+  answers,
+  onAnswerChange,
+  objectiveInstructions,
+  theoryInstructions,
+}) => {
+  const objectiveQuestions = questions.filter((q) => q.type === "Objective");
+  const theoryQuestions = questions.filter((q) => q.type === "Theory");
+  const isMixed = objectiveQuestions.length > 0 && theoryQuestions.length > 0;
+
+  // Not a mixed paper - one flat list exactly as before, no section chrome.
+  if (!isMixed) {
+    return (
+      <div className="space-y-6">
+        <h2 className="text-xl font-semibold text-[#1A3A5C] border-b border-[#E8EEF5] pb-3">
+          Questions
+        </h2>
+        {renderBlocks(questions, 0, questions.length, answers, onAnswerChange)}
+      </div>
+    );
+  }
+
+  // `start` is the running offset, so numbering continues across sections
+  // (Q1-Q20 in Section A, then Q21-Q25 in Section B).
+  const sections = [
+    {
+      key: "Objective",
+      letter: "A",
+      title: "Objective (Multiple Choice)",
+      items: objectiveQuestions,
+      start: 0,
+      instructions: objectiveInstructions?.trim() || SECTION_INSTRUCTIONS.Objective,
+    },
+    {
+      key: "Theory",
+      letter: "B",
+      title: "Theory",
+      items: theoryQuestions,
+      start: objectiveQuestions.length,
+      instructions: theoryInstructions?.trim() || SECTION_INSTRUCTIONS.Theory,
+    },
+  ] as const;
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-[#1A3A5C] border-b border-[#E8EEF5] pb-3">
-        Questions
-      </h2>
+    <div className="space-y-10">
+      {sections.map((section) => {
+        const start = section.start;
+        const totalMarks = section.items.reduce((sum, item) => sum + item.marks, 0);
+        const headingId = `section-${section.letter}-heading`;
+        const count = section.items.length;
 
+        return (
+          <section key={section.key} aria-labelledby={headingId} className="space-y-6">
+            <div className="border-b border-[#E8EEF5] pb-3">
+              <h2 id={headingId} className="text-xl font-semibold text-[#1A3A5C]">
+                Section {section.letter}: {section.title}
+              </h2>
+              <p className="text-sm text-[#5A7A9A] mt-1">
+                Questions {start + 1}–{start + count} · {count} question{count === 1 ? "" : "s"} ·{" "}
+                {totalMarks} mark{totalMarks === 1 ? "" : "s"}
+              </p>
+              <div className="mt-3 bg-[#F8FAFE] border border-[#C5D8EC] rounded-lg p-3 text-sm text-[#4A6A8A] whitespace-pre-wrap">
+                <span className="font-medium text-[#1A3A5C]">Instructions: </span>
+                {section.instructions}
+              </div>
+            </div>
+            {renderBlocks(section.items, start, questions.length, answers, onAnswerChange)}
+          </section>
+        );
+      })}
+    </div>
+  );
+};
+
+function renderBlocks(
+  sectionQuestions: SessionQuestion[],
+  indexOffset: number,
+  totalQuestions: number,
+  answers: Record<string, string>,
+  onAnswerChange: QuestionsListProps["onAnswerChange"],
+) {
+  const blocks = groupQuestionsByPassage(sectionQuestions, indexOffset);
+
+  return (
+    <>
       {blocks.map((block) => {
         if (block.kind === "standalone") {
           return (
@@ -37,7 +129,7 @@ const QuestionsList: React.FC<QuestionsListProps> = ({ questions, answers, onAns
               key={block.question._id}
               question={block.question}
               questionIndex={block.globalIndex}
-              totalQuestions={questions.length}
+              totalQuestions={totalQuestions}
               answer={answers[block.question._id]}
               onAnswerChange={onAnswerChange}
             />
@@ -86,7 +178,7 @@ const QuestionsList: React.FC<QuestionsListProps> = ({ questions, answers, onAns
                   key={question._id}
                   question={question}
                   questionIndex={globalIndex}
-                  totalQuestions={questions.length}
+                  totalQuestions={totalQuestions}
                   answer={answers[question._id]}
                   onAnswerChange={onAnswerChange}
                   groupContext={{
@@ -99,8 +191,8 @@ const QuestionsList: React.FC<QuestionsListProps> = ({ questions, answers, onAns
           </div>
         );
       })}
-    </div>
+    </>
   );
-};
+}
 
 export default QuestionsList;

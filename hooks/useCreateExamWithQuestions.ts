@@ -28,6 +28,8 @@ interface FormData {
   duration: number;
   type: "objective" | "theory" | "mixed";
   instructions: string;
+  objectiveInstructions: string;
+  theoryInstructions: string;
   passingScore: number;
   shuffleQuestions: boolean;
 }
@@ -62,6 +64,8 @@ export function useCreateExamWithQuestions() {
     duration: 60,
     type: "objective",
     instructions: "",
+    objectiveInstructions: "",
+    theoryInstructions: "",
     passingScore: 40,
     shuffleQuestions: false,
   });
@@ -284,6 +288,8 @@ export function useCreateExamWithQuestions() {
             examDate,
             duration: formData.duration,
             instructions: formData.instructions,
+            objectiveInstructions: formData.type === "mixed" ? formData.objectiveInstructions : "",
+            theoryInstructions: formData.type === "mixed" ? formData.theoryInstructions : "",
             passingScore: formData.passingScore,
             shuffleQuestions: formData.shuffleQuestions,
           }),
@@ -346,6 +352,8 @@ export function useCreateExamWithQuestions() {
       duration: 60,
       type: "objective",
       instructions: "",
+    objectiveInstructions: "",
+    theoryInstructions: "",
       passingScore: 40,
       shuffleQuestions: false,
     });

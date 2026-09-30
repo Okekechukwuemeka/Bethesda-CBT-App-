@@ -27,6 +27,14 @@ const StudentScriptRow: React.FC<StudentScriptRowProps> = ({
   onDownloadScript,
 }) => {
   const hasAnswers = (student.answers?.length ?? 0) > 0 && student.status !== "not-started";
+  // Mixed exam whose theory part is still unmarked: the MCQ half is already
+  // auto-scored, so show it instead of leaving the row scoreless.
+  const hasMcqScore =
+    student.status !== "marked" &&
+    student.objectiveScore !== undefined &&
+    student.objectiveTotal !== undefined;
+  const statusLabel =
+    hasMcqScore && student.status === "pending" ? "Theory Awaiting Marking" : statusLabels[student.status];
 
   return (
     <li className="flex items-center justify-between gap-3 bg-white border border-[#E8EEF5] rounded-lg p-3">
@@ -41,9 +49,15 @@ const StudentScriptRow: React.FC<StudentScriptRowProps> = ({
             <span className="text-xs font-normal text-[#5A7A9A]">({student.percentage}%)</span>
           </span>
         )}
+        {hasMcqScore && (
+          <span className="text-sm font-semibold text-[#1A3A5C]">
+            <span className="text-xs font-normal text-[#5A7A9A]">MCQ </span>
+            {student.objectiveScore}/{student.objectiveTotal}
+          </span>
+        )}
         <span
           className={`text-xs px-2 py-1 rounded-full font-medium ${statusStyles[student.status]}`}>
-          {statusLabels[student.status]}
+          {statusLabel}
         </span>
         {showScriptDownload && hasAnswers && (
           <button

@@ -82,6 +82,8 @@ const ExamPage: React.FC = () => {
             questions={questions}
             answers={answers}
             onAnswerChange={handleAnswerChange}
+            objectiveInstructions={exam.objectiveInstructions}
+            theoryInstructions={exam.theoryInstructions}
           />
 
           <div className="flex flex-col sm:flex-row gap-4 justify-end border-t border-[#E8EEF5] pt-6 mt-6">

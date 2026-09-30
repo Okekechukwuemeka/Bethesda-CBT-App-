@@ -51,6 +51,8 @@ export const useExams = () => {
           examCode: e.examCode,
           isCodeActive: e.isCodeActive,
           instructions: e.instructions,
+          objectiveInstructions: e.objectiveInstructions,
+          theoryInstructions: e.theoryInstructions,
           passingScore: e.passingScore,
           shuffleQuestions: e.shuffleQuestions,
         })),

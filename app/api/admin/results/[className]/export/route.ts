@@ -3,10 +3,13 @@ import { connectDB } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-guards";
 import { Student } from "@/lib/models/student.model";
 import { Submission } from "@/lib/models/submission.model";
+import { Question } from "@/lib/models/question.model";
 import {
   buildSubjectResult,
   getClassActiveStudentCount,
   getExamsForClass,
+  objectiveScoreFromAnswers,
+  objectiveTotalMarks,
   toScriptStatus,
 } from "@/lib/results-helpers";
 import type { ExamLean } from "@/lib/results-helpers";
@@ -45,8 +48,22 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
   const studentIds = new Set(students.map((s) => s._id.toString()));
 
   for (const exam of exams) {
+    const isMixed = exam.type === "Mixed";
+    // A Mixed exam sits at "Submitted" until theory is marked, so `score`
+    // is withheld below - but its auto-graded MCQ part is already known.
+    // Needs the attached questions' type/marks to work out the MCQ total.
+    let objectiveTotal = 0;
+    if (isMixed) {
+      const attached = await Question.find({
+        _id: { $in: (exam.questions ?? []).map((q) => q.question) },
+      })
+        .select("type marks")
+        .lean();
+      objectiveTotal = objectiveTotalMarks(attached.map((question) => ({ question })));
+    }
+
     const submissions = await Submission.find({ exam: exam._id })
-      .select("student status score totalMarks")
+      .select(isMixed ? "student status score totalMarks answers" : "student status score totalMarks")
       .lean();
     // Scoped to this class's own students before it feeds into
     // buildSubjectResult below - without this, a general exam shared
@@ -76,6 +93,15 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
             ? Math.round((submission.score / submission.totalMarks) * 100)
             : 0,
         status: toScriptStatus(submission?.status),
+        ...(isMixed && (submission?.status === "Submitted" || isMarked)
+          ? {
+              objectiveScore: objectiveScoreFromAnswers(
+                (submission as { answers?: { isCorrect?: boolean; marksAwarded?: number }[] })
+                  .answers,
+              ),
+              objectiveTotal,
+            }
+          : {}),
       };
     });
   }

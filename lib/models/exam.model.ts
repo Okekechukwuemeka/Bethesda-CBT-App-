@@ -41,6 +41,11 @@ export interface IExam extends Document {
   totalMarks: number;
   status: ExamStatus;
   instructions?: string;
+  // Only used when type === "Mixed": directions shown at the top of Section A
+  // (objective) and Section B (theory) on the student's exam page. Blank
+  // falls back to a sensible default on the student side.
+  objectiveInstructions?: string;
+  theoryInstructions?: string;
 
   passingScore: number;
 
@@ -142,6 +147,8 @@ const examSchema = new Schema<IExam>(
       default: "Scheduled",
     },
     instructions: { type: String, trim: true },
+    objectiveInstructions: { type: String, trim: true },
+    theoryInstructions: { type: String, trim: true },
     passingScore: {
       type: Number,
       default: 40,
@@ -255,6 +262,15 @@ export async function recomputeExamTotals(examId: mongoose.Types.ObjectId | stri
     exam.totalMarks = questions.reduce((sum, q) => sum + q.marks, 0);
   }
   await exam.save();
+}
+
+// Dev-server hot reload keeps the FIRST compiled Exam model in mongoose.models
+// forever, so a newly added schema path (like objectiveInstructions) is
+// silently ignored - saves drop it and reads never return it - until the
+// server is fully restarted. If the cached model predates the section
+// instruction fields, discard it so the current schema is registered.
+if (models.Exam && !models.Exam.schema.path("objectiveInstructions")) {
+  mongoose.deleteModel("Exam");
 }
 
 export const Exam = (models.Exam as mongoose.Model<IExam>) || model<IExam>("Exam", examSchema);

@@ -33,6 +33,9 @@ export interface ExamSessionMeta {
   duration: number;
   totalMarks: number;
   instructions?: string;
+  // Mixed exams: admin-written directions for each section (optional).
+  objectiveInstructions?: string;
+  theoryInstructions?: string;
 }
 
 export interface ExamSessionResponse {

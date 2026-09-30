@@ -29,11 +29,19 @@ export type QuestionBlock = StandaloneBlock | PassageBlock;
 // (`question-${globalIndex}`) - that id needs to keep meaning whatever
 // external code might jump to it, independent of how grouping re-arranges
 // the visual layout.
-export function groupQuestionsByPassage(questions: SessionQuestion[]): QuestionBlock[] {
+//
+// indexOffset shifts every globalIndex - used when a Mixed exam is split into
+// sections (objective first, then theory) so numbering keeps running across
+// sections (Q1-Q20, then Q21-Q25) instead of restarting at 1 in section B.
+export function groupQuestionsByPassage(
+  questions: SessionQuestion[],
+  indexOffset = 0,
+): QuestionBlock[] {
   const blocks: QuestionBlock[] = [];
   const blockIndexByPassageId = new Map<string, number>();
 
-  questions.forEach((question, globalIndex) => {
+  questions.forEach((question, i) => {
+    const globalIndex = i + indexOffset;
     if (!question.passageId) {
       blocks.push({ kind: "standalone", question, globalIndex });
       return;

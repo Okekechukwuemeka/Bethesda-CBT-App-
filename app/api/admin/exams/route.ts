@@ -122,6 +122,8 @@ export async function POST(req: NextRequest) {
       examDate: body.examDate,
       duration: body.duration,
       instructions: body.instructions,
+      objectiveInstructions: body.objectiveInstructions,
+      theoryInstructions: body.theoryInstructions,
       passingScore: body.passingScore,
       shuffleQuestions: body.shuffleQuestions,
       createdBy: guard.session.user.id,

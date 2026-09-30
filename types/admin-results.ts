@@ -37,6 +37,11 @@ export interface StudentScript {
   status: ScriptStatus;
   submittedAt: string;
   answers?: StudentAnswer[];
+  // Auto-graded MCQ portion. Only populated for Mixed exams whose script
+  // hasn't been fully marked yet - `score` above stays 0 until theory is
+  // marked, but the MCQ part is already known the moment the student submits.
+  objectiveScore?: number;
+  objectiveTotal?: number;
 }
 
 export interface ClassExportRow {
@@ -46,4 +51,7 @@ export interface ClassExportRow {
   totalMarks: number;
   percentage: number;
   status: ScriptStatus;
+  // See StudentScript - MCQ portion of a Mixed exam, known before theory is marked.
+  objectiveScore?: number;
+  objectiveTotal?: number;
 }

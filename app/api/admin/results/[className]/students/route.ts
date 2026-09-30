@@ -4,7 +4,11 @@ import { requireAdmin } from "@/lib/api-guards";
 import { Exam } from "@/lib/models/exam.model";
 import { Student } from "@/lib/models/student.model";
 import { Submission } from "@/lib/models/submission.model";
-import { toScriptStatus } from "@/lib/results-helpers";
+import {
+  objectiveScoreFromAnswers,
+  objectiveTotalMarks,
+  toScriptStatus,
+} from "@/lib/results-helpers";
 import type { ClassLevel } from "@/lib/models/constants";
 import type { StudentScript } from "@/types/admin-results";
 
@@ -36,7 +40,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
     // 3. Look up the exam record using our query string variable
     exam = await Exam.findById(examId).populate({
       path: "questions.question",
-      select: "text type",
+      select: "text type marks",
     });
   } catch (err) {
     return NextResponse.json({ error: "Invalid exam ID format" }, { status: 400 });
@@ -49,7 +53,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
     type: string;
     title: string;
     questions: {
-      question: { _id: { toString(): string }; text: string; type: string };
+      question: { _id: { toString(): string }; text: string; type: string; marks: number };
       order: number;
     }[];
   };
@@ -58,6 +62,11 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
     .sort((a, b) => a.order - b.order)
     .filter((q) => q.question && q.question.type === "Theory")
     .map((q, i) => ({ id: q.question._id.toString(), questionNo: i + 1 }));
+
+  // Mixed exams stay "Submitted" until theory is marked, but the MCQ part is
+  // auto-graded already - expose it so the sheet/modal can show it.
+  const isMixed = examObj.type === "Mixed";
+  const objectiveTotal = isMixed ? objectiveTotalMarks(examObj.questions) : 0;
 
   // Use our parsed className variable to gather active classroom students
   const students = await Student.find({ class: className, isActive: true })
@@ -92,6 +101,12 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
       status: toScriptStatus(submission?.status),
       submittedAt: submission?.submittedAt ? new Date(submission.submittedAt).toISOString() : "",
       answers: theoryQuestionsInOrder.length > 0 ? answers : undefined,
+      ...(isMixed && (submission?.status === "Submitted" || isMarked)
+        ? {
+            objectiveScore: objectiveScoreFromAnswers(submission?.answers),
+            objectiveTotal,
+          }
+        : {}),
     };
   });
 

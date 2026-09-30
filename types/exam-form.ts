@@ -15,6 +15,9 @@ export interface ExamFormData {
   duration: number;
   type: "objective" | "theory" | "mixed";
   instructions: string;
+  // Mixed exams only - per-section directions (blank = default text).
+  objectiveInstructions: string;
+  theoryInstructions: string;
   passingScore: number;
   shuffleQuestions: boolean;
 }
@@ -31,6 +34,8 @@ export const initialFormData: ExamFormData = {
   duration: 60,
   type: "objective",
   instructions: "",
+  objectiveInstructions: "",
+  theoryInstructions: "",
   passingScore: 40,
   shuffleQuestions: false,
 };

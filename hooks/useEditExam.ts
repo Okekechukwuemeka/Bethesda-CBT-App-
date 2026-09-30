@@ -26,6 +26,8 @@ interface FormData {
   duration: number;
   type: "objective" | "theory" | "mixed";
   instructions: string;
+  objectiveInstructions: string;
+  theoryInstructions: string;
   passingScore: number;
   shuffleQuestions: boolean;
   status: "scheduled" | "ongoing" | "completed";
@@ -76,6 +78,8 @@ export function useEditExam(examId: string) {
     duration: 60,
     type: "objective",
     instructions: "",
+    objectiveInstructions: "",
+    theoryInstructions: "",
     passingScore: 40,
     shuffleQuestions: false,
     status: "scheduled",
@@ -116,6 +120,8 @@ export function useEditExam(examId: string) {
           duration: exam.duration,
           type: fromBackendEnum(exam.type),
           instructions: exam.instructions ?? "",
+          objectiveInstructions: exam.objectiveInstructions ?? "",
+          theoryInstructions: exam.theoryInstructions ?? "",
           passingScore: exam.passingScore ?? 40,
           shuffleQuestions: exam.shuffleQuestions ?? false,
           status: fromBackendEnum(exam.status),
@@ -239,6 +245,8 @@ export function useEditExam(examId: string) {
             examDate,
             duration: formData.duration,
             instructions: formData.instructions,
+            objectiveInstructions: formData.type === "mixed" ? formData.objectiveInstructions : "",
+            theoryInstructions: formData.type === "mixed" ? formData.theoryInstructions : "",
             passingScore: formData.passingScore,
             shuffleQuestions: formData.shuffleQuestions,
             status: toBackendStatus(formData.status),
