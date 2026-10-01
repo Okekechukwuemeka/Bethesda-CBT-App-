@@ -79,7 +79,7 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ subjects, classes }) 
 
         <button
           type="button"
-          onClick={downloadQuestionTemplate}
+          onClick={() => downloadQuestionTemplate()}
           className="text-[#2B6CB0] hover:text-[#1A3A5C] text-sm font-medium flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] rounded px-2 py-1">
           <svg
             className="w-4 h-4"
