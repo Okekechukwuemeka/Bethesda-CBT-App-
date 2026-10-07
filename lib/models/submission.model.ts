@@ -7,7 +7,42 @@ import "./question.model";
 import "./exam.model";
 import "./student.model";
 import "./admin.model";
-import { SUBMISSION_STATUSES, SubmissionStatus } from "./constants";
+import {
+  ClassLevel,
+  CLASS_LEVELS,
+  EXAM_TYPES,
+  ExamType,
+  SUBMISSION_STATUSES,
+  SubmissionStatus,
+} from "./constants";
+
+// A frozen copy of the exam details a result needs in order to still make
+// sense after its exam has been deleted. It is written onto every submission
+// of an exam at the moment that exam is deleted (see lib/exam-snapshot.ts),
+// which is also what marks a submission as a "result whose exam no longer
+// exists" - submissions of live exams never carry one, so existing data is
+// not touched until (and unless) its exam is removed.
+export interface IExamSnapshot {
+  title: string;
+  subject?: mongoose.Types.ObjectId;
+  subjectName: string;
+  isGeneral: boolean;
+  class?: ClassLevel;
+  classes?: ClassLevel[];
+  term?: string;
+  academicYear?: string;
+  type: ExamType;
+  examDate?: Date;
+  totalMarks: number;
+  // Ids of the exam's Theory questions in the order they were presented,
+  // so a student's theory answers can still be numbered Q1, Q2... once the
+  // exam (which held that ordering) is gone.
+  theoryQuestionIds: mongoose.Types.ObjectId[];
+  // Total marks of the exam's Objective questions (used for the MCQ part of
+  // a Mixed exam whose theory section hasn't been marked yet).
+  objectiveTotal: number;
+  deletedAt: Date;
+}
 
 export interface IAnswerRecord {
   question: mongoose.Types.ObjectId;
@@ -43,9 +78,33 @@ export interface ISubmission extends Document {
   // column) - the timer itself is always derived from startedAt, never
   // from this.
   lastSyncedAt?: Date;
+  // Only present once the exam this submission belongs to has been deleted.
+  // `exam` above then simply points at an id that no longer exists, and this
+  // snapshot is what the Results pages read instead.
+  examSnapshot?: IExamSnapshot;
   createdAt: Date;
   updatedAt: Date;
 }
+
+const examSnapshotSchema = new Schema<IExamSnapshot>(
+  {
+    title: { type: String, required: true },
+    subject: { type: Schema.Types.ObjectId, ref: "Subject" },
+    subjectName: { type: String, default: "Unknown Subject" },
+    isGeneral: { type: Boolean, default: false },
+    class: { type: String, enum: CLASS_LEVELS },
+    classes: { type: [String], enum: CLASS_LEVELS, default: undefined },
+    term: String,
+    academicYear: String,
+    type: { type: String, enum: EXAM_TYPES, required: true },
+    examDate: Date,
+    totalMarks: { type: Number, default: 0 },
+    theoryQuestionIds: [{ type: Schema.Types.ObjectId }],
+    objectiveTotal: { type: Number, default: 0 },
+    deletedAt: { type: Date, required: true },
+  },
+  { _id: false },
+);
 
 const submissionSchema = new Schema<ISubmission>(
   {
@@ -83,6 +142,7 @@ const submissionSchema = new Schema<ISubmission>(
     markedAt: Date,
     markedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
     lastSyncedAt: Date,
+    examSnapshot: { type: examSnapshotSchema, default: undefined },
   },
   { timestamps: true },
 );
@@ -90,6 +150,9 @@ const submissionSchema = new Schema<ISubmission>(
 // One submission per student per exam.
 submissionSchema.index({ exam: 1, student: 1 }, { unique: true });
 submissionSchema.index({ exam: 1, status: 1 });
+// Finding "results whose exam was deleted" for one class's Results page.
+submissionSchema.index({ "examSnapshot.class": 1 });
+submissionSchema.index({ "examSnapshot.classes": 1 });
 
 // Auto-grade objective answers and roll the score up whenever answers change.
 // Theory answers are left alone here since those are scored manually via
@@ -102,6 +165,16 @@ submissionSchema.pre("save", async function (this: ISubmission) {
     this.score = graded.reduce((sum, a) => sum + (a.marksAwarded ?? 0), 0);
   }
 });
+
+// Dev-server hot reload keeps the FIRST compiled Submission model in
+// mongoose.models forever, so the newly added examSnapshot path would be
+// silently dropped from writes until the server is restarted - which would
+// make a snapshot "succeed" without storing anything. Discard a cached model
+// that predates it so the current schema is registered (same approach as
+// the Exam model).
+if (models.Submission && !models.Submission.schema.path("examSnapshot")) {
+  mongoose.deleteModel("Submission");
+}
 
 export const Submission =
   (models.Submission as mongoose.Model<ISubmission>) ||

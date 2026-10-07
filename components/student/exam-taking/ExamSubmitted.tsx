@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { ExamSessionMeta, SubmitResult } from "@/types/exam-session";
+import StudentIdentityBar from "@/components/student/StudentIdentityBar";
 
 interface ExamSubmittedProps {
   exam: ExamSessionMeta;
@@ -31,7 +32,8 @@ const ExamSubmitted: React.FC<ExamSubmittedProps> = ({ exam, result, onDone }) =
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#E8F0FE] flex items-center justify-center px-4 py-8">
+    <div className="min-h-screen bg-[#E8F0FE] flex flex-col items-center justify-center px-4 py-8">
+      <StudentIdentityBar className="w-full max-w-md mb-4" />
       <div className="bg-white rounded-2xl shadow-2xl border border-[#B8D0E8] max-w-md w-full p-8 text-center">
         <div
           className={`mx-auto mb-4 h-14 w-14 rounded-full flex items-center justify-center text-2xl ${

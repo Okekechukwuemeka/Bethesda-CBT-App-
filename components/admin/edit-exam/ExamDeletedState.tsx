@@ -19,8 +19,8 @@ const ExamDeletedState: React.FC<ExamDeletedStateProps> = ({ examTitle }) => {
         Exam Deleted
       </h1>
       <p className="text-[#5A7A9A]">
-        &ldquo;{examTitle}&rdquo; and all associated questions and results have been permanently
-        deleted.
+        &ldquo;{examTitle}&rdquo; has been deleted. Its questions remain in the Question Bank, and any
+        student results were kept and are still available under Results.
       </p>
       <button
         type="button"

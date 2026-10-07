@@ -4,6 +4,7 @@ import { requireTeacher } from "@/lib/api-guards";
 import { Staff } from "@/lib/models/staff.model";
 import { Student } from "@/lib/models/student.model";
 import { Exam, examClassFilter } from "@/lib/models/exam.model";
+import { getDeletedExamGroupsForClass } from "@/lib/results-helpers";
 import type { ClassResult } from "@/types/admin-results";
 
 // GET /api/staff/results/classes
@@ -23,10 +24,14 @@ export async function GET() {
     const studentCount = await Student.countDocuments({ class: className, isActive: true });
     if (studentCount === 0) continue;
 
-    const totalExams = await Exam.countDocuments({
+    const liveExams = await Exam.countDocuments({
       ...examClassFilter(className),
       subject: { $in: staff.assignedSubjects },
     });
+    // Exams that were deleted but whose results were kept still appear on
+    // the class's Results page, so they count here too.
+    const deletedExams = await getDeletedExamGroupsForClass(className, staff.assignedSubjects);
+    const totalExams = liveExams + deletedExams.length;
 
     results.push({ className, studentCount, totalExams });
   }

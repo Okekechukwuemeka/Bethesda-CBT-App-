@@ -100,7 +100,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-[#E8F0FE]">
+      <body className="min-h-full flex flex-col bg-[#E8F0FE]" suppressHydrationWarning>
         <AuthSessionProvider>
           <ServiceWorkerRegister />
           {children}

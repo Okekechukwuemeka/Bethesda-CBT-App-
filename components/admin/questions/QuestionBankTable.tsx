@@ -9,6 +9,10 @@ interface QuestionBankTableProps {
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: () => void;
+  // Total matches across every page. When given, the table's own footer
+  // (which could only count the rows on this page) is left to the pagination
+  // control below it.
+  totalCount?: number;
 }
 
 const getTypeBadgeColor = (type: string) =>
@@ -71,6 +75,7 @@ const QuestionBankTable: React.FC<QuestionBankTableProps> = ({
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
+  totalCount,
 }) => {
   // Rows sharing a passage sit next to each other, in passageOrder, rather
   // than scattered wherever the API's createdAt sort happened to put them
@@ -252,13 +257,15 @@ const QuestionBankTable: React.FC<QuestionBankTableProps> = ({
           );
         })}
       </tbody>
-      <tfoot>
-        <tr>
-          <td colSpan={columnHeaders.length + 1} className="px-4 py-3 border-t border-[#E8EEF5]">
-            <p className="text-sm text-[#5A7A9A]">Total: {questions.length} questions</p>
-          </td>
-        </tr>
-      </tfoot>
+      {totalCount === undefined && (
+        <tfoot>
+          <tr>
+            <td colSpan={columnHeaders.length + 1} className="px-4 py-3 border-t border-[#E8EEF5]">
+              <p className="text-sm text-[#5A7A9A]">Total: {questions.length} questions</p>
+            </td>
+          </tr>
+        </tfoot>
+      )}
     </TableShell>
   );
 };

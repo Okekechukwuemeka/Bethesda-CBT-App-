@@ -10,7 +10,6 @@ import ExamDetailsFormSection from "@/components/admin/edit-exam/ExamDetailsForm
 import ScheduleStatusFormSection from "@/components/admin/edit-exam/ScheduleStatusFormSection";
 import ScoringBehaviorFormSection from "@/components/admin/edit-exam/ScoringBehaviorFormSection";
 import InstructionsFormSection from "@/components/admin/edit-exam/InstructionsFormSection";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useEditExam } from "@/hooks/useEditExam";
 
 const EditExamPage: React.FC = () => {
@@ -25,7 +24,6 @@ const EditExamPage: React.FC = () => {
     statusMessage,
     fieldErrors,
     showDeleteConfirm,
-    forceDeleteWarning,
     subjects,
     loadError,
     formData,
@@ -199,7 +197,7 @@ const EditExamPage: React.FC = () => {
       </div>
 
       <DeleteConfirmModal
-        isOpen={showDeleteConfirm && !forceDeleteWarning}
+        isOpen={showDeleteConfirm}
         examTitle={formData.title}
         examSubject={subjectName}
         examClass={
@@ -210,24 +208,7 @@ const EditExamPage: React.FC = () => {
             : formData.class
         }
         isProcessing={isSubmitting}
-        onConfirm={() => performDelete(false)}
-        onCancel={cancelDeleteConfirm}
-      />
-
-      {/* Second step - only when the backend reports existing submissions */}
-      <ConfirmDialog
-        isOpen={showDeleteConfirm && !!forceDeleteWarning}
-        title="Students have already started this exam"
-        description={
-          <>
-            {forceDeleteWarning} Deleting anyway will also permanently delete all of those student
-            submissions. This cannot be undone.
-          </>
-        }
-        confirmLabel="Delete Exam and All Submissions"
-        isDangerous
-        isProcessing={isSubmitting}
-        onConfirm={() => performDelete(true)}
+        onConfirm={performDelete}
         onCancel={cancelDeleteConfirm}
       />
     </>

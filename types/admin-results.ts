@@ -21,6 +21,12 @@ export interface SubjectResult {
   lowestScore: number;
   completed: number;
   status: ResultStatus;
+  // True when this row describes results whose exam has since been deleted.
+  // Such rows are built from the snapshot kept on the submissions, can still
+  // be viewed/exported, and (for admins) deleted.
+  examDeleted?: boolean;
+  term?: string;
+  academicYear?: string;
 }
 
 export interface StudentAnswer {

@@ -10,6 +10,9 @@ interface SubjectResultsTableProps {
   onExportExcel: (subject: SubjectResult) => void;
   onExportAllScripts: (subject: SubjectResult) => void;
   onViewScripts: (subject: SubjectResult, e: React.MouseEvent<HTMLButtonElement>) => void;
+  // Only the admin page passes these. Teachers can view results of a deleted
+  // exam but never delete them, so without them no delete button is shown.
+  onDeleteResults?: (subject: SubjectResult, e: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 const SubjectResultsTable: React.FC<SubjectResultsTableProps> = ({
@@ -19,6 +22,7 @@ const SubjectResultsTable: React.FC<SubjectResultsTableProps> = ({
   onExportExcel,
   onExportAllScripts,
   onViewScripts,
+  onDeleteResults,
 }) => {
   if (subjects.length === 0) {
     return (
@@ -80,6 +84,14 @@ const SubjectResultsTable: React.FC<SubjectResultsTableProps> = ({
                   <td className="px-4 py-3 text-sm font-medium text-[#1A3A5C]">
                     {subject.subject}
                     <p className="text-xs font-normal text-[#8A9CAE]">{subject.examTitle}</p>
+                    {subject.examDeleted && (
+                      <p className="mt-1 text-xs font-normal text-[#8A9CAE]">
+                        <span className="inline-block rounded-full bg-gray-200 px-2 py-0.5 font-medium text-gray-700">
+                          Exam deleted
+                        </span>{" "}
+                        {[subject.term, subject.academicYear].filter(Boolean).join(" · ")}
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <ExamTypeBadge type={subject.examType} />
@@ -121,6 +133,14 @@ const SubjectResultsTable: React.FC<SubjectResultsTableProps> = ({
                         className="text-sm bg-[#E8F0FE] hover:bg-[#D5E4F7] text-[#2B6CB0] px-3 py-1 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-[#2B6CB0]">
                         View Students
                       </button>
+                      {subject.examDeleted && onDeleteResults && (
+                        <button
+                          onClick={(e) => onDeleteResults(subject, e)}
+                          aria-label={`Delete saved results for ${subject.subject}, ${subject.examTitle}`}
+                          className="text-sm bg-red-50 hover:bg-red-100 text-red-700 px-3 py-1 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-red-500">
+                          Delete Results
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

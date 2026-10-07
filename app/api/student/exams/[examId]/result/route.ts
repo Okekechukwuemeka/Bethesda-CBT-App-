@@ -12,10 +12,15 @@ export async function GET(req: NextRequest, context: { params: Promise<{ examId:
   const { examId } = await context.params;
   await connectDB();
 
+  // Not required to still exist: an admin may have deleted the exam since
+  // the student sat it, but the student's result is kept (with a snapshot of
+  // the exam's title) and should stay viewable.
   const exam = await Exam.findById(examId);
-  if (!exam) return NextResponse.json({ error: "Exam not found" }, { status: 404 });
 
-  const submission = await Submission.findOne({ exam: exam._id, student: session.user.id });
+  const submission = await Submission.findOne({ exam: examId, student: session.user.id });
+  if (!exam && !submission) {
+    return NextResponse.json({ error: "Exam not found" }, { status: 404 });
+  }
   if (!submission) {
     return NextResponse.json({ error: "You have not attempted this exam" }, { status: 404 });
   }
@@ -24,7 +29,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ examId:
   }
 
   return NextResponse.json({
-    examTitle: exam.title,
+    examTitle: exam?.title ?? submission.examSnapshot?.title ?? "Deleted exam",
     status: submission.status,
     score: submission.status === "Marked" ? submission.score : null,
     totalMarks: submission.totalMarks,

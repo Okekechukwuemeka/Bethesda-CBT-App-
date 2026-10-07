@@ -58,7 +58,6 @@ export function useEditExam(examId: string) {
   const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [forceDeleteWarning, setForceDeleteWarning] = useState<string | null>(null);
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [examCode, setExamCode] = useState<string | null>(null);
@@ -274,44 +273,34 @@ export function useEditExam(examId: string) {
 
   const handleDelete = useCallback(() => {
     setShowDeleteConfirm(true);
-    setForceDeleteWarning(null);
   }, []);
 
   const cancelDeleteConfirm = useCallback(() => {
     setShowDeleteConfirm(false);
-    setForceDeleteWarning(null);
   }, []);
 
-  const performDelete = useCallback(
-    async (force = false) => {
-      setIsSubmitting(true);
-      try {
-        const res = await fetch(`/api/admin/exams/${examId}${force ? "?force=true" : ""}`, {
-          method: "DELETE",
-        });
-        const body = await res.json().catch(() => ({}));
+  // Deleting an exam no longer deletes student results (the server keeps
+  // them), so there is no second "delete anyway?" confirmation step.
+  const performDelete = useCallback(async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`/api/admin/exams/${examId}`, { method: "DELETE" });
+      const body = await res.json().catch(() => ({}));
 
-        if (res.status === 409 && !force) {
-          setForceDeleteWarning(body.error ?? "This exam has student submissions attached to it.");
-          setIsSubmitting(false);
-          return;
-        }
+      if (!res.ok) throw new Error(body.error ?? "Failed to delete exam");
 
-        if (!res.ok) throw new Error(body.error ?? "Failed to delete exam");
-
-        setShowDeleteConfirm(false);
-        setIsSubmitting(false);
-        setIsDeleted(true);
-      } catch (err) {
-        setIsSubmitting(false);
-        setStatusMessage({
-          type: "error",
-          text: err instanceof Error ? err.message : "Failed to delete exam.",
-        });
-      }
-    },
-    [examId],
-  );
+      setShowDeleteConfirm(false);
+      setIsSubmitting(false);
+      setIsDeleted(true);
+    } catch (err) {
+      setIsSubmitting(false);
+      setShowDeleteConfirm(false);
+      setStatusMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to delete exam.",
+      });
+    }
+  }, [examId]);
 
   return {
     isLoading,
@@ -320,7 +309,6 @@ export function useEditExam(examId: string) {
     statusMessage,
     fieldErrors,
     showDeleteConfirm,
-    forceDeleteWarning,
     subjects,
     loadError,
     formData,

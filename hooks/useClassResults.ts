@@ -16,7 +16,7 @@ interface StatusMessage {
 
 async function parseErrorMessage(res: Response, fallback: string): Promise<string> {
   const data = await res.json().catch(() => ({}));
-  return data.error || fallback;
+  return data.error || `${fallback} (server returned ${res.status})`;
 }
 
 export const useClassResults = (className: string) => {
@@ -38,6 +38,10 @@ export const useClassResults = (className: string) => {
 
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [isExportingClass, setIsExportingClass] = useState(false);
+
+  // Deleting the saved results of an exam that was itself already deleted.
+  const [resultsPendingDelete, setResultsPendingDelete] = useState<SubjectResult | null>(null);
+  const [isDeletingResults, setIsDeletingResults] = useState(false);
 
   const showStatus = useCallback((message: StatusMessage, durationMs = 4000) => {
     setStatusMessage(message);
@@ -182,9 +186,56 @@ export const useClassResults = (className: string) => {
     }
   }, [className, showStatus]);
 
+  const requestDeleteResults = useCallback((subject: SubjectResult) => {
+    setResultsPendingDelete(subject);
+  }, []);
+
+  const cancelDeleteResults = useCallback(() => {
+    if (isDeletingResults) return;
+    setResultsPendingDelete(null);
+  }, [isDeletingResults]);
+
+  const confirmDeleteResults = useCallback(async () => {
+    if (!resultsPendingDelete) return;
+    const target = resultsPendingDelete;
+    setIsDeletingResults(true);
+    try {
+      const res = await fetch(
+        `/api/admin/results/${encodeURIComponent(className)}/exams/${target.id}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to delete results"));
+
+      setSubjects((prev) => prev.filter((s) => s.id !== target.id));
+      setStudentsByExam((prev) => {
+        const next = { ...prev };
+        delete next[target.id];
+        return next;
+      });
+      setResultsPendingDelete(null);
+      showStatus({
+        type: "success",
+        text: `Deleted the saved results for ${target.subject} (${target.examTitle}).`,
+      });
+    } catch (err) {
+      setResultsPendingDelete(null);
+      showStatus({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to delete results.",
+      });
+    } finally {
+      setIsDeletingResults(false);
+    }
+  }, [className, resultsPendingDelete, showStatus]);
+
   return {
     className,
     subjects,
+    resultsPendingDelete,
+    isDeletingResults,
+    requestDeleteResults,
+    cancelDeleteResults,
+    confirmDeleteResults,
     isLoading,
     subjectsError, // ✅ Updated
     studentsError, // ✅ Updated

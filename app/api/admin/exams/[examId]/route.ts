@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/api-guards";
 import { Exam } from "@/lib/models/exam.model";
 import { Subject } from "@/lib/models/subject.model";
 import { syncExamStatus } from "@/lib/exam-status";
+import { deleteExamPreservingResults } from "@/lib/exam-snapshot";
 
 // GET /api/admin/exams/[examId]
 export async function GET(_req: NextRequest, context: { params: Promise<{ examId: string }> }) {
@@ -74,38 +75,35 @@ const EDITABLE_FIELDS = [
 ] as const;
 
 // DELETE /api/admin/exams/[examId]
-// Refuses to delete an exam that already has student submissions unless
-// ?force=true is passed - silently destroying student work is worse than
-// asking for one extra confirmation click.
-export async function DELETE(req: NextRequest, context: { params: Promise<{ examId: string }> }) {
+// Deletes the exam but KEEPS every student submission (result) that was
+// recorded against it. Before the exam is removed, the details those
+// results need to stay meaningful (title, subject, class, term, theory
+// question numbering...) are copied onto each submission - see
+// lib/exam-snapshot.ts. The results then stay on the Results pages, marked
+// as belonging to a deleted exam, until an admin deletes them there.
+//
+// There is deliberately no ?force=true any more: deleting an exam no longer
+// destroys anything that needs a second confirmation. (The parameter is
+// ignored if an old client still sends it.)
+export async function DELETE(_req: NextRequest, context: { params: Promise<{ examId: string }> }) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
 
   const { examId } = await context.params;
-  const force = req.nextUrl.searchParams.get("force") === "true";
+  if (!mongoose.Types.ObjectId.isValid(examId)) {
+    return NextResponse.json({ error: "Exam not found" }, { status: 404 });
+  }
   await connectDB();
 
-  const { Submission } = await import("@/lib/models/submission.model");
-  const submissionCount = await Submission.countDocuments({ exam: examId });
+  try {
+    const outcome = await deleteExamPreservingResults(examId);
+    if (!outcome) return NextResponse.json({ error: "Exam not found" }, { status: 404 });
 
-  if (submissionCount > 0 && !force) {
-    return NextResponse.json(
-      {
-        error: `This exam has ${submissionCount} student submission(s). Pass ?force=true to delete anyway.`,
-        submissionCount,
-      },
-      { status: 409 },
-    );
+    return NextResponse.json({ deleted: true, preservedResults: outcome.preservedResults });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to delete exam";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const exam = await Exam.findByIdAndDelete(examId);
-  if (!exam) return NextResponse.json({ error: "Exam not found" }, { status: 404 });
-
-  if (force && submissionCount > 0) {
-    await Submission.deleteMany({ exam: examId });
-  }
-
-  return NextResponse.json({ deleted: true });
 }
 
 // PATCH /api/admin/exams/[examId]

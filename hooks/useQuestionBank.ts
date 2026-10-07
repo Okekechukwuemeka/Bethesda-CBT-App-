@@ -3,7 +3,10 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import type { BlockingExam, Question, QuestionInput, RowError, Subject } from "@/types/question";
 import type { PassageKind } from "@/lib/models/constants";
+import type { PaginationInfo } from "@/lib/pagination";
 import { usePassages } from "./usePassages";
+
+const PAGE_SIZE = 20;
 
 interface StatusMessage {
   type: "success" | "error" | "warning";
@@ -63,6 +66,13 @@ export const useQuestionBank = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
   const [questionsError, setQuestionsError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    page: 1,
+    pageSize: PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  });
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
@@ -162,7 +172,7 @@ export const useQuestionBank = () => {
     setIsLoadingQuestions(true);
     setQuestionsError(null);
     try {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
       if (filterType !== "all") params.set("type", filterType);
       if (filterSubject !== "all") params.set("subject", filterSubject);
       if (filterClass !== "all") params.set("class", filterClass);
@@ -170,14 +180,18 @@ export const useQuestionBank = () => {
 
       const res = await fetch(`/api/admin/questions?${params.toString()}`);
       if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to load questions"));
-      const { questions: apiQuestions } = await res.json();
+      const { questions: apiQuestions, pagination: apiPagination } = await res.json();
       setQuestions(apiQuestions);
+      setPagination(apiPagination);
+      // The server clamps an out-of-range page (e.g. the last question on the
+      // last page was just deleted) - follow it rather than show an empty page.
+      if (apiPagination.page !== page) setPage(apiPagination.page);
     } catch (err) {
       setQuestionsError(err instanceof Error ? err.message : "Failed to load questions.");
     } finally {
       setIsLoadingQuestions(false);
     }
-  }, [filterType, filterSubject, filterClass, searchTerm]);
+  }, [filterType, filterSubject, filterClass, searchTerm, page]);
 
   useEffect(() => {
     const timer = setTimeout(fetchQuestionsList, 300);
@@ -697,14 +711,31 @@ export const useQuestionBank = () => {
     [subjectName, subjectCode, showStatus],
   );
 
-  const filteredCount = useMemo(() => questions.length, [questions]);
+  // Changing any filter or the search starts again from page 1 - the page the
+  // admin was on may not even exist in the new, narrower result set.
+  const changeFilter = useCallback(
+    (setter: (value: string) => void) => (value: string) => {
+      setter(value);
+      setPage(1);
+    },
+    [],
+  );
+  const setSearchTermAndReset = useMemo(() => changeFilter(setSearchTerm), [changeFilter]);
+  const setFilterSubjectAndReset = useMemo(() => changeFilter(setFilterSubject), [changeFilter]);
+  const setFilterTypeAndReset = useMemo(() => changeFilter(setFilterType), [changeFilter]);
+  const setFilterClassAndReset = useMemo(() => changeFilter(setFilterClass), [changeFilter]);
+
+  // Total matches across ALL pages (what the "N questions found" announcement
+  // should say), not just the rows on this page.
+  const filteredCount = pagination.total;
 
   // --- bulk selection / bulk delete -----------------------------------
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // Selection is keyed on the currently visible (filtered) list, so
-  // changing filters/search doesn't leave stale ids selected that the
-  // admin can no longer see.
+  // Selection is keyed on the currently visible (filtered, current-page)
+  // list, so changing filters/search/page doesn't leave stale ids selected
+  // that the admin can no longer see - "Select all" and bulk delete always
+  // act on exactly the rows on screen.
   useEffect(() => {
     const visibleIds = new Set(questions.map((q) => q._id));
     setSelectedIds((prev) => {
@@ -808,10 +839,15 @@ export const useQuestionBank = () => {
     filterSubject,
     filterType,
     filterClass,
-    setSearchTerm,
-    setFilterSubject,
-    setFilterType,
-    setFilterClass,
+    setSearchTerm: setSearchTermAndReset,
+    setFilterSubject: setFilterSubjectAndReset,
+    setFilterType: setFilterTypeAndReset,
+    setFilterClass: setFilterClassAndReset,
+
+    // pagination
+    pagination,
+    pageSize: PAGE_SIZE,
+    setPage,
 
     statusMessage,
 

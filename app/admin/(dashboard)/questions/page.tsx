@@ -10,6 +10,7 @@ import BulkImportModal from "@/components/admin/questions/BulkImportModal";
 import ConfirmDeleteModal from "@/components/admin/questions/ConfirmDeleteModal";
 import BulkDeleteQuestionsModal from "@/components/admin/questions/BulkDeleteQuestionsModal";
 import SubjectFormModal from "@/components/admin/questions/SubjectFormModal";
+import Pagination from "@/components/ui/Pagination";
 import PassageManagerModal from "@/components/admin/questions/PassageManagerModal";
 
 const QuestionsPage: React.FC = () => {
@@ -20,6 +21,9 @@ const QuestionsPage: React.FC = () => {
     subjects,
     isLoadingSubjects,
     filteredCount,
+    pagination,
+    pageSize,
+    setPage,
 
     searchTerm,
     filterSubject,
@@ -316,7 +320,23 @@ const QuestionsPage: React.FC = () => {
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
           onToggleSelectAll={toggleSelectAll}
+          totalCount={pagination.total}
         />
+        {!isLoadingQuestions && (
+          <div className="bg-white rounded-xl border border-[#C5D8EC] shadow-sm empty:hidden">
+            <Pagination
+              currentPage={pagination.page}
+              totalPages={pagination.totalPages}
+              totalItems={pagination.total}
+              pageSize={pageSize}
+              onPageChange={(p) => {
+                setPage(p);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              itemLabel="questions"
+            />
+          </div>
+        )}
       </div>
 
       {/* Question Form Modal */}

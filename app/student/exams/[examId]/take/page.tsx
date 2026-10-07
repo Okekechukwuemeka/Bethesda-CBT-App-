@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import StudentIdentityBar from "@/components/student/StudentIdentityBar";
 import ExamHeader from "@/components/student/exam-taking/ExamHeader";
 import Timer from "@/components/student/exam-taking/Timer";
 import TimerAnnouncement from "@/components/student/exam-taking/TimerAnnouncement";
@@ -54,6 +55,8 @@ const ExamPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#E8F0FE] py-6 px-4 font-sans">
       <div className="max-w-3xl mx-auto">
+        {/* Pinned to the top so the student can always see whose exam this is. */}
+        <StudentIdentityBar sticky className="mb-3" />
         <ExamHeader exam={exam} />
 
         <Timer

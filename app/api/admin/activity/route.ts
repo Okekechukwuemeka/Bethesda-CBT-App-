@@ -57,8 +57,10 @@ export async function GET(req: NextRequest) {
     return {
       id: s.id,
       student: student ? `${student.firstName} ${student.lastName}` : "Unknown student",
-      exam: exam ? exam.title : "Unknown exam",
-      subject: exam?.subject?.name ?? "Unknown subject",
+      // A deleted exam no longer populates - its results carry a snapshot
+      // of the title/subject for exactly this case.
+      exam: exam ? exam.title : (s.examSnapshot?.title ?? "Unknown exam"),
+      subject: exam?.subject?.name ?? s.examSnapshot?.subjectName ?? "Unknown subject",
       action: isDone ? "submitted" : s.status === "In Progress" ? "started" : "pending review",
       status: isDone ? "completed" : s.status === "In Progress" ? "in-progress" : "pending",
       submissionStatus: s.status, // raw status, for callers that need Marked vs Submitted specifically

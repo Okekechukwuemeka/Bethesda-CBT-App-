@@ -19,6 +19,12 @@ export interface CachedQuestion {
 
 export interface ExamSessionRecord {
   examId: string; // primary key
+  // Who this cached session belongs to. The store is keyed by exam only, and
+  // a school computer is often used by several students in turn, so without
+  // this the next student to open the same exam could inherit the previous
+  // student's saved answers. Optional because sessions saved before this
+  // field existed don't have it (those are left alone).
+  studentId?: string;
   submissionId: string;
   title: string;
   type: string;

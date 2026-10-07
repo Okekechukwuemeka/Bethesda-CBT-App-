@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { getSession as getAuthSession } from "next-auth/react";
 import {
   ExamSessionMeta,
   ExamSessionResponse,
@@ -107,9 +108,24 @@ export const useExamTaking = () => {
       setShowSubmitDialog(false);
       setIsSubmitting(false);
 
+      // Whoever is signed in right now. Used to make sure we never pick up
+      // another student's locally saved answers for this exam (see below).
+      const currentStudentId = (await getAuthSession().catch(() => null))?.user?.id;
+
+      let cachedSession = await getSession(examId).catch(() => undefined);
+      if (
+        cachedSession?.studentId &&
+        currentStudentId &&
+        cachedSession.studentId !== currentStudentId
+      ) {
+        // This browser still holds a different student's unfinished copy of
+        // this exam. It isn't ours: discard it so its answers and its
+        // submission id can't leak into (or be submitted as) this student's.
+        await clearSession(examId).catch(() => {});
+        cachedSession = undefined;
+      }
       // 1. A submit was in flight when the tab last closed - don't
       // re-render the exam at all, just retry the submit.
-      const cachedSession = await getSession(examId).catch(() => undefined);
       if (cachedSession?.status === "pending-submit") {
         submissionIdRef.current = cachedSession.submissionId;
         setExamMeta({
@@ -180,6 +196,7 @@ export const useExamTaking = () => {
 
       await saveSession({
         examId,
+        studentId: currentStudentId,
         submissionId: data.submissionId,
         title: data.exam.title,
         type: data.exam.type,
