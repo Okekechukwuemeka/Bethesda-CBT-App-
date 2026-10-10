@@ -16,7 +16,7 @@ interface StatusMessage {
 
 async function parseErrorMessage(res: Response, fallback: string): Promise<string> {
   const data = await res.json().catch(() => ({}));
-  return data.error || fallback;
+  return data.error || `${fallback} (server returned ${res.status})`;
 }
 
 export const useClassResults = (className: string) => {

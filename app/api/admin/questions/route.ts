@@ -4,14 +4,22 @@ import "@/lib/models/subject.model";
 import "@/lib/models/passage.model";
 import { requireAdmin } from "@/lib/api-guards";
 import { Question } from "@/lib/models/question.model";
+<<<<<<< HEAD
 import { buildQuestionFilter } from "@/lib/question-filter";
 import { normalizeGroupName, resolveGroupName, validateGroupName } from "@/lib/question-groups";
+=======
+import { ClassLevel, QuestionType } from "@/lib/models/constants";
+>>>>>>> dec5f6225600b421121f5d76dd0fbeba598d6227
 import { buildPagination, parsePageRequest } from "@/lib/pagination";
 import type { PaginationInfo } from "@/lib/pagination";
 
 // GET /api/admin/questions?type=Objective&subject=<id>&class=JSS1&search=photosynthesis
+<<<<<<< HEAD
 //   &group=First+Term+2026 &page=1&pageSize=20
 // `group` is a group name, or "__ungrouped__" for questions with no group.
+=======
+//   &page=1&pageSize=20
+>>>>>>> dec5f6225600b421121f5d76dd0fbeba598d6227
 // Filters are all direct fields on Question now that it's a standalone
 // bank entity - no join through Exam needed.
 //
@@ -31,6 +39,12 @@ export async function GET(req: NextRequest) {
   const pageRequest = parsePageRequest(params, 20, 100);
   let pagination: PaginationInfo | undefined;
 
+<<<<<<< HEAD
+=======
+  const pageRequest = parsePageRequest(params, 20, 100);
+  let pagination: PaginationInfo | undefined;
+
+>>>>>>> dec5f6225600b421121f5d76dd0fbeba598d6227
   // _id as a tie-breaker so questions created in the same instant (e.g. a
   // bulk import) keep a stable order from one page to the next.
   let query = Question.find(filter)

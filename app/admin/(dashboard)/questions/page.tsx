@@ -10,8 +10,6 @@ import BulkImportModal from "@/components/admin/questions/BulkImportModal";
 import ConfirmDeleteModal from "@/components/admin/questions/ConfirmDeleteModal";
 import BulkDeleteQuestionsModal from "@/components/admin/questions/BulkDeleteQuestionsModal";
 import SubjectFormModal from "@/components/admin/questions/SubjectFormModal";
-import Pagination from "@/components/ui/Pagination";
-import MoveToGroupModal from "@/components/questions/MoveToGroupModal";
 import PassageManagerModal from "@/components/admin/questions/PassageManagerModal";
 
 const QuestionsPage: React.FC = () => {

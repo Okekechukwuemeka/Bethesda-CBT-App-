@@ -45,6 +45,7 @@ const SubjectResultsTable: React.FC<SubjectResultsTableProps> = ({
       ? `${subject.highestScore}/${subject.totalMarks} — ${subject.lowestScore}/${subject.totalMarks}`
       : "—";
 
+<<<<<<< HEAD
   const deletedNote = (subject: SubjectResult) =>
     subject.examDeleted ? (
       <p className="mt-1 text-xs font-normal text-[#8A9CAE]">
@@ -148,10 +149,26 @@ const SubjectResultsTable: React.FC<SubjectResultsTableProps> = ({
                       <ExamTypeBadge type={subject.examType} />
                     </div>
                     {deletedNote(subject)}
+=======
+              return (
+                <tr key={subject.id} className="hover:bg-[#F8FAFE] transition">
+                  <td className="px-4 py-3 text-sm font-medium text-[#1A3A5C]">
+                    {subject.subject}
+                    <p className="text-xs font-normal text-[#8A9CAE]">{subject.examTitle}</p>
+                    {subject.examDeleted && (
+                      <p className="mt-1 text-xs font-normal text-[#8A9CAE]">
+                        <span className="inline-block rounded-full bg-gray-200 px-2 py-0.5 font-medium text-gray-700">
+                          Exam deleted
+                        </span>{" "}
+                        {[subject.term, subject.academicYear].filter(Boolean).join(" · ")}
+                      </p>
+                    )}
+>>>>>>> dec5f6225600b421121f5d76dd0fbeba598d6227
                   </td>
                   <td className="px-4 py-4">
                     <StatusBadge status={subject.status} />
                   </td>
+<<<<<<< HEAD
                   <td className="px-4 py-4 text-sm">
                     <p className="text-[#1A3A5C] font-medium">
                       {subject.completed} of {subject.totalStudents} marked
@@ -161,6 +178,51 @@ const SubjectResultsTable: React.FC<SubjectResultsTableProps> = ({
                       <span aria-hidden="true">High/Low: </span>
                       {highLow(subject)}
                     </p>
+=======
+                  <td className="px-4 py-3 text-sm text-[#4A6A8A]">
+                    {subject.completed > 0
+                      ? `${subject.highestScore}/${subject.totalMarks} — ${subject.lowestScore}/${subject.totalMarks}`
+                      : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-[#4A6A8A]">
+                    {subject.completed}/{subject.totalStudents}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      {showExcelExport && (
+                        <button
+                          onClick={() => onExportExcel(subject)}
+                          disabled={isExporting}
+                          aria-label={`Download spreadsheet results for ${subject.subject}`}
+                          className="text-sm bg-[#1A3A5C] hover:bg-[#14304D] text-white px-3 py-1 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] disabled:opacity-50">
+                          {isExporting ? "Preparing..." : "Download Results"}
+                        </button>
+                      )}
+                      {showScriptExport && (
+                        <button
+                          onClick={() => onExportAllScripts(subject)}
+                          disabled={isExporting}
+                          aria-label={`Download all student scripts for ${subject.subject}`}
+                          className="text-sm bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50">
+                          {isExporting ? "Preparing..." : "Download Scripts"}
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => onViewScripts(subject, e)}
+                        aria-label={`View students for ${subject.subject}`}
+                        className="text-sm bg-[#E8F0FE] hover:bg-[#D5E4F7] text-[#2B6CB0] px-3 py-1 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-[#2B6CB0]">
+                        View Students
+                      </button>
+                      {subject.examDeleted && onDeleteResults && (
+                        <button
+                          onClick={(e) => onDeleteResults(subject, e)}
+                          aria-label={`Delete saved results for ${subject.subject}, ${subject.examTitle}`}
+                          className="text-sm bg-red-50 hover:bg-red-100 text-red-700 px-3 py-1 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-red-500">
+                          Delete Results
+                        </button>
+                      )}
+                    </div>
+>>>>>>> dec5f6225600b421121f5d76dd0fbeba598d6227
                   </td>
                   <td className="px-4 py-4">{actions(subject)}</td>
                 </tr>

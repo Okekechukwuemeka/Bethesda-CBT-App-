@@ -4,8 +4,11 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import type { BlockingExam, Question, QuestionInput, RowError, Subject } from "@/types/question";
 import type { PassageKind } from "@/lib/models/constants";
 import type { PaginationInfo } from "@/lib/pagination";
+<<<<<<< HEAD
 import { normalizeGroupName, validateGroupName } from "@/lib/question-group-rules";
 import { useQuestionGroups } from "./useQuestionGroups";
+=======
+>>>>>>> dec5f6225600b421121f5d76dd0fbeba598d6227
 import { usePassages } from "./usePassages";
 
 const PAGE_SIZE = 20;
@@ -205,7 +208,11 @@ export const useQuestionBank = () => {
     } finally {
       setIsLoadingQuestions(false);
     }
+<<<<<<< HEAD
   }, [filterType, filterSubject, filterClass, filterGroup, searchTerm, page]);
+=======
+  }, [filterType, filterSubject, filterClass, searchTerm, page]);
+>>>>>>> dec5f6225600b421121f5d76dd0fbeba598d6227
 
   useEffect(() => {
     const timer = setTimeout(fetchQuestionsList, 300);
@@ -785,7 +792,10 @@ export const useQuestionBank = () => {
   const setFilterSubjectAndReset = useMemo(() => changeFilter(setFilterSubject), [changeFilter]);
   const setFilterTypeAndReset = useMemo(() => changeFilter(setFilterType), [changeFilter]);
   const setFilterClassAndReset = useMemo(() => changeFilter(setFilterClass), [changeFilter]);
+<<<<<<< HEAD
   const setFilterGroupAndReset = useMemo(() => changeFilter(setFilterGroup), [changeFilter]);
+=======
+>>>>>>> dec5f6225600b421121f5d76dd0fbeba598d6227
 
   // Total matches across ALL pages (what the "N questions found" announcement
   // should say), not just the rows on this page.
@@ -993,12 +1003,15 @@ export const useQuestionBank = () => {
     setFilterSubject: setFilterSubjectAndReset,
     setFilterType: setFilterTypeAndReset,
     setFilterClass: setFilterClassAndReset,
+<<<<<<< HEAD
     filterGroup,
     setFilterGroup: setFilterGroupAndReset,
     groups: groupsApi.groups,
     ungroupedCount: groupsApi.ungroupedCount,
     totalQuestionCount: groupsApi.total,
     isLoadingGroups: groupsApi.isLoading,
+=======
+>>>>>>> dec5f6225600b421121f5d76dd0fbeba598d6227
 
     // pagination
     pagination,
