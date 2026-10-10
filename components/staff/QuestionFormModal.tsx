@@ -5,6 +5,7 @@ import Modal from "@/components/ui/Modal";
 import TextField from "@/components/ui/form/TextField";
 import SelectField from "@/components/ui/form/SelectField";
 import { useTeacherQuestionsStore } from "@/store/useTeacherQuestionsStore";
+import GroupPicker from "@/components/questions/GroupPicker";
 import type { AssignedSubject } from "@/types/staff";
 
 interface QuestionFormModalProps {
@@ -24,6 +25,8 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({ subjects, classes
     formData,
     formError,
     isSubmitting,
+    groups,
+    isLoadingGroups,
     updateFormField,
     updateOption,
     addOption,
@@ -74,6 +77,15 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({ subjects, classes
             </div>
           </div>
         )}
+
+        <GroupPicker
+          value={formData.group}
+          onChange={(value) => updateFormField("group", value)}
+          groups={groups}
+          isLoadingGroups={isLoadingGroups}
+          disabled={isSubmitting}
+          helpText="Groups keep your questions organised, for example by term or session. Admins can filter by group when building an exam."
+        />
 
         <div>
           <label htmlFor="q-type" className="block text-sm font-medium text-[#1A3A5C] mb-1">

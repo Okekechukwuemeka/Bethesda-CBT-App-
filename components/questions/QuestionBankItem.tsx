@@ -53,6 +53,14 @@ const QuestionBankItem: React.FC<QuestionBankItemProps> = ({
             </span>
           </span>
         )}
+        {question.group && (
+          <span
+            className="text-xs px-2 py-0.5 rounded-full bg-[#E8F0FE] text-[#1A3A5C] flex-shrink-0 max-w-[10rem] truncate"
+            title={`Group: ${question.group}`}>
+            <span className="sr-only">Group: </span>
+            {question.group}
+          </span>
+        )}
         <span className="text-xs text-[#5A7A9A] flex-shrink-0">{question.marks} marks</span>
         <span className="text-xs text-[#5A7A9A] flex-shrink-0">{subjectName}</span>
         <span className="text-xs text-[#5A7A9A] flex-shrink-0">{question.class}</span>

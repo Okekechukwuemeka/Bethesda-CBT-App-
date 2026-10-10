@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { normalizeGroupName, validateGroupName } from "@/lib/question-group-rules";
+import type { QuestionGroupSummary } from "@/types/question";
 
 export interface TeacherQuestion {
   id: string;
@@ -9,6 +11,7 @@ export interface TeacherQuestion {
   marks: number;
   options?: string[];
   correctAnswer?: string;
+  group?: string;
 }
 
 interface StatusMessage {
@@ -24,7 +27,13 @@ export interface QuestionFormData {
   marks: string;
   options: string[];
   correctAnswer: string;
+  // "" = leave ungrouped
+  group: string;
 }
+
+// The group used for the last question this teacher added in this session,
+// offered as the starting choice for the next one.
+let lastUsedGroup = "";
 
 const emptyForm: QuestionFormData = {
   text: "",
@@ -34,6 +43,7 @@ const emptyForm: QuestionFormData = {
   marks: "1",
   options: ["", ""],
   correctAnswer: "",
+  group: "",
 };
 
 async function parseErrorMessage(res: Response, fallback: string): Promise<string> {
@@ -55,6 +65,7 @@ function fromApiQuestion(q: any): TeacherQuestion {
     marks: q.marks,
     options: q.options,
     correctAnswer: q.correctAnswer,
+    group: q.group ?? undefined,
   };
 }
 
@@ -67,7 +78,22 @@ interface TeacherQuestionsState {
   filterSubject: string;
   filterClass: string;
   filterType: string;
+  // "all", "__ungrouped__" (no group yet) or a group name
+  filterGroup: string;
   searchTerm: string;
+
+  // question groups available to this teacher (within their assignment)
+  groups: QuestionGroupSummary[];
+  ungroupedCount: number;
+  isLoadingGroups: boolean;
+  fetchGroups: () => Promise<void>;
+
+  isMoveModalOpen: boolean;
+  isMoving: boolean;
+  moveError: string | null;
+  openMoveModal: () => void;
+  closeMoveModal: () => void;
+  confirmMove: (group: string) => Promise<void>;
 
   isModalOpen: boolean;
   isEditing: boolean;
@@ -79,6 +105,8 @@ interface TeacherQuestionsState {
   isImportModalOpen: boolean;
   importSubject: string;
   importClass: string;
+  importGroup: string;
+  importGroupError: string | null;
   isImporting: boolean;
   importError: string | null;
   importRowErrors: { row: number; error: string }[];
@@ -88,6 +116,7 @@ interface TeacherQuestionsState {
   setFilterSubject: (v: string) => void;
   setFilterClass: (v: string) => void;
   setFilterType: (v: string) => void;
+  setFilterGroup: (v: string) => void;
   setSearchTerm: (v: string) => void;
 
   openAddModal: () => void;
@@ -104,6 +133,7 @@ interface TeacherQuestionsState {
   closeImportModal: () => void;
   setImportSubject: (v: string) => void;
   setImportClass: (v: string) => void;
+  setImportGroup: (v: string) => void;
   setSelectedFile: (f: File | null) => void;
   confirmImport: () => Promise<void>;
 }
@@ -117,7 +147,16 @@ export const useTeacherQuestionsStore = create<TeacherQuestionsState>((set, get)
   filterSubject: "all",
   filterClass: "all",
   filterType: "all",
+  filterGroup: "all",
   searchTerm: "",
+
+  groups: [],
+  ungroupedCount: 0,
+  isLoadingGroups: true,
+
+  isMoveModalOpen: false,
+  isMoving: false,
+  moveError: null,
 
   isModalOpen: false,
   isEditing: false,
@@ -129,19 +168,36 @@ export const useTeacherQuestionsStore = create<TeacherQuestionsState>((set, get)
   isImportModalOpen: false,
   importSubject: "",
   importClass: "",
+  importGroup: "",
+  importGroupError: null,
   isImporting: false,
   importError: null,
   importRowErrors: [],
   selectedFile: null,
 
+  fetchGroups: async () => {
+    set({ isLoadingGroups: true });
+    try {
+      const res = await fetch("/api/staff/questions/groups");
+      if (!res.ok) throw new Error("Failed to load groups");
+      const data = await res.json();
+      set({ groups: data.groups ?? [], ungroupedCount: data.ungroupedCount ?? 0 });
+    } catch {
+      // The group lists are a convenience; the screen still works without them.
+    } finally {
+      set({ isLoadingGroups: false });
+    }
+  },
+
   fetchQuestions: async () => {
     set({ isLoading: true, error: null });
     try {
-      const { filterSubject, filterClass, filterType, searchTerm } = get();
+      const { filterSubject, filterClass, filterType, filterGroup, searchTerm } = get();
       const params = new URLSearchParams();
       if (filterSubject !== "all") params.set("subject", filterSubject);
       if (filterClass !== "all") params.set("class", filterClass);
       if (filterType !== "all") params.set("type", filterType);
+      if (filterGroup !== "all") params.set("group", filterGroup);
       if (searchTerm.trim()) params.set("search", searchTerm.trim());
 
       const res = await fetch(`/api/staff/questions?${params.toString()}`);
@@ -167,10 +223,20 @@ export const useTeacherQuestionsStore = create<TeacherQuestionsState>((set, get)
     set({ filterType: v });
     get().fetchQuestions();
   },
+  setFilterGroup: (v) => {
+    set({ filterGroup: v });
+    get().fetchQuestions();
+  },
   setSearchTerm: (v) => set({ searchTerm: v }),
 
   openAddModal: () =>
-    set({ isModalOpen: true, isEditing: false, selectedQuestion: null, formError: null, formData: emptyForm }),
+    set({
+      isModalOpen: true,
+      isEditing: false,
+      selectedQuestion: null,
+      formError: null,
+      formData: { ...emptyForm, group: lastUsedGroup },
+    }),
 
   openEditModal: (q) =>
     set({
@@ -186,6 +252,7 @@ export const useTeacherQuestionsStore = create<TeacherQuestionsState>((set, get)
         marks: String(q.marks),
         options: q.options && q.options.length > 0 ? q.options : ["", ""],
         correctAnswer: q.correctAnswer ?? "",
+        group: q.group ?? "",
       },
     }),
 
@@ -226,6 +293,14 @@ export const useTeacherQuestionsStore = create<TeacherQuestionsState>((set, get)
       set({ formError: "Select a subject and class." });
       return;
     }
+    const groupName = normalizeGroupName(formData.group);
+    if (groupName) {
+      const groupProblem = validateGroupName(groupName);
+      if (groupProblem) {
+        set({ formError: groupProblem });
+        return;
+      }
+    }
     const marks = Number(formData.marks);
     if (!formData.marks || Number.isNaN(marks) || marks < 1) {
       set({ formError: "Marks must be a number of at least 1." });
@@ -249,6 +324,8 @@ export const useTeacherQuestionsStore = create<TeacherQuestionsState>((set, get)
       text: formData.text,
       type: formData.type,
       marks,
+      // "" on an edit moves the question back to "Ungrouped"
+      group: groupName,
     };
     if (formData.type === "Objective") {
       payload.options = formData.options.map((o) => o.trim()).filter(Boolean);
@@ -270,6 +347,7 @@ export const useTeacherQuestionsStore = create<TeacherQuestionsState>((set, get)
           ),
           statusMessage: { type: "success", text: "Question updated." },
         }));
+        get().fetchGroups();
       } else {
         payload.subject = formData.subject;
         payload.class = formData.class;
@@ -279,8 +357,15 @@ export const useTeacherQuestionsStore = create<TeacherQuestionsState>((set, get)
           body: JSON.stringify(payload),
         });
         if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to add question"));
+        lastUsedGroup = groupName;
         await get().fetchQuestions();
-        set({ statusMessage: { type: "success", text: "Question added." } });
+        get().fetchGroups();
+        set({
+          statusMessage: {
+            type: "success",
+            text: groupName ? `Question added in the group “${groupName}”.` : "Question added.",
+          },
+        });
       }
       set({ isSubmitting: false, isModalOpen: false });
     } catch (err) {
@@ -299,6 +384,7 @@ export const useTeacherQuestionsStore = create<TeacherQuestionsState>((set, get)
         questions: state.questions.filter((q) => q.id !== id),
         statusMessage: { type: "success", text: "Question deleted." },
       }));
+      get().fetchGroups();
     } catch (err) {
       set({
         statusMessage: {
@@ -314,6 +400,10 @@ export const useTeacherQuestionsStore = create<TeacherQuestionsState>((set, get)
       isImportModalOpen: true,
       importSubject: "",
       importClass: "",
+      // Never pre-filled: a bulk upload is filed under the group chosen here,
+      // so it has to be a deliberate choice each time.
+      importGroup: "",
+      importGroupError: null,
       importError: null,
       importRowErrors: [],
       selectedFile: null,
@@ -323,10 +413,21 @@ export const useTeacherQuestionsStore = create<TeacherQuestionsState>((set, get)
   },
   setImportSubject: (v) => set({ importSubject: v }),
   setImportClass: (v) => set({ importClass: v }),
+  setImportGroup: (v) => set({ importGroup: v, importGroupError: null }),
   setSelectedFile: (f) => set({ selectedFile: f }),
 
   confirmImport: async () => {
-    const { importSubject, importClass, selectedFile } = get();
+    const { importSubject, importClass, importGroup, selectedFile } = get();
+    // Every bulk upload must say which group its questions belong to.
+    const groupName = normalizeGroupName(importGroup);
+    const groupProblem = validateGroupName(groupName);
+    if (groupProblem) {
+      set({
+        importGroupError: groupProblem,
+        importError: "Please choose or create a question group before importing.",
+      });
+      return;
+    }
     if (!importSubject || !importClass) {
       set({ importError: "Select a subject and class first." });
       return;
@@ -336,12 +437,13 @@ export const useTeacherQuestionsStore = create<TeacherQuestionsState>((set, get)
       return;
     }
 
-    set({ isImporting: true, importError: null, importRowErrors: [] });
+    set({ isImporting: true, importError: null, importGroupError: null, importRowErrors: [] });
 
     const body = new FormData();
     body.append("file", selectedFile);
     body.append("subject", importSubject);
     body.append("class", importClass);
+    body.append("group", groupName);
 
     try {
       const res = await fetch("/api/staff/questions/bulk", { method: "POST", body });
@@ -354,14 +456,65 @@ export const useTeacherQuestionsStore = create<TeacherQuestionsState>((set, get)
         return;
       }
       await get().fetchQuestions();
+      get().fetchGroups();
       set({
-        statusMessage: { type: "success", text: `Imported ${data.imported} question(s).` },
+        statusMessage: {
+          type: "success",
+          text: `Imported ${data.imported} question(s) into the group “${data.group ?? groupName}”.`,
+        },
         isImportModalOpen: false,
       });
     } catch {
       set({ importError: "Network error while importing." });
     } finally {
       set({ isImporting: false });
+    }
+  },
+  openMoveModal: () => set({ isMoveModalOpen: true, moveError: null }),
+  closeMoveModal: () => {
+    if (!get().isMoving) set({ isMoveModalOpen: false, moveError: null });
+  },
+  // Moves the teacher's OWN questions matching the filters currently applied
+  // to the list. (The server skips other teachers' questions and says how many.)
+  confirmMove: async (group) => {
+    const { filterSubject, filterClass, filterType, filterGroup, searchTerm } = get();
+    set({ isMoving: true, moveError: null });
+    try {
+      const res = await fetch("/api/staff/questions/bulk-group", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          group,
+          filter: {
+            subject: filterSubject !== "all" ? filterSubject : "",
+            class: filterClass !== "all" ? filterClass : "",
+            type: filterType !== "all" ? filterType : "",
+            group: filterGroup !== "all" ? filterGroup : "",
+            search: searchTerm.trim(),
+          },
+        }),
+      });
+      if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to move questions"));
+      const data = await res.json();
+      const skipped: number = data.skipped ?? 0;
+      lastUsedGroup = data.group ?? group;
+      set({
+        isMoveModalOpen: false,
+        statusMessage: {
+          type: "success",
+          text:
+            `Moved ${data.updated} of your question${data.updated !== 1 ? "s" : ""} to the group “${data.group ?? group}”.` +
+            (skipped > 0
+              ? ` ${skipped} other question${skipped !== 1 ? "s" : ""} in the list were added by someone else, so they were left as they are.`
+              : ""),
+        },
+      });
+      await get().fetchQuestions();
+      get().fetchGroups();
+    } catch (err) {
+      set({ moveError: err instanceof Error ? err.message : "Failed to move questions." });
+    } finally {
+      set({ isMoving: false });
     }
   },
 }));

@@ -10,6 +10,8 @@ import BulkImportModal from "@/components/admin/questions/BulkImportModal";
 import ConfirmDeleteModal from "@/components/admin/questions/ConfirmDeleteModal";
 import BulkDeleteQuestionsModal from "@/components/admin/questions/BulkDeleteQuestionsModal";
 import SubjectFormModal from "@/components/admin/questions/SubjectFormModal";
+import Pagination from "@/components/ui/Pagination";
+import MoveToGroupModal from "@/components/questions/MoveToGroupModal";
 import PassageManagerModal from "@/components/admin/questions/PassageManagerModal";
 
 const QuestionsPage: React.FC = () => {
@@ -20,6 +22,9 @@ const QuestionsPage: React.FC = () => {
     subjects,
     isLoadingSubjects,
     filteredCount,
+    pagination,
+    pageSize,
+    setPage,
 
     searchTerm,
     filterSubject,
@@ -29,6 +34,23 @@ const QuestionsPage: React.FC = () => {
     setFilterSubject,
     setFilterType,
     setFilterClass,
+    filterGroup,
+    setFilterGroup,
+    groups,
+    ungroupedCount,
+    totalQuestionCount,
+    isLoadingGroups,
+
+    isMoveModalOpen,
+    isMoving,
+    moveError,
+    openMoveModal,
+    closeMoveModal,
+    confirmMove,
+
+    importGroup,
+    importGroupError,
+    handleImportGroupChange,
 
     statusMessage,
 
@@ -173,7 +195,8 @@ const QuestionsPage: React.FC = () => {
     !!pendingDelete ||
     isSubjectModalOpen ||
     isPassageManagerOpen ||
-    isBulkDeleteModalOpen;
+    isBulkDeleteModalOpen ||
+    isMoveModalOpen;
 
   // Used both to show the passage-aware note in the delete confirmation
   // and, indirectly, wherever the currently-pending-delete question's
@@ -188,15 +211,20 @@ const QuestionsPage: React.FC = () => {
     <>
       <div className="space-y-6" inert={anyModalOpen}>
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-[#1A3A5C]">Question Bank</h1>
+            <h1
+              id="question-bank-heading"
+              tabIndex={-1}
+              className="text-2xl font-bold text-[#1A3A5C] outline-none">
+              Question Bank
+            </h1>
             <p className="text-[#5A7A9A] text-sm">Create and manage questions for all exams</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <button
-              onClick={openPassageManager}
-              className="bg-amber-600 hover:bg-amber-700 text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-amber-500/50 flex items-center gap-2">
+              onClick={handleAddQuestion}
+              className="bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50 flex w-full items-center justify-center gap-2">
               <svg
                 className="w-5 h-5"
                 fill="none"
@@ -207,14 +235,14 @@ const QuestionsPage: React.FC = () => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                  d="M12 4v16m8-8H4"
                 />
               </svg>
-              Manage Passages
+              Add Question
             </button>
             <button
               onClick={handleOpenImportModal}
-              className="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-green-500/50 flex items-center gap-2">
+              className="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-green-500/50 flex w-full items-center justify-center gap-2">
               <svg
                 className="w-5 h-5"
                 fill="none"
@@ -231,8 +259,8 @@ const QuestionsPage: React.FC = () => {
               Import Bulk
             </button>
             <button
-              onClick={handleAddQuestion}
-              className="bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50 flex items-center gap-2">
+              onClick={openPassageManager}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-amber-500/50 flex w-full items-center justify-center gap-2">
               <svg
                 className="w-5 h-5"
                 fill="none"
@@ -243,10 +271,16 @@ const QuestionsPage: React.FC = () => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M12 4v16m8-8H4"
+                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
                 />
               </svg>
-              Add Question
+              Manage Passages
+            </button>
+            <button
+              type="button"
+              onClick={openMoveModal}
+              className="border border-[#2B6CB0] text-[#2B6CB0] hover:bg-[#F0F6FC] font-medium px-4 py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/30 w-full">
+              Move Questions to a Group
             </button>
           </div>
         </div>
@@ -289,7 +323,20 @@ const QuestionsPage: React.FC = () => {
           onSubjectChange={setFilterSubject}
           onTypeChange={setFilterType}
           onClassChange={setFilterClass}
+          filterGroup={filterGroup}
+          groups={groups}
+          ungroupedCount={ungroupedCount}
+          totalQuestions={totalQuestionCount}
+          isLoadingGroups={isLoadingGroups}
+          onGroupChange={setFilterGroup}
           onAddSubject={handleOpenSubjectModal}
+          onClear={() => {
+            setSearchTerm("");
+            setFilterSubject("all");
+            setFilterType("all");
+            setFilterClass("all");
+            setFilterGroup("all");
+          }}
         />
 
         {/* Bulk actions bar */}
@@ -298,12 +345,20 @@ const QuestionsPage: React.FC = () => {
             <p className="text-sm font-medium">
               {selectedIds.size} question{selectedIds.size !== 1 ? "s" : ""} selected
             </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={openMoveModal}
+                className="bg-white text-[#1A3A5C] hover:bg-[#E8F0FE] font-medium px-4 py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-white/60">
+                Move Selected to a Group
+              </button>
             <button
               type="button"
               onClick={requestBulkDelete}
               className="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-red-500/50">
               Delete Selected
             </button>
+            </div>
           </div>
         )}
 
@@ -316,7 +371,23 @@ const QuestionsPage: React.FC = () => {
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
           onToggleSelectAll={toggleSelectAll}
+          totalCount={pagination.total}
         />
+        {!isLoadingQuestions && (
+          <div className="bg-white rounded-xl border border-[#C5D8EC] shadow-sm empty:hidden">
+            <Pagination
+              currentPage={pagination.page}
+              totalPages={pagination.totalPages}
+              totalItems={pagination.total}
+              pageSize={pageSize}
+              onPageChange={(p) => {
+                setPage(p);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              itemLabel="questions"
+            />
+          </div>
+        )}
       </div>
 
       {/* Question Form Modal */}
@@ -330,6 +401,8 @@ const QuestionsPage: React.FC = () => {
         isLoadingSubjects={isLoadingSubjects}
         passages={passages}
         isLoadingPassages={isLoadingPassages}
+        groups={groups}
+        isLoadingGroups={isLoadingGroups}
         newPassageData={newPassageData}
         onChange={handleInputChange}
         onNewPassageChange={handleNewPassageChange}
@@ -354,10 +427,28 @@ const QuestionsPage: React.FC = () => {
         importRowErrors={importRowErrors}
         onSubjectChange={setImportSubject}
         onClassChange={setImportClass}
+        importGroup={importGroup}
+        importGroupError={importGroupError}
+        groups={groups}
+        isLoadingGroups={isLoadingGroups}
+        onGroupChange={handleImportGroupChange}
         onFileUpload={handleFileUpload}
         onConfirmImport={confirmImport}
         onDownloadTemplate={downloadTemplate}
         onCancel={closeImportModal}
+      />
+
+      <MoveToGroupModal
+        isOpen={isMoveModalOpen}
+        onClose={closeMoveModal}
+        onConfirm={confirmMove}
+        groups={groups}
+        isLoadingGroups={isLoadingGroups}
+        isSubmitting={isMoving}
+        error={moveError}
+        selectedCount={selectedIds.size}
+        matchingCount={pagination.total}
+        allowSelected
       />
 
       {/* Delete Confirmation Modal (replaces window.confirm) */}

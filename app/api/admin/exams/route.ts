@@ -4,10 +4,25 @@ import { connectDB } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-guards";
 import { Exam, examClassFilter } from "@/lib/models/exam.model";
 import { Subject } from "@/lib/models/subject.model";
-import { ClassLevel, ExamType, ExamStatus, Term } from "@/lib/models/constants";
-import { syncExamStatus } from "@/lib/exam-status";
+import { ClassLevel, ExamType, ExamStatus, Term, EXAM_STATUSES } from "@/lib/models/constants";
+import { examStatusFilter, syncAllExamStatuses, syncExamStatus } from "@/lib/exam-status";
+import { buildPagination, parsePageRequest } from "@/lib/pagination";
+import type { PaginationInfo } from "@/lib/pagination";
 
-// GET /api/admin/exams?class=JSS1&subject=<id>&term=First+Term&type=Objective&status=Scheduled
+// GET /api/admin/exams
+//   ?class=JSS1 &subject=<id> &term=First+Term &type=Objective &status=Ongoing
+//   &search=<text> &dateFrom=<ISO> &dateTo=<ISO> &page=1 &pageSize=12
+//
+// Filters (all optional, all combinable):
+//  - class: class-specific exams for it, plus general exams it's eligible for
+//  - search: matches exam title, exam code, or subject name
+//  - dateFrom / dateTo: inclusive range on the exam's date/time. Sent as full
+//    ISO timestamps (the browser turns the admin's local calendar days into
+//    their exact start/end instants) so the range is right in any timezone.
+//  - status: Scheduled / Ongoing / Completed, evaluated against the clock
+//
+// Sorted newest exam first. Without `page`/`pageSize` the complete list is
+// returned as before; with them the response also carries `pagination`.
 export async function GET(req: NextRequest) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
@@ -20,17 +35,55 @@ export async function GET(req: NextRequest) {
   const termFilter = params.get("term") as Term | null;
   const typeFilter = params.get("type") as ExamType | null;
   const statusFilter = params.get("status") as ExamStatus | null;
+  const search = params.get("search")?.trim();
+  const dateFrom = params.get("dateFrom");
+  const dateTo = params.get("dateTo");
 
-  // status is applied AFTER the sync below, not as a DB query filter -
-  // status is time-derived now, so a stale value in the database can't
-  // be trusted at query time. Every other filter still runs in the query
-  // itself since those fields don't drift on their own.
-  // classFilter uses examClassFilter (an $or) since a general exam has no
-  // single `class` value - it matches instead via its `classes` array.
-  const filter: Record<string, unknown> = classFilter ? examClassFilter(classFilter) : {};
-  if (subjectFilter) filter.subject = subjectFilter;
-  if (termFilter) filter.term = termFilter;
-  if (typeFilter) filter.type = typeFilter;
+  if (subjectFilter && !mongoose.Types.ObjectId.isValid(subjectFilter)) {
+    return NextResponse.json({ error: "Invalid subject filter" }, { status: 400 });
+  }
+  const fromDate = dateFrom ? new Date(dateFrom) : null;
+  const toDate = dateTo ? new Date(dateTo) : null;
+  if ((fromDate && Number.isNaN(fromDate.getTime())) || (toDate && Number.isNaN(toDate.getTime()))) {
+    return NextResponse.json({ error: "Invalid date filter" }, { status: 400 });
+  }
+
+  // Combined with $and because several of these need a top-level $or
+  // (class matching, search) and would otherwise overwrite one another.
+  const conditions: Record<string, unknown>[] = [];
+  if (classFilter) conditions.push(examClassFilter(classFilter));
+  if (subjectFilter) conditions.push({ subject: subjectFilter });
+  if (termFilter) conditions.push({ term: termFilter });
+  if (typeFilter) conditions.push({ type: typeFilter });
+  if (fromDate || toDate) {
+    conditions.push({
+      examDate: { ...(fromDate ? { $gte: fromDate } : {}), ...(toDate ? { $lte: toDate } : {}) },
+    });
+  }
+  if (statusFilter && EXAM_STATUSES.includes(statusFilter)) {
+    conditions.push(examStatusFilter(statusFilter));
+  }
+  if (search) {
+    const pattern = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    const matchingSubjects = await Subject.find({ name: pattern }).select("_id").lean();
+    conditions.push({
+      $or: [
+        { title: pattern },
+        { examCode: pattern },
+        ...(matchingSubjects.length > 0
+          ? [{ subject: { $in: matchingSubjects.map((s) => s._id) } }]
+          : []),
+      ],
+    });
+  }
+  const filter = conditions.length > 0 ? { $and: conditions } : {};
+
+  // Keep every exam's stored status current, not just the page returned -
+  // see syncAllExamStatuses.
+  await syncAllExamStatuses();
+
+  const pageRequest = parsePageRequest(params, 12, 50);
+  let pagination: PaginationInfo | undefined;
 
   // Deliberately .lean() + resolve subject names ourselves here, instead
   // of .populate("subject", "name code"): populate (like any normal
@@ -39,7 +92,14 @@ export async function GET(req: NextRequest) {
   // document has a raw string there instead of a real ref. .lean() skips
   // that hydration step entirely, so one bad row degrades gracefully
   // instead of taking down the whole exams page.
-  const exams = await Exam.find(filter).sort({ examDate: -1 }).lean();
+  // _id is a tie-breaker so exams sharing a date keep a stable order across pages.
+  let query = Exam.find(filter).sort({ examDate: -1, _id: -1 });
+  if (pageRequest.paginated) {
+    const total = await Exam.countDocuments(filter);
+    pagination = buildPagination(total, pageRequest.page, pageRequest.pageSize);
+    query = query.skip((pagination.page - 1) * pagination.pageSize).limit(pagination.pageSize);
+  }
+  const exams = await query.lean();
 
   const validSubjectIds = Array.from(
     new Set(
@@ -68,23 +128,16 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  // Recompute + persist each exam's status from examDate/duration before
-  // returning - keeps status accurate for readers without needing a cron
-  // job, and self-heals any exam whose status went stale since the last
-  // time someone loaded it. A malformed legacy exam (missing examDate or
-  // duration) is left with whatever status it already has - see
-  // syncExamStatus.
+  // Status was brought up to date above; this also covers a malformed
+  // legacy exam (left with whatever status it has) and the narrow window
+  // where an exam crossed a boundary since that sync.
   await Promise.all(
     examsWithResolvedSubject.map(async (exam) => {
       exam.status = await syncExamStatus(exam);
     }),
   );
 
-  const result = statusFilter
-    ? examsWithResolvedSubject.filter((e) => e.status === statusFilter)
-    : examsWithResolvedSubject;
-
-  return NextResponse.json({ exams: result });
+  return NextResponse.json({ exams: examsWithResolvedSubject, ...(pagination ? { pagination } : {}) });
 }
 
 // POST /api/admin/exams

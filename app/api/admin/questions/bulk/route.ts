@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/api-guards";
 import { Question, IQuestion } from "@/lib/models/question.model";
 import { Passage, IPassage } from "@/lib/models/passage.model";
 import { PASSAGE_KINDS } from "@/lib/models/constants";
+import { normalizeGroupName, resolveGroupName, validateGroupName } from "@/lib/question-groups";
 
 interface RowError {
   row: number;
@@ -70,7 +71,9 @@ interface PassageCandidate {
 }
 
 // POST /api/admin/questions/bulk
-// multipart/form-data: file=<csv>, subject=<subjectId>, class=<ClassLevel>
+// multipart/form-data: file=<csv>, subject=<subjectId>, class=<ClassLevel>,
+// group=<group name>  (REQUIRED - every bulk upload to the bank must say which
+// group its questions belong to, e.g. "First Term 2026")
 //
 // Optional passage-group columns: passage_key, passage_title, passage_body,
 // passage_kind - same shape as the exam-scoped bulk import. Rows sharing a
@@ -94,6 +97,7 @@ export async function POST(req: NextRequest) {
   const file = formData.get("file");
   const subject = formData.get("subject");
   const classLevel = formData.get("class");
+  const rawGroup = formData.get("group");
 
   if (!(file instanceof File)) {
     return NextResponse.json(
@@ -107,6 +111,15 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+
+  // Required for every bulk upload to the bank - checked before the file is
+  // even read so the person is told straight away what is missing.
+  const requestedGroup = normalizeGroupName(rawGroup);
+  const groupError = validateGroupName(requestedGroup);
+  if (groupError) {
+    return NextResponse.json({ error: groupError }, { status: 400 });
+  }
+  const groupName = await resolveGroupName(requestedGroup);
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const text = buffer.toString("utf-8");
@@ -290,6 +303,7 @@ export async function POST(req: NextRequest) {
     candidates.push({
       rowNumber,
       doc: new Question({
+        group: groupName,
         text: row.text?.trim(),
         type,
         subject,
@@ -340,7 +354,7 @@ export async function POST(req: NextRequest) {
   await Question.insertMany(candidates.map((q) => q.doc));
 
   return NextResponse.json(
-    { imported: candidates.length, passagesCreated: passageCandidates.length },
+    { imported: candidates.length, passagesCreated: passageCandidates.length, group: groupName },
     { status: 201 },
   );
 }

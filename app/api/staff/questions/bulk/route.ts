@@ -6,6 +6,7 @@ import { requireTeacher, assertTeacherScope } from "@/lib/api-guards";
 import { Question, IQuestion } from "@/lib/models/question.model";
 import { Passage, IPassage } from "@/lib/models/passage.model";
 import { PASSAGE_KINDS } from "@/lib/models/constants";
+import { normalizeGroupName, resolveGroupName, validateGroupName } from "@/lib/question-groups";
 
 interface RowError {
   row: number;
@@ -62,7 +63,9 @@ interface PassageCandidate {
 }
 
 // POST /api/staff/questions/bulk
-// multipart/form-data: file=<csv>, subject=<subjectId>, class=<ClassLevel>
+// multipart/form-data: file=<csv>, subject=<subjectId>, class=<ClassLevel>,
+// group=<group name>  (REQUIRED - every bulk upload to the bank must say which
+// group its questions belong to, e.g. "First Term 2026")
 // Identical CSV format to the admin bulk importer, but subject+class MUST
 // be a pair this teacher is assigned - see assertTeacherScope.
 export async function POST(req: NextRequest) {
@@ -75,6 +78,7 @@ export async function POST(req: NextRequest) {
   const file = formData.get("file");
   const subject = formData.get("subject");
   const classLevel = formData.get("class");
+  const rawGroup = formData.get("group");
 
   if (!(file instanceof File)) {
     return NextResponse.json(
@@ -91,6 +95,15 @@ export async function POST(req: NextRequest) {
 
   const scope = await assertTeacherScope(guard.session.user.id, subject, classLevel as never);
   if (!scope.ok) return scope.response;
+
+  // Required for every bulk upload to the bank - checked before the file is
+  // even read so the person is told straight away what is missing.
+  const requestedGroup = normalizeGroupName(rawGroup);
+  const groupError = validateGroupName(requestedGroup);
+  if (groupError) {
+    return NextResponse.json({ error: groupError }, { status: 400 });
+  }
+  const groupName = await resolveGroupName(requestedGroup);
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const text = buffer.toString("utf-8");
@@ -270,6 +283,7 @@ export async function POST(req: NextRequest) {
     candidates.push({
       rowNumber,
       doc: new Question({
+        group: groupName,
         text: row.text?.trim(),
         type,
         subject,
@@ -318,7 +332,7 @@ export async function POST(req: NextRequest) {
   await Question.insertMany(candidates.map((q) => q.doc));
 
   return NextResponse.json(
-    { imported: candidates.length, passagesCreated: passageCandidates.length },
+    { imported: candidates.length, passagesCreated: passageCandidates.length, group: groupName },
     { status: 201 },
   );
 }

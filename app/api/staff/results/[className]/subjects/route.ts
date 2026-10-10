@@ -4,7 +4,13 @@ import { requireTeacher, assertTeacherScope } from "@/lib/api-guards";
 import { Exam, examClassFilter } from "@/lib/models/exam.model";
 import { Student } from "@/lib/models/student.model";
 import { Submission } from "@/lib/models/submission.model";
-import { buildSubjectResult, getClassActiveStudentCount, type ExamLean } from "@/lib/results-helpers";
+import {
+  buildDeletedSubjectResults,
+  buildSubjectResult,
+  getClassActiveStudentCount,
+  getDeletedExamGroupsForClass,
+  type ExamLean,
+} from "@/lib/results-helpers";
 import type { ClassLevel } from "@/lib/models/constants";
 
 // GET /api/staff/results/[className]/subjects
@@ -23,17 +29,20 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
 
   await connectDB();
 
-  const [exams, totalStudents, students] = await Promise.all([
+  const [exams, totalStudents, students, deletedGroups] = await Promise.all([
     Exam.find({ ...examClassFilter(className), subject: { $in: scope.staff.assignedSubjects } })
       .populate("subject", "name")
       .sort({ examDate: -1 })
       .lean(),
     getClassActiveStudentCount(className),
     Student.find({ class: className, isActive: true }).select("_id").lean(),
+    // Results of exams that have since been deleted, still limited to the
+    // subjects this teacher is assigned.
+    getDeletedExamGroupsForClass(className, scope.staff.assignedSubjects),
   ]);
   const studentIds = students.map((s) => s._id);
 
-  const subjects = await Promise.all(
+  const liveSubjects = await Promise.all(
     exams.map(async (exam) => {
       const submissions = await Submission.find({
         exam: exam._id,
@@ -44,6 +53,9 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
       return buildSubjectResult(exam as unknown as ExamLean, submissions, totalStudents);
     }),
   );
+
+  const deletedSubjects = await buildDeletedSubjectResults(deletedGroups, studentIds, totalStudents);
+  const subjects = [...liveSubjects, ...deletedSubjects];
 
   return NextResponse.json({ subjects, className });
 }

@@ -3,7 +3,12 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import type { BlockingExam, Question, QuestionInput, RowError, Subject } from "@/types/question";
 import type { PassageKind } from "@/lib/models/constants";
+import type { PaginationInfo } from "@/lib/pagination";
+import { normalizeGroupName, validateGroupName } from "@/lib/question-group-rules";
+import { useQuestionGroups } from "./useQuestionGroups";
 import { usePassages } from "./usePassages";
+
+const PAGE_SIZE = 20;
 
 interface StatusMessage {
   type: "success" | "error" | "warning";
@@ -63,6 +68,13 @@ export const useQuestionBank = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
   const [questionsError, setQuestionsError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    page: 1,
+    pageSize: PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  });
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
@@ -72,6 +84,8 @@ export const useQuestionBank = () => {
   const [filterSubject, setFilterSubject] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterClass, setFilterClass] = useState<string>("all");
+  // Question group: "all", "__ungrouped__" (no group), or a group name.
+  const [filterGroup, setFilterGroup] = useState<string>("all");
 
   const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
 
@@ -98,6 +112,8 @@ export const useQuestionBank = () => {
   const [previewRowCount, setPreviewRowCount] = useState<number | null>(null);
   const [importSubject, setImportSubject] = useState("");
   const [importClass, setImportClass] = useState("");
+  const [importGroup, setImportGroup] = useState("");
+  const [importGroupError, setImportGroupError] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importRowErrors, setImportRowErrors] = useState<RowError[] | null>(null);
   const importTriggerRef = useRef<HTMLElement | null>(null);
@@ -114,6 +130,13 @@ export const useQuestionBank = () => {
     setStatusMessage(message);
     setTimeout(() => setStatusMessage(null), durationMs);
   }, []);
+
+  // The question groups in the bank (for the filter, the form picker and the
+  // import dialog), with counts. refresh() after anything that changes them.
+  const groupsApi = useQuestionGroups({ scope: "admin" });
+  // The group used for the last question added this session, offered as the
+  // starting choice for the next one so adding several in a row is quick.
+  const lastGroupRef = useRef("");
 
   // Composed here (not called as a sibling hook from the page) so its
   // status messages (passage created/updated/deleted) share this hook's
@@ -162,22 +185,27 @@ export const useQuestionBank = () => {
     setIsLoadingQuestions(true);
     setQuestionsError(null);
     try {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
       if (filterType !== "all") params.set("type", filterType);
       if (filterSubject !== "all") params.set("subject", filterSubject);
       if (filterClass !== "all") params.set("class", filterClass);
+      if (filterGroup !== "all") params.set("group", filterGroup);
       if (searchTerm.trim()) params.set("search", searchTerm.trim());
 
       const res = await fetch(`/api/admin/questions?${params.toString()}`);
       if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to load questions"));
-      const { questions: apiQuestions } = await res.json();
+      const { questions: apiQuestions, pagination: apiPagination } = await res.json();
       setQuestions(apiQuestions);
+      setPagination(apiPagination);
+      // The server clamps an out-of-range page (e.g. the last question on the
+      // last page was just deleted) - follow it rather than show an empty page.
+      if (apiPagination.page !== page) setPage(apiPagination.page);
     } catch (err) {
       setQuestionsError(err instanceof Error ? err.message : "Failed to load questions.");
     } finally {
       setIsLoadingQuestions(false);
     }
-  }, [filterType, filterSubject, filterClass, searchTerm]);
+  }, [filterType, filterSubject, filterClass, filterGroup, searchTerm, page]);
 
   useEffect(() => {
     const timer = setTimeout(fetchQuestionsList, 300);
@@ -231,7 +259,7 @@ export const useQuestionBank = () => {
     setIsEditing(false);
     setSelectedQuestion(null);
     setFormError(null);
-    setFormData(emptyFormData);
+    setFormData({ ...emptyFormData, group: lastGroupRef.current });
     setNewPassageData(emptyNewPassageData);
     setIsModalOpen(true);
   }, []);
@@ -250,6 +278,7 @@ export const useQuestionBank = () => {
         marks: question.marks,
         subject: typeof question.subject === "string" ? question.subject : question.subject._id,
         class: question.class,
+        group: question.group ?? "",
         passageId: question.passageId
           ? typeof question.passageId === "string"
             ? question.passageId
@@ -276,6 +305,11 @@ export const useQuestionBank = () => {
       if (!formData.text?.trim()) return setFormError("Please enter the question text.");
       if (!formData.subject) return setFormError("Please select a subject.");
       if (!formData.class) return setFormError("Please select a class.");
+      const groupName = normalizeGroupName(formData.group);
+      if (groupName) {
+        const groupProblem = validateGroupName(groupName);
+        if (groupProblem) return setFormError(groupProblem);
+      }
       if (formData.type === "Objective") {
         const filledOptions = (formData.options || []).filter((opt) => opt.trim());
         if (filledOptions.length < 2) {
@@ -376,10 +410,14 @@ export const useQuestionBank = () => {
           type: "success",
           text: isEditing
             ? "Question updated successfully."
-            : "Question added to bank successfully.",
+            : groupName
+              ? `Question added to the bank in the group “${groupName}”.`
+              : "Question added to bank successfully.",
         });
+        if (!isEditing) lastGroupRef.current = groupName;
         setIsModalOpen(false);
         fetchQuestionsList();
+        groupsApi.refresh();
         if (formData.passageId === "__new__" || formData.passageId) {
           passagesApi.fetchPassagesList();
         }
@@ -397,6 +435,7 @@ export const useQuestionBank = () => {
       showStatus,
       fetchQuestionsList,
       passagesApi,
+      groupsApi,
     ],
   );
 
@@ -460,6 +499,11 @@ export const useQuestionBank = () => {
     setPreviewRowCount(null);
     setImportSubject("");
     setImportClass("");
+    // Deliberately NOT pre-filled from an earlier upload: a bulk upload is
+    // filed under whatever group is chosen here, so it must be an explicit,
+    // conscious choice every time (a wrong default is easy to miss by ear).
+    setImportGroup("");
+    setImportGroupError(null);
     setImportError(null);
     setImportRowErrors(null);
   }, []);
@@ -491,8 +535,31 @@ export const useQuestionBank = () => {
     reader.readAsText(file);
   }, []);
 
+  const handleImportGroupChange = useCallback((value: string) => {
+    setImportGroup(value);
+    setImportGroupError(null);
+  }, []);
+
   const confirmImport = useCallback(async () => {
-    if (!selectedFile || !importSubject || !importClass) return;
+    // Say exactly what is missing (rather than silently doing nothing) so a
+    // screen-reader user knows what to fix. The group is mandatory for every
+    // bulk upload to the bank.
+    const groupName = normalizeGroupName(importGroup);
+    const groupProblem = validateGroupName(groupName);
+    if (groupProblem) {
+      setImportGroupError(groupProblem);
+      setImportError("Please choose or create a question group before importing.");
+      return;
+    }
+    if (!importSubject || !importClass) {
+      setImportError("Please choose the subject and the class for these questions.");
+      return;
+    }
+    if (!selectedFile) {
+      setImportError("Please choose a CSV file to import.");
+      return;
+    }
+    setImportGroupError(null);
     setIsImporting(true);
     setImportError(null);
     setImportRowErrors(null);
@@ -501,6 +568,7 @@ export const useQuestionBank = () => {
       body.append("file", selectedFile);
       body.append("subject", importSubject);
       body.append("class", importClass);
+      body.append("group", groupName);
 
       const res = await fetch("/api/admin/questions/bulk", { method: "POST", body });
       if (!res.ok) {
@@ -511,18 +579,25 @@ export const useQuestionBank = () => {
         }
         throw error;
       }
-      const { imported } = await res.json();
-      showStatus({ type: "success", text: `Successfully imported ${imported} questions.` });
+      const { imported, group: savedGroup } = await res.json();
+      showStatus(
+        {
+          type: "success",
+          text: `Successfully imported ${imported} questions into the group “${savedGroup ?? groupName}”.`,
+        },
+        8000,
+      );
       setIsImportModalOpen(false);
       setSelectedFile(null);
       setPreviewRowCount(null);
       fetchQuestionsList();
+      groupsApi.refresh();
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "Failed to import questions.");
     } finally {
       setIsImporting(false);
     }
-  }, [selectedFile, importSubject, importClass, showStatus, fetchQuestionsList]);
+  }, [selectedFile, importSubject, importClass, importGroup, showStatus, fetchQuestionsList, groupsApi]);
   // Wraps a field in quotes and escapes any internal quotes if it contains
   // a comma, quote, or newline - without this, a passage body like "Last
   // term, our class teacher..." would split into extra columns the moment
@@ -697,14 +772,32 @@ export const useQuestionBank = () => {
     [subjectName, subjectCode, showStatus],
   );
 
-  const filteredCount = useMemo(() => questions.length, [questions]);
+  // Changing any filter or the search starts again from page 1 - the page the
+  // admin was on may not even exist in the new, narrower result set.
+  const changeFilter = useCallback(
+    (setter: (value: string) => void) => (value: string) => {
+      setter(value);
+      setPage(1);
+    },
+    [],
+  );
+  const setSearchTermAndReset = useMemo(() => changeFilter(setSearchTerm), [changeFilter]);
+  const setFilterSubjectAndReset = useMemo(() => changeFilter(setFilterSubject), [changeFilter]);
+  const setFilterTypeAndReset = useMemo(() => changeFilter(setFilterType), [changeFilter]);
+  const setFilterClassAndReset = useMemo(() => changeFilter(setFilterClass), [changeFilter]);
+  const setFilterGroupAndReset = useMemo(() => changeFilter(setFilterGroup), [changeFilter]);
+
+  // Total matches across ALL pages (what the "N questions found" announcement
+  // should say), not just the rows on this page.
+  const filteredCount = pagination.total;
 
   // --- bulk selection / bulk delete -----------------------------------
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // Selection is keyed on the currently visible (filtered) list, so
-  // changing filters/search doesn't leave stale ids selected that the
-  // admin can no longer see.
+  // Selection is keyed on the currently visible (filtered, current-page)
+  // list, so changing filters/search/page doesn't leave stale ids selected
+  // that the admin can no longer see - "Select all" and bulk delete always
+  // act on exactly the rows on screen.
   useEffect(() => {
     const visibleIds = new Set(questions.map((q) => q._id));
     setSelectedIds((prev) => {
@@ -794,6 +887,94 @@ export const useQuestionBank = () => {
   const confirmBulkDelete = useCallback(() => runBulkDelete(false), [runBulkDelete]);
   const forceConfirmBulkDelete = useCallback(() => runBulkDelete(true), [runBulkDelete]);
 
+  // --- move questions into a group (also how older, ungrouped questions get organised) ---
+  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
+  const [isMoving, setIsMoving] = useState(false);
+  const [moveError, setMoveError] = useState<string | null>(null);
+  const moveTriggerRef = useRef<HTMLElement | null>(null);
+
+  const openMoveModal = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    moveTriggerRef.current = e.currentTarget;
+    setMoveError(null);
+    setIsMoveModalOpen(true);
+  }, []);
+
+  const closeMoveModal = useCallback(() => {
+    if (isMoving) return;
+    setIsMoveModalOpen(false);
+    setMoveError(null);
+    // Put keyboard/screen-reader focus back on the button that opened the
+    // dialog (the selection bar disappears once a move succeeds, so fall back
+    // to the page heading).
+    setTimeout(() => {
+      const trigger = moveTriggerRef.current;
+      if (trigger && document.contains(trigger)) trigger.focus();
+      else document.getElementById("question-bank-heading")?.focus();
+    }, 0);
+  }, [isMoving]);
+
+  const confirmMove = useCallback(
+    async (group: string, scope: "selected" | "filtered") => {
+      setIsMoving(true);
+      setMoveError(null);
+      try {
+        const body =
+          scope === "selected"
+            ? { group, ids: Array.from(selectedIds) }
+            : {
+                group,
+                filter: {
+                  type: filterType !== "all" ? filterType : "",
+                  subject: filterSubject !== "all" ? filterSubject : "",
+                  class: filterClass !== "all" ? filterClass : "",
+                  group: filterGroup !== "all" ? filterGroup : "",
+                  search: searchTerm.trim(),
+                },
+              };
+        const res = await fetch("/api/admin/questions/bulk-group", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to move questions"));
+        const { matched, group: savedGroup } = await res.json();
+
+        setIsMoveModalOpen(false);
+        clearSelection();
+        showStatus(
+          {
+            type: "success",
+            text: `Moved ${matched} question${matched !== 1 ? "s" : ""} to the group “${savedGroup ?? group}”.`,
+          },
+          8000,
+        );
+        fetchQuestionsList();
+        groupsApi.refresh();
+        setTimeout(() => {
+          const trigger = moveTriggerRef.current;
+          if (trigger && document.contains(trigger)) trigger.focus();
+          else document.getElementById("question-bank-heading")?.focus();
+        }, 0);
+      } catch (err) {
+        setMoveError(err instanceof Error ? err.message : "Failed to move questions.");
+      } finally {
+        setIsMoving(false);
+      }
+    },
+    [
+      selectedIds,
+      filterType,
+      filterSubject,
+      filterClass,
+      filterGroup,
+      searchTerm,
+      clearSelection,
+      showStatus,
+      fetchQuestionsList,
+      groupsApi,
+    ],
+  );
+
   return {
     // data
     questions,
@@ -808,10 +989,21 @@ export const useQuestionBank = () => {
     filterSubject,
     filterType,
     filterClass,
-    setSearchTerm,
-    setFilterSubject,
-    setFilterType,
-    setFilterClass,
+    setSearchTerm: setSearchTermAndReset,
+    setFilterSubject: setFilterSubjectAndReset,
+    setFilterType: setFilterTypeAndReset,
+    setFilterClass: setFilterClassAndReset,
+    filterGroup,
+    setFilterGroup: setFilterGroupAndReset,
+    groups: groupsApi.groups,
+    ungroupedCount: groupsApi.ungroupedCount,
+    totalQuestionCount: groupsApi.total,
+    isLoadingGroups: groupsApi.isLoading,
+
+    // pagination
+    pagination,
+    pageSize: PAGE_SIZE,
+    setPage,
 
     statusMessage,
 
@@ -847,6 +1039,9 @@ export const useQuestionBank = () => {
     previewRowCount,
     importSubject,
     importClass,
+    importGroup,
+    importGroupError,
+    handleImportGroupChange,
     importError,
     importRowErrors,
     importTriggerRef,
@@ -902,6 +1097,14 @@ export const useQuestionBank = () => {
     requestDeletePassage: passagesApi.requestDeletePassage,
     cancelDeletePassage: passagesApi.cancelDeletePassage,
     confirmDeletePassage: passagesApi.confirmDeletePassage,
+
+    // move questions to a group
+    isMoveModalOpen,
+    isMoving,
+    moveError,
+    openMoveModal,
+    closeMoveModal,
+    confirmMove,
 
     // bulk selection / bulk delete
     selectedIds,

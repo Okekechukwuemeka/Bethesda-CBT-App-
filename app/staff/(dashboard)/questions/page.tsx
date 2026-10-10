@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTeacherProfileStore } from "@/store/useTeacherProfileStore";
 import { useTeacherQuestionsStore } from "@/store/useTeacherQuestionsStore";
 import SelectField from "@/components/ui/form/SelectField";
@@ -8,6 +8,10 @@ import TextField from "@/components/ui/form/TextField";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import QuestionFormModal from "@/components/staff/QuestionFormModal";
 import BulkImportModal from "@/components/staff/BulkImportModal";
+import GroupFilterSelect from "@/components/questions/GroupFilterSelect";
+import MoveToGroupModal from "@/components/questions/MoveToGroupModal";
+import PassageManagerModal from "@/components/admin/questions/PassageManagerModal";
+import { usePassages } from "@/hooks/usePassages";
 
 const TeacherQuestionsPage: React.FC = () => {
   const { profile, fetchProfile } = useTeacherProfileStore();
@@ -20,6 +24,18 @@ const TeacherQuestionsPage: React.FC = () => {
     filterClass,
     filterType,
     searchTerm,
+    filterGroup,
+    groups,
+    ungroupedCount,
+    isLoadingGroups,
+    isMoveModalOpen,
+    isMoving,
+    moveError,
+    fetchGroups,
+    setFilterGroup,
+    openMoveModal,
+    closeMoveModal,
+    confirmMove,
     fetchQuestions,
     setFilterSubject,
     setFilterClass,
@@ -38,12 +54,33 @@ const TeacherQuestionsPage: React.FC = () => {
   }, [fetchProfile]);
 
   useEffect(() => {
+    fetchGroups();
     fetchQuestions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const subjects = profile?.assignedSubjects ?? [];
   const classes = profile?.assignedClasses ?? [];
+
+  // Passages share this page's status banner (the store's statusMessage).
+  const showPassageStatus = useCallback(
+    (message: { type: "success" | "error" | "warning"; text: string }) => {
+      useTeacherQuestionsStore.setState({
+        statusMessage: {
+          type: message.type === "error" ? "error" : "success",
+          text: message.text,
+        },
+      });
+    },
+    [],
+  );
+  const passageState = usePassages(showPassageStatus, "/api/staff/passages");
+
+  // The passage manager expects { _id, name, code }; the profile uses { id, ... }.
+  const passageSubjects = useMemo(
+    () => subjects.map((s) => ({ _id: s.id, name: s.name, code: s.code })),
+    [subjects],
+  );
 
   if (profile && profile.role !== "teacher") {
     return (
@@ -55,27 +92,40 @@ const TeacherQuestionsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#1A3A5C]">Question Bank</h1>
           <p className="text-[#5A7A9A] text-sm">
             Manage questions for your assigned subjects and classes
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={openImportModal}
-            disabled={subjects.length === 0 || classes.length === 0}
-            className="bg-[#E8EEF5] hover:bg-[#D5DFE8] text-[#1A3A5C] font-medium px-4 py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/30 disabled:opacity-50">
-            Bulk Import
-          </button>
+        <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <button
             type="button"
             onClick={openAddModal}
             disabled={subjects.length === 0 || classes.length === 0}
-            className="bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50 disabled:opacity-50">
+            className="bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50 disabled:opacity-50 w-full">
             + Add Question
+          </button>
+          <button
+            type="button"
+            onClick={openImportModal}
+            disabled={subjects.length === 0 || classes.length === 0}
+            className="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-green-500/50 disabled:opacity-50 w-full">
+            Bulk Import
+          </button>
+          <button
+            type="button"
+            onClick={passageState.openPassageManager}
+            className="bg-amber-600 hover:bg-amber-700 text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-amber-500/50 w-full">
+            Manage Passages
+          </button>
+          <button
+            type="button"
+            onClick={openMoveModal}
+            disabled={subjects.length === 0 || classes.length === 0}
+            className="border border-[#2B6CB0] text-[#2B6CB0] hover:bg-[#F0F6FC] font-medium px-4 py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/30 disabled:opacity-50 w-full">
+            Move Questions to a Group
           </button>
         </div>
       </div>
@@ -95,7 +145,18 @@ const TeacherQuestionsPage: React.FC = () => {
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-[#C5D8EC] p-4 flex flex-col sm:flex-row gap-3">
+      <div className="bg-white rounded-xl border border-[#C5D8EC] p-4 flex flex-col sm:flex-row gap-3" role="search">
+        <GroupFilterSelect
+          id="filter-group"
+          value={filterGroup}
+          onChange={setFilterGroup}
+          groups={groups}
+          ungroupedCount={ungroupedCount}
+          isLoading={isLoadingGroups}
+          allValue="all"
+          srOnlyLabel
+          className="w-full sm:w-64"
+        />
         <div className="flex-1">
           <label htmlFor="q-search" className="sr-only">
             Search questions
@@ -150,6 +211,10 @@ const TeacherQuestionsPage: React.FC = () => {
         </div>
       </div>
 
+      <p className="sr-only" role="status" aria-live="polite">
+        {isLoading ? "Loading questions" : `${questions.length} question${questions.length !== 1 ? "s" : ""} found`}
+      </p>
+
       {isLoading ? (
         <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
           <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-[#1A3A5C] border-t-transparent" aria-hidden="true" />
@@ -169,7 +234,7 @@ const TeacherQuestionsPage: React.FC = () => {
               <caption className="sr-only">Your questions</caption>
               <thead className="bg-[#F8FAFE] border-b border-[#E8EEF5]">
                 <tr>
-                  {["Question", "Subject", "Class", "Type", "Marks", "Actions"].map((h) => (
+                  {["Question", "Subject", "Class", "Type", "Marks", "Group", "Actions"].map((h) => (
                     <th key={h} scope="col" className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
                       {h}
                     </th>
@@ -184,6 +249,9 @@ const TeacherQuestionsPage: React.FC = () => {
                     <td className="px-4 py-3 text-sm text-[#4A6A8A] whitespace-nowrap">{q.class}</td>
                     <td className="px-4 py-3 text-sm text-[#4A6A8A] whitespace-nowrap">{q.type}</td>
                     <td className="px-4 py-3 text-sm text-[#4A6A8A] whitespace-nowrap">{q.marks}</td>
+                    <td className="px-4 py-3 text-sm text-[#4A6A8A] whitespace-nowrap">
+                      {q.group ? q.group : <span className="text-[#8A9CAE]">Ungrouped</span>}
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       <div className="flex gap-2">
                         <button
@@ -210,6 +278,46 @@ const TeacherQuestionsPage: React.FC = () => {
 
       <QuestionFormModal subjects={subjects} classes={classes} />
       <BulkImportModal subjects={subjects} classes={classes} />
+      <MoveToGroupModal
+        isOpen={isMoveModalOpen}
+        onClose={closeMoveModal}
+        onConfirm={(group) => confirmMove(group)}
+        groups={groups}
+        isLoadingGroups={isLoadingGroups}
+        isSubmitting={isMoving}
+        error={moveError}
+        selectedCount={0}
+        matchingCount={questions.length}
+        allowSelected={false}
+      />
+
+      <PassageManagerModal
+        isOpen={passageState.isManagerOpen}
+        view={passageState.managerView}
+        passages={passageState.passages}
+        isLoadingPassages={passageState.isLoadingPassages}
+        passagesError={passageState.passagesError}
+        subjects={passageSubjects}
+        isLoadingSubjects={!profile}
+        classOptions={classes}
+        editingPassage={passageState.editingPassage}
+        passageFormData={passageState.passageFormData}
+        passageFormError={passageState.passageFormError}
+        isSavingPassage={passageState.isSavingPassage}
+        onFormChange={passageState.handlePassageFormChange}
+        onFormSubmit={passageState.submitPassageForm}
+        onStartCreate={passageState.startCreatePassage}
+        onStartEdit={passageState.startEditPassage}
+        onCancelForm={passageState.cancelPassageForm}
+        pendingDeletePassage={passageState.pendingDeletePassage}
+        isDeletingPassage={passageState.isDeletingPassage}
+        deletePassageError={passageState.deletePassageError}
+        deleteBlockedByQuestions={passageState.deleteBlockedByQuestions}
+        onRequestDelete={passageState.requestDeletePassage}
+        onCancelDelete={passageState.cancelDeletePassage}
+        onConfirmDelete={passageState.confirmDeletePassage}
+        onClose={passageState.closePassageManager}
+      />
 
       <ConfirmDialog
         isOpen={pendingDeleteId !== null}

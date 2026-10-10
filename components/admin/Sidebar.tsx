@@ -105,9 +105,9 @@ const Sidebar = forwardRef<HTMLElement, SidebarProps>(
             </svg>
             <span>{isLoading ? "Logging out..." : "Logout"}</span>
           </button>
-          <p className="text-[#8A9CAE] text-xs text-center mt-2">
-            Koko Technologies©{new Date().getFullYear()}
-          </p>
+          <p aria-hidden="true" className="text-[#8A9CAE] text-xs text-center mt-2">
+            Koko Technologies &copy; {new Date().getFullYear()}
+            </p>
         </div>
       </aside>
     );

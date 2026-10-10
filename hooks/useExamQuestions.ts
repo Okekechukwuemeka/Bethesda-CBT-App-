@@ -5,6 +5,7 @@ import type { PopulatedPassage, QuestionInput, Subject } from "@/types/question"
 import type { PassageKind } from "@/lib/models/constants";
 import { ClassLevel } from "@/lib/models/constants";
 import { usePassages } from "./usePassages";
+import { useQuestionGroups } from "./useQuestionGroups";
 
 export interface ExamQuestion {
   _id: string;
@@ -17,6 +18,7 @@ export interface ExamQuestion {
   class: ClassLevel;
   passageId?: string | PopulatedPassage;
   passageOrder?: number;
+  group?: string;
 }
 
 export interface ExamSummary {
@@ -41,6 +43,7 @@ export interface BankQuestion {
   class: ClassLevel;
   passageId?: string | PopulatedPassage;
   passageOrder?: number;
+  group?: string;
 }
 
 interface StatusMessage {
@@ -125,6 +128,8 @@ export const useExamQuestions = (examId: string) => {
   const [bankFilterType, setBankFilterType] = useState("");
   const [bankFilterSubject, setBankFilterSubject] = useState("");
   const [bankFilterClass, setBankFilterClass] = useState("");
+  // "" = all groups, "__ungrouped__" = older questions with no group, else a group name.
+  const [bankFilterGroup, setBankFilterGroup] = useState("");
   const [isAttaching, setIsAttaching] = useState(false);
 
   // --- Load the exam's own details (title, subject, class) -----------
@@ -222,6 +227,7 @@ export const useExamQuestions = (examId: string) => {
         if (bankFilterType) params.set("type", bankFilterType);
         if (bankFilterSubject) params.set("subject", bankFilterSubject);
         if (bankFilterClass) params.set("class", bankFilterClass);
+        if (bankFilterGroup) params.set("group", bankFilterGroup);
 
         const res = await fetch(`/api/admin/questions?${params.toString()}`);
         if (res.ok) {
@@ -236,7 +242,27 @@ export const useExamQuestions = (examId: string) => {
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [showQuestionBank, bankSearchTerm, bankFilterType, bankFilterSubject, bankFilterClass]);
+  }, [
+    showQuestionBank,
+    bankSearchTerm,
+    bankFilterType,
+    bankFilterSubject,
+    bankFilterClass,
+    bankFilterGroup,
+  ]);
+
+  // Groups offered in the picker's filter, counted within the subject/class
+  // currently chosen there - so choosing "First Term 2026" shows exactly the
+  // questions an admin could attach, and every earlier group stays in the list
+  // for reusing past questions.
+  const bankGroupsApi = useQuestionGroups({
+    scope: "admin",
+    subject: bankFilterSubject,
+    classLevel: bankFilterClass,
+    enabled: showQuestionBank,
+  });
+  // All groups (unfiltered) for the "add a new question" form's group picker.
+  const formGroupsApi = useQuestionGroups({ scope: "admin" });
 
   const attachedIds = useMemo(() => new Set(questions.map((q) => q._id)), [questions]);
 
@@ -453,10 +479,12 @@ export const useExamQuestions = (examId: string) => {
     setIsEditing(false);
     setSelectedQuestion(null);
     setFormError(null);
-    setFormData(emptyFormData);
+    // A question created from inside an exam goes into a group named after
+    // that exam unless another group is chosen (matches the server default).
+    setFormData({ ...emptyFormData, group: exam?.title ?? "" });
     setNewPassageData(emptyNewPassageData);
     setIsModalOpen(true);
-  }, []);
+  }, [exam]);
 
   const handleEditQuestion = useCallback(
     (question: ExamQuestion, e: React.MouseEvent<HTMLButtonElement>) => {
@@ -472,6 +500,7 @@ export const useExamQuestions = (examId: string) => {
         marks: question.marks,
         subject: typeof question.subject === "string" ? question.subject : question.subject._id,
         class: question.class,
+        group: question.group ?? "",
         passageId: passageIdOf(question.passageId) ?? "",
       });
       setNewPassageData(emptyNewPassageData);
@@ -628,6 +657,8 @@ export const useExamQuestions = (examId: string) => {
             throw new Error(itemError ?? body.error ?? "Failed to add question");
           }
           await loadQuestions();
+          formGroupsApi.refresh();
+          bankGroupsApi.refresh();
           showStatus({ type: "success", text: "Question added to exam successfully." });
         }
 
@@ -651,6 +682,8 @@ export const useExamQuestions = (examId: string) => {
       loadQuestions,
       passagesApi,
       showStatus,
+      formGroupsApi,
+      bankGroupsApi,
     ],
   );
 
@@ -717,6 +750,14 @@ export const useExamQuestions = (examId: string) => {
     setBankFilterSubject,
     bankFilterClass,
     setBankFilterClass,
+    bankFilterGroup,
+    setBankFilterGroup,
+    bankGroups: bankGroupsApi.groups,
+    bankUngroupedCount: bankGroupsApi.ungroupedCount,
+    bankGroupTotal: bankGroupsApi.total,
+    isLoadingBankGroups: bankGroupsApi.isLoading,
+    formGroups: formGroupsApi.groups,
+    isLoadingFormGroups: formGroupsApi.isLoading,
     attachedIds,
     isAttaching,
     handleAttachBankQuestion,

@@ -12,12 +12,14 @@ interface ModalProps {
   // (672px) is for anything with side-by-side fields, option rows, file
   // pickers, or tables inside it (matches the width the admin question
   // modals use, since they're built from the same kind of content).
-  maxWidth?: "md" | "2xl";
+  // "4xl" (896px) is for lists/tables of records, e.g. the results student list.
+  maxWidth?: "md" | "2xl" | "4xl";
 }
 
 const MAX_WIDTH_CLASSES: Record<NonNullable<ModalProps["maxWidth"]>, string> = {
-  md: "max-w-md",
+  md: "max-w-md max-h-[90vh] overflow-y-auto",
   "2xl": "max-w-2xl max-h-[90vh] overflow-y-auto",
+  "4xl": "max-w-4xl max-h-[90vh] overflow-y-auto",
 };
 
 const Modal: React.FC<ModalProps> = ({
@@ -49,7 +51,7 @@ const Modal: React.FC<ModalProps> = ({
       if (e.key !== "Tab" || !modalRef.current) return;
 
       const focusable = modalRef.current.querySelectorAll<HTMLElement>(
-        'button, input, a[href], [tabindex]:not([tabindex="-1"])',
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
       );
       if (focusable.length === 0) return;
 

@@ -174,6 +174,7 @@ const CreateExamPage: React.FC = () => {
         classOptions={CLASS_OPTIONS.filter((o) => formData.classes.includes(o.value))}
         selectedClass={questionsCsvClass}
         onSelectedClassChange={handleQuestionsCsvClassChange}
+        examTitle={formData.title}
       />
 
       <ConfirmDialog

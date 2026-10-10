@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from "react";
-import type { RowError, Subject } from "@/types/question";
+import type { QuestionGroupSummary, RowError, Subject } from "@/types/question";
+import GroupPicker from "@/components/questions/GroupPicker";
 import { CLASS_LEVELS } from "@/lib/models/constants";
 
 interface BulkImportModalProps {
@@ -11,10 +12,16 @@ interface BulkImportModalProps {
   isLoadingSubjects: boolean;
   importSubject: string;
   importClass: string;
+  // Required: every bulk upload to the bank is filed under a named group.
+  importGroup: string;
+  importGroupError: string | null;
+  groups: QuestionGroupSummary[];
+  isLoadingGroups: boolean;
   importError: string | null;
   importRowErrors: RowError[] | null;
   onSubjectChange: (value: string) => void;
   onClassChange: (value: string) => void;
+  onGroupChange: (value: string) => void;
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onConfirmImport: () => void;
   onDownloadTemplate: () => void;
@@ -30,10 +37,15 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
   isLoadingSubjects,
   importSubject,
   importClass,
+  importGroup,
+  importGroupError,
+  groups,
+  isLoadingGroups,
   importError,
   importRowErrors,
   onSubjectChange,
   onClassChange,
+  onGroupChange,
   onFileUpload,
   onConfirmImport,
   onDownloadTemplate,
@@ -49,8 +61,10 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
 
   if (!isOpen) return null;
 
-  const canImport =
-    !!selectedFileName && !!importSubject && !!importClass && !isImporting && previewRowCount !== 0;
+  // Not disabled when something is missing: a disabled button gives a screen
+  // reader user no hint why. Clicking it instead announces exactly what still
+  // needs filling in (see confirmImport in useQuestionBank).
+  const canImport = !isImporting && previewRowCount !== 0;
 
   return (
     <div
@@ -77,8 +91,13 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
             </h3>
             <ul className="text-sm text-[#4A6A8A] space-y-1 list-disc list-inside">
               <li>
-                Choose the subject and class the whole file applies to, then upload a{" "}
+                Choose the <strong>group</strong> these questions belong to (for example “First Term
+                2026”), the subject and class the whole file applies to, then upload a{" "}
                 <strong>CSV</strong> file
+              </li>
+              <li>
+                The group is required. You can pick one that already exists or create a new one, and
+                you can later filter by it when choosing questions for an exam
               </li>
               <li>
                 CSV columns: <code>text, type, marks, option1, option2, ..., optionN</code>. Use as
@@ -154,6 +173,20 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
             </svg>
             Download CSV Template
           </button>
+
+          <div className="mb-4">
+            <GroupPicker
+              value={importGroup}
+              onChange={onGroupChange}
+              groups={groups}
+              isLoadingGroups={isLoadingGroups}
+              required
+              label="Question group"
+              error={importGroupError}
+              disabled={isImporting}
+              helpText="All the questions in this file will be saved in this group."
+            />
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>

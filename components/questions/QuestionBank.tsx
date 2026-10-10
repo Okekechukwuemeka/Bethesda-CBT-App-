@@ -1,6 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import { BankQuestion } from "@/types/exam.types";
+import type { QuestionGroupSummary } from "@/types/question";
 import QuestionBankFilters from "./QuestionBankFilters";
 import QuestionBankItem from "./QuestionBankItem";
 interface QuestionBankProps {
@@ -14,6 +15,14 @@ interface QuestionBankProps {
   filterType: string;
   filterSubject: string;
   filterClass: string;
+  // Group filter ("" = all groups). Earlier groups stay selectable so past
+  // questions can be reused.
+  filterGroup?: string;
+  groups?: QuestionGroupSummary[];
+  ungroupedCount?: number;
+  groupTotal?: number;
+  isLoadingGroups?: boolean;
+  onGroupChange?: (value: string) => void;
   onSearchChange: (value: string) => void;
   onTypeChange: (value: string) => void;
   onSubjectChange: (value: string) => void;
@@ -28,6 +37,7 @@ interface QuestionBankProps {
 const QuestionBank: React.FC<QuestionBankProps> = ({
   isOpen,
   onToggle,
+  isLoadingBank,
   questions,
   selectedQuestions,
   subjects,
@@ -35,6 +45,12 @@ const QuestionBank: React.FC<QuestionBankProps> = ({
   filterType,
   filterSubject,
   filterClass,
+  filterGroup,
+  groups,
+  ungroupedCount,
+  groupTotal,
+  isLoadingGroups,
+  onGroupChange,
   onSearchChange,
   onTypeChange,
   onSubjectChange,
@@ -69,12 +85,29 @@ const QuestionBank: React.FC<QuestionBankProps> = ({
             filterType={filterType}
             filterSubject={filterSubject}
             filterClass={filterClass}
+            filterGroup={filterGroup}
+            groups={groups}
+            ungroupedCount={ungroupedCount}
+            groupTotal={groupTotal}
+            isLoadingGroups={isLoadingGroups}
+            onGroupChange={onGroupChange}
             subjects={subjects}
             onSearchChange={onSearchChange}
             onTypeChange={onTypeChange}
             onSubjectChange={onSubjectChange}
             onClassChange={onClassChange}
           />
+          <p className="sr-only" role="status" aria-live="polite">
+            {isLoadingBank
+              ? "Loading questions"
+              : `${questions.length} question${questions.length !== 1 ? "s" : ""} shown${
+                  filterGroup
+                    ? filterGroup === "__ungrouped__"
+                      ? " from older ungrouped questions"
+                      : ` in the group ${filterGroup}`
+                    : " from all groups"
+                }`}
+          </p>
           <div className="max-h-60 overflow-y-auto space-y-2">
             {questions.length === 0 ? (
               <p className="text-sm text-[#8A9CAE] text-center py-4">

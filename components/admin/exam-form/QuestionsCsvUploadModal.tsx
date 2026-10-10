@@ -22,6 +22,10 @@ interface QuestionsCsvUploadModalProps {
   classOptions: ClassOption[];
   selectedClass: string;
   onSelectedClassChange: (value: string) => void;
+  // The exam's title as currently typed. Imported questions are filed in a
+  // question group of exactly this name (done by the server when the exam is
+  // created), so it is shown here to avoid any surprise.
+  examTitle?: string;
 }
 
 const QuestionsCsvUploadModal: React.FC<QuestionsCsvUploadModalProps> = ({
@@ -33,6 +37,7 @@ const QuestionsCsvUploadModal: React.FC<QuestionsCsvUploadModalProps> = ({
   classOptions,
   selectedClass,
   onSelectedClassChange,
+  examTitle,
 }) => {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -52,6 +57,18 @@ const QuestionsCsvUploadModal: React.FC<QuestionsCsvUploadModalProps> = ({
         </div>
 
         <div className="p-6 space-y-4">
+          <p className="text-sm font-medium text-[#1A3A5C]">
+            Question group: the imported questions will be saved in a question group named after
+            this exam
+            {examTitle?.trim() ? (
+              <>
+                : <strong>“{examTitle.trim()}”</strong>
+              </>
+            ) : (
+              <> (enter the exam title first)</>
+            )}
+            . You can later pick this group when choosing questions for other exams.
+          </p>
           <p className="text-sm text-[#4A6A8A]">
             Columns:{" "}
             <code className="text-xs bg-[#F8FAFE] px-1 py-0.5 rounded">

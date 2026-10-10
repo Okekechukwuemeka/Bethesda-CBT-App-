@@ -1,4 +1,6 @@
 import { CLASS_OPTIONS } from "@/config/exam-form-options";
+import type { QuestionGroupSummary } from "@/types/question";
+import GroupFilterSelect from "./GroupFilterSelect";
 
 interface QuestionBankFiltersProps {
   searchTerm: string;
@@ -6,6 +8,13 @@ interface QuestionBankFiltersProps {
   filterSubject: string;
   filterClass: string;
   subjects: { id: string; name: string }[];
+  // Question group filter: "" = every group.
+  filterGroup?: string;
+  groups?: QuestionGroupSummary[];
+  ungroupedCount?: number;
+  groupTotal?: number;
+  isLoadingGroups?: boolean;
+  onGroupChange?: (value: string) => void;
   onSearchChange: (value: string) => void;
   onTypeChange: (value: string) => void;
   onSubjectChange: (value: string) => void;
@@ -17,13 +26,32 @@ const QuestionBankFilters: React.FC<QuestionBankFiltersProps> = ({
   filterSubject,
   filterClass,
   subjects,
+  filterGroup = "",
+  groups = [],
+  ungroupedCount = 0,
+  groupTotal,
+  isLoadingGroups = false,
+  onGroupChange,
   onSearchChange,
   onTypeChange,
   onSubjectChange,
   onClassChange,
 }) => {
   return (
-    <div className="flex flex-col sm:flex-row gap-3 mb-4 min-w-0">
+    <div className="mb-4 min-w-0 space-y-3">
+      {onGroupChange && (
+        <GroupFilterSelect
+          id="bank-filter-group"
+          value={filterGroup}
+          onChange={onGroupChange}
+          groups={groups}
+          ungroupedCount={ungroupedCount}
+          totalCount={groupTotal}
+          isLoading={isLoadingGroups}
+          className="sm:max-w-md"
+        />
+      )}
+    <div className="flex flex-col sm:flex-row gap-3 min-w-0">
       <div className="flex-1 min-w-0">
         <label htmlFor="searchQuestions" className="sr-only">
           Search questions
@@ -72,6 +100,7 @@ const QuestionBankFilters: React.FC<QuestionBankFiltersProps> = ({
           ))}
         </select>
       </div>
+    </div>
     </div>
   );
 };

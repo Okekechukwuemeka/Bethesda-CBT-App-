@@ -7,6 +7,7 @@ import { Exam, recomputeExamTotals } from "@/lib/models/exam.model";
 import { Question, IQuestion } from "@/lib/models/question.model";
 import { Passage, IPassage } from "@/lib/models/passage.model";
 import { PASSAGE_KINDS, ClassLevel } from "@/lib/models/constants";
+import { GROUP_MAX_LENGTH, normalizeGroupName, resolveGroupName } from "@/lib/question-groups";
 
 interface RowError {
   row: number;
@@ -118,6 +119,14 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
       { status: 400 },
     );
   }
+
+  // Every question imported through an exam is filed in a group named after
+  // that exam (e.g. "Mathematics - Second Term Examination"), so the exam's
+  // own questions can be found together in the bank later. If a group with
+  // that name already exists the questions simply join it.
+  const groupName = await resolveGroupName(
+    normalizeGroupName(exam.title).slice(0, GROUP_MAX_LENGTH),
+  );
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const text = buffer.toString("utf-8");
@@ -298,6 +307,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
     candidates.push({
       rowNumber,
       doc: new Question({
+        group: groupName,
         text: row.text?.trim(),
         type,
         marks,
@@ -363,6 +373,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
       {
         imported: candidates.length,
         passagesCreated: passageCandidates.length,
+        group: groupName,
         totalQuestions: exam.questions.length,
       },
       { status: 201 },

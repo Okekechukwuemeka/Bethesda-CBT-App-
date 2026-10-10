@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-guards";
 import { Question } from "@/lib/models/question.model";
 import { Exam, recomputeExamTotals } from "@/lib/models/exam.model";
+import { normalizeGroupName, resolveGroupName, validateGroupName } from "@/lib/question-groups";
 
 // GET /api/admin/questions/[id]
 export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -49,11 +50,27 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     if (body[field] !== undefined) updates[field] = body[field];
   }
 
+  // `group` is handled apart from EDITABLE_FIELDS: it is normalised and
+  // joined to an existing group of the same name, and an empty value clears
+  // the question's group (back to "Ungrouped").
+  let clearGroup = false;
+  if (body.group !== undefined) {
+    const group = normalizeGroupName(body.group);
+    if (!group) {
+      clearGroup = true;
+    } else {
+      const groupError = validateGroupName(group);
+      if (groupError) return NextResponse.json({ error: groupError }, { status: 400 });
+      updates.group = await resolveGroupName(group);
+    }
+  }
+
   try {
     const question = await Question.findById(id);
     if (!question) return NextResponse.json({ error: "Question not found" }, { status: 404 });
 
     Object.assign(question, updates);
+    if (clearGroup) question.group = undefined;
     await question.save(); // runs the objective/theory pre-validate rule
 
     // Marks may have changed - keep every exam that uses this question

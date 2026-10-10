@@ -6,6 +6,7 @@ import Link from "next/link";
 import StatsSummary from "@/components/admin/results/StatsSummary";
 import SubjectResultsTable from "@/components/admin/results/SubjectResultsTable";
 import StudentScriptsModal from "@/components/admin/results/StudentScriptsModal";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useClassResults } from "@/hooks/useClassResults";
 
 const ClassResultsPage: React.FC = () => {
@@ -30,6 +31,11 @@ const ClassResultsPage: React.FC = () => {
     exportAllScripts,
     exportSingleScript,
     exportClassResults,
+    resultsPendingDelete,
+    isDeletingResults,
+    requestDeleteResults,
+    cancelDeleteResults,
+    confirmDeleteResults,
   } = useClassResults(className);
 
   return (
@@ -104,6 +110,7 @@ const ClassResultsPage: React.FC = () => {
             onExportExcel={exportExcel}
             onExportAllScripts={exportAllScripts}
             onViewScripts={handleViewScripts}
+            onDeleteResults={requestDeleteResults}
           />
         </>
       )}
@@ -118,6 +125,27 @@ const ClassResultsPage: React.FC = () => {
           selectedSubject && exportSingleScript(selectedSubject, student)
         }
         onDownloadAll={() => selectedSubject && exportAllScripts(selectedSubject)}
+      />
+
+      <ConfirmDialog
+        isOpen={!!resultsPendingDelete}
+        title="Delete these saved results?"
+        description={
+          <>
+            The exam <strong>{resultsPendingDelete?.examTitle}</strong> (
+            {resultsPendingDelete?.subject}) was deleted earlier, but its student results were
+            kept. This will permanently delete those results
+            {resultsPendingDelete?.completed
+              ? ` (${resultsPendingDelete.completed} marked so far)`
+              : ""}
+            . This cannot be undone.
+          </>
+        }
+        confirmLabel="Delete Results"
+        isDangerous
+        isProcessing={isDeletingResults}
+        onConfirm={confirmDeleteResults}
+        onCancel={cancelDeleteResults}
       />
     </div>
   );

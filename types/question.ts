@@ -19,6 +19,9 @@ export interface Passage {
   subject: string | Subject;
   class: ClassLevel;
   questionCount: number;
+  // Only set by the staff API: false when the passage belongs to someone else
+  // (an admin or another teacher), so the manager hides Edit/Delete for it.
+  canEdit?: boolean;
 }
 
 export interface PassageInput {
@@ -51,6 +54,8 @@ export interface Question {
   correctAnswer?: string;
   passageId?: string | PopulatedPassage;
   passageOrder?: number;
+  // Question group (e.g. "First Term 2026"); absent on older questions.
+  group?: string;
 }
 
 export interface QuestionInput {
@@ -66,6 +71,13 @@ export interface QuestionInput {
   // Passage._id.
   passageId?: string;
   passageOrder?: number;
+  // "" = leave ungrouped.
+  group?: string;
+}
+
+export interface QuestionGroupSummary {
+  name: string;
+  count: number;
 }
 
 export interface BlockingExam {

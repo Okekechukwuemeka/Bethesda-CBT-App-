@@ -5,6 +5,7 @@ import Modal from "@/components/ui/Modal";
 import SelectField from "@/components/ui/form/SelectField";
 import { useTeacherQuestionsStore } from "@/store/useTeacherQuestionsStore";
 import { downloadQuestionTemplate } from "@/lib/questionCsvTemplate";
+import GroupPicker from "@/components/questions/GroupPicker";
 import type { AssignedSubject } from "@/types/staff";
 
 interface BulkImportModalProps {
@@ -17,12 +18,17 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ subjects, classes }) 
     isImportModalOpen,
     importSubject,
     importClass,
+    importGroup,
+    importGroupError,
+    groups,
+    isLoadingGroups,
     isImporting,
     importError,
     importRowErrors,
     selectedFile,
     setImportSubject,
     setImportClass,
+    setImportGroup,
     setSelectedFile,
     confirmImport,
     closeImportModal,
@@ -46,8 +52,13 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ subjects, classes }) 
           </h3>
           <ul className="text-sm text-[#4A6A8A] space-y-1 list-disc list-inside">
             <li>
-              Choose the subject and class the whole file applies to, then upload a{" "}
+              Choose the <strong>group</strong> these questions belong to (for example “First Term
+              2026”), the subject and class the whole file applies to, then upload a{" "}
               <strong>CSV</strong> file
+            </li>
+            <li>
+              The group is required. Pick an existing group or create a new one; groups are how
+              questions are found again when exams are put together
             </li>
             <li>
               CSV columns: <code>text, type, marks, option1, option2, ..., optionN</code>. Use as
@@ -96,6 +107,17 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ subjects, classes }) 
           </svg>
           Download CSV Template
         </button>
+
+        <GroupPicker
+          value={importGroup}
+          onChange={setImportGroup}
+          groups={groups}
+          isLoadingGroups={isLoadingGroups}
+          required
+          error={importGroupError}
+          disabled={isImporting}
+          helpText="All the questions in this file will be saved in this group."
+        />
 
         <div className="grid grid-cols-2 gap-4">
           <div>

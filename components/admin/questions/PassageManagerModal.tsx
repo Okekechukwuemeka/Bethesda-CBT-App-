@@ -10,6 +10,9 @@ interface PassageManagerModalProps {
   passagesError: string | null;
   subjects: Subject[];
   isLoadingSubjects: boolean;
+  // Classes offered in the create form. Defaults to every class (admin);
+  // the teacher screen passes only the classes they're assigned to.
+  classOptions?: readonly string[];
 
   editingPassage: Passage | null;
   passageFormData: PassageInput;
@@ -47,6 +50,7 @@ const PassageManagerModal: React.FC<PassageManagerModalProps> = ({
   passagesError,
   subjects,
   isLoadingSubjects,
+  classOptions = CLASS_LEVELS,
   editingPassage,
   passageFormData,
   passageFormError,
@@ -340,7 +344,7 @@ const PassageManagerModal: React.FC<PassageManagerModalProps> = ({
                     aria-required="true"
                     className="w-full px-3 py-2 border border-[#C5D8EC] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] bg-[#F8FAFE] disabled:opacity-60">
                     <option value="">Select a class</option>
-                    {CLASS_LEVELS.map((level) => (
+                    {classOptions.map((level) => (
                       <option key={level} value={level}>
                         {level}
                       </option>
@@ -414,6 +418,17 @@ const PassageManagerModal: React.FC<PassageManagerModalProps> = ({
                         question
                         {passage.questionCount !== 1 ? "s" : ""} attached
                       </p>
+                      <details className="mt-2 text-sm text-[#4A6A8A]">
+                        <summary className="cursor-pointer text-[#2B6CB0] font-medium focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] rounded w-fit">
+                          Read passage
+                        </summary>
+                        <p className="mt-2 whitespace-pre-wrap">{passage.text}</p>
+                      </details>
+                      {passage.canEdit === false ? (
+                        <p className="text-xs text-[#8A9CAE] mt-3">
+                          Created by someone else — view only.
+                        </p>
+                      ) : (
                       <div className="flex gap-2 mt-3">
                         <button
                           type="button"
@@ -430,6 +445,7 @@ const PassageManagerModal: React.FC<PassageManagerModalProps> = ({
                           Delete
                         </button>
                       </div>
+                      )}
                     </li>
                   ))}
                 </ul>

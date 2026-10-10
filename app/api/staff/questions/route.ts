@@ -4,9 +4,11 @@ import "@/lib/models/subject.model";
 import "@/lib/models/passage.model";
 import { requireTeacher, assertTeacherScope } from "@/lib/api-guards";
 import { Question } from "@/lib/models/question.model";
-import { ClassLevel, QuestionType } from "@/lib/models/constants";
+import { ClassLevel } from "@/lib/models/constants";
+import { buildQuestionFilter } from "@/lib/question-filter";
+import { normalizeGroupName, resolveGroupName, validateGroupName } from "@/lib/question-groups";
 
-// GET /api/staff/questions?type=Objective&subject=<id>&class=JSS1&search=...
+// GET /api/staff/questions?type=Objective&subject=<id>&class=JSS1&search=...&group=<name>
 // Always scoped to this teacher's own assigned subjects/classes - a
 // teacher never sees the full question bank, only the slice that overlaps
 // what they've been assigned. Passing a subject/class outside that scope
@@ -16,10 +18,8 @@ export async function GET(req: NextRequest) {
   if (!guard.ok) return guard.response;
 
   const params = req.nextUrl.searchParams;
-  const type = params.get("type") as QuestionType | null;
   const subject = params.get("subject");
   const classFilter = params.get("class") as ClassLevel | null;
-  const search = params.get("search")?.trim();
 
   const scope = await assertTeacherScope(
     guard.session.user.id,
@@ -30,16 +30,13 @@ export async function GET(req: NextRequest) {
 
   await connectDB();
 
-  const filter: Record<string, unknown> = {
+  // Always limited to the teacher's own assignment; the request's subject/class
+  // filters (already checked against it above) and the group/type/search
+  // filters narrow within that.
+  const filter = buildQuestionFilter(params, {
     subject: { $in: scope.staff.assignedSubjects },
     class: { $in: scope.staff.assignedClasses },
-  };
-  if (type) filter.type = type;
-  if (subject) filter.subject = subject;
-  if (classFilter) filter.class = classFilter;
-  if (search) {
-    filter.text = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-  }
+  });
 
   const questions = await Question.find(filter)
     .populate("subject", "name code")
@@ -50,7 +47,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/staff/questions
-// Body: { text, type, subject, class, marks, options?, correctAnswer? }
+// Body: { text, type, subject, class, marks, options?, correctAnswer?, group? }
 // subject+class must be a pair this teacher is actually assigned - a
 // teacher assigned Chemistry for SSS1 and Biology for SSS2 cannot add a
 // Chemistry/SSS2 question even though each half is individually assigned.
@@ -64,8 +61,15 @@ export async function POST(req: NextRequest) {
   const scope = await assertTeacherScope(guard.session.user.id, body.subject, body.class);
   if (!scope.ok) return scope.response;
 
+  const requestedGroup = normalizeGroupName(body.group);
+  if (requestedGroup) {
+    const groupError = validateGroupName(requestedGroup);
+    if (groupError) return NextResponse.json({ error: groupError }, { status: 400 });
+  }
+
   try {
     const question = await Question.create({
+      group: requestedGroup ? await resolveGroupName(requestedGroup) : undefined,
       text: body.text,
       type: body.type,
       subject: body.subject,

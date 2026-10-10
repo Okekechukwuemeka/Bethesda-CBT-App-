@@ -59,6 +59,14 @@ const ExamQuestionsPage: React.FC = () => {
     setBankFilterSubject,
     bankFilterClass,
     setBankFilterClass,
+    bankFilterGroup,
+    setBankFilterGroup,
+    bankGroups,
+    bankUngroupedCount,
+    bankGroupTotal,
+    isLoadingBankGroups,
+    formGroups,
+    isLoadingFormGroups,
     attachedIds,
     handleAttachBankQuestion,
 
@@ -107,6 +115,7 @@ const ExamQuestionsPage: React.FC = () => {
         ? { id: q.passageId._id, title: q.passageId.title }
         : undefined,
     passageOrder: q.passageOrder,
+    group: q.group,
   }));
 
   const selectedQuestionsForComponent: SharedBankQuestion[] = filteredQuestions
@@ -222,6 +231,12 @@ const ExamQuestionsPage: React.FC = () => {
             onTypeChange={setBankFilterType}
             onSubjectChange={setBankFilterSubject}
             onClassChange={setBankFilterClass}
+            filterGroup={bankFilterGroup}
+            groups={bankGroups}
+            ungroupedCount={bankUngroupedCount}
+            groupTotal={bankGroupTotal}
+            isLoadingGroups={isLoadingBankGroups}
+            onGroupChange={setBankFilterGroup}
             onAddQuestion={handleAddFromBank}
             checkedIds={selectedBankIds}
             onToggleCheck={toggleBankSelect}
@@ -273,6 +288,9 @@ const ExamQuestionsPage: React.FC = () => {
         isLoadingSubjects={isLoadingSubjects}
         passages={passages}
         isLoadingPassages={isLoadingPassages}
+        groups={formGroups}
+        isLoadingGroups={isLoadingFormGroups}
+        groupHelpText="Questions added from an exam are saved in a group named after the exam unless you choose a different group."
         newPassageData={newPassageData}
         onChange={handleInputChange}
         onNewPassageChange={handleNewPassageChange}

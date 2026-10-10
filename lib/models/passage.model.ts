@@ -17,6 +17,10 @@ export interface IPassage extends Document {
   subject: mongoose.Types.ObjectId;
   class: ClassLevel;
   createdBy: mongoose.Types.ObjectId;
+  // Which collection createdBy points into - "Admin" for passages made from
+  // the admin question bank, "Staff" for ones a teacher made. Older documents
+  // predate this field and were all Admin-created, so it defaults there.
+  createdByModel: "Admin" | "Staff";
   createdAt: Date;
   updatedAt: Date;
 }
@@ -50,9 +54,14 @@ const passageSchema = new Schema<IPassage>(
       required: [true, "Class is required"],
       enum: { values: CLASS_LEVELS, message: "{VALUE} is not a valid class level" },
     },
+    createdByModel: {
+      type: String,
+      enum: ["Admin", "Staff"],
+      default: "Admin",
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
-      ref: "Admin",
+      refPath: "createdByModel",
       required: [true, "createdBy is required"],
     },
   },

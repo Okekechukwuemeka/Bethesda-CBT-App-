@@ -44,15 +44,13 @@ const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
           <span className="font-medium">Class:</span> {examClass}
         </p>
         <p className="text-sm text-[#4A6A8A]">
-          <span className="font-medium">Questions:</span> This will delete all questions associated
-          with this exam
+          <span className="font-medium">Questions:</span> The exam is removed. Its questions stay in the Question Bank.
         </p>
       </div>
 
       <p className="text-sm text-red-600 mb-4">
         <span aria-hidden="true">⚠️ </span>
-        This action cannot be undone. All student results and data for this exam will be permanently
-        deleted.
+        This action cannot be undone. Student results already recorded for this exam are kept and stay available under Results.
       </p>
 
       <div className="flex gap-3">

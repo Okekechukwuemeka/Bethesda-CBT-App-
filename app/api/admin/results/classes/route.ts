@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/api-guards";
 import { Student } from "@/lib/models/student.model";
 import { Exam, examClassFilter } from "@/lib/models/exam.model";
 import { CLASS_LEVELS } from "@/lib/models/constants";
+import { getDeletedExamGroupsForClass } from "@/lib/results-helpers";
 import type { ClassResult } from "@/types/admin-results";
 
 // GET /api/admin/results/classes
@@ -25,7 +26,11 @@ export async function GET() {
     // nothing in the app ever actually sets, so it always read 0 even
     // with real exams scheduled/ongoing for the class. Includes general
     // exams this class is eligible for, not just class-specific ones.
-    const totalExams = await Exam.countDocuments(examClassFilter(className));
+    const liveExams = await Exam.countDocuments(examClassFilter(className));
+    // Plus exams that were deleted but whose results were kept - they still
+    // have a row on the class's Results page.
+    const deletedExams = await getDeletedExamGroupsForClass(className);
+    const totalExams = liveExams + deletedExams.length;
 
     results.push({ className, studentCount, totalExams });
   }

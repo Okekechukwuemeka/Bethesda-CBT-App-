@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db";
 import { requireTeacher, assertTeacherScope } from "@/lib/api-guards";
 import { Question } from "@/lib/models/question.model";
 import { Exam, recomputeExamTotals } from "@/lib/models/exam.model";
+import { normalizeGroupName, resolveGroupName, validateGroupName } from "@/lib/question-groups";
 
 const EDITABLE_FIELDS = ["text", "marks", "options", "correctAnswer"] as const;
 
@@ -25,7 +26,7 @@ async function loadOwnedQuestion(id: string, staffId: string) {
 }
 
 // PATCH /api/staff/questions/[id]
-// Body: any subset of { text, marks, options, correctAnswer }. Subject and
+// Body: any subset of { text, marks, options, correctAnswer, group }. Subject and
 // class are intentionally not editable here - moving a question outside
 // the teacher's assignment would just re-trigger the same scope problem
 // POST already guards against, so it's simpler to disallow it outright.
@@ -45,8 +46,23 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     if (body[field] !== undefined) updates[field] = body[field];
   }
 
+  // Group: normalised and joined to an existing group of the same name;
+  // an empty value moves the question back to "Ungrouped".
+  let clearGroup = false;
+  if (body.group !== undefined) {
+    const group = normalizeGroupName(body.group);
+    if (!group) {
+      clearGroup = true;
+    } else {
+      const groupError = validateGroupName(group);
+      if (groupError) return NextResponse.json({ error: groupError }, { status: 400 });
+      updates.group = await resolveGroupName(group);
+    }
+  }
+
   try {
     Object.assign(question!, updates);
+    if (clearGroup) question!.group = undefined;
     await question!.save();
 
     if (updates.marks !== undefined) {

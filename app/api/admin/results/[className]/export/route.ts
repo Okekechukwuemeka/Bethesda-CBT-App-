@@ -7,6 +7,7 @@ import { Question } from "@/lib/models/question.model";
 import {
   buildSubjectResult,
   getClassActiveStudentCount,
+  getDeletedExamGroupsForClass,
   getExamsForClass,
   objectiveScoreFromAnswers,
   objectiveTotalMarks,
@@ -35,17 +36,29 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
   const className = decodeURIComponent(rawClassName) as ClassLevel;
   await connectDB();
 
-  const [exams, totalStudents, students] = await Promise.all([
+  const [exams, totalStudents, students, deletedGroups] = await Promise.all([
     getExamsForClass(className),
     getClassActiveStudentCount(className),
     Student.find({ class: className, isActive: true })
       .select("firstName lastName admissionNumber")
       .sort({ lastName: 1, firstName: 1 })
       .lean(),
+    getDeletedExamGroupsForClass(className),
   ]);
   const subjects: SubjectResult[] = [];
   const scoresBySubject: Record<string, ClassExportRow[]> = {};
   const studentIds = new Set(students.map((s) => s._id.toString()));
+
+  // Everything the export needs to know about one exam, whether it still
+  // exists or its results were kept after it was deleted.
+  interface ExportSource {
+    examId: string;
+    lean: ExamLean;
+    isMixed: boolean;
+    objectiveTotal: number;
+    deleted?: { term?: string; academicYear?: string };
+  }
+  const sources: ExportSource[] = [];
 
   for (const exam of exams) {
     const isMixed = exam.type === "Mixed";
@@ -61,8 +74,34 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
         .lean();
       objectiveTotal = objectiveTotalMarks(attached.map((question) => ({ question })));
     }
+    sources.push({
+      examId: exam._id.toString(),
+      lean: exam as unknown as ExamLean,
+      isMixed,
+      objectiveTotal,
+    });
+  }
 
-    const submissions = await Submission.find({ exam: exam._id })
+  // Exams that were deleted but whose results were kept: their MCQ total
+  // was captured in the snapshot, so nothing needs looking up.
+  for (const { examId, snapshot } of deletedGroups) {
+    sources.push({
+      examId,
+      lean: {
+        _id: examId,
+        subject: snapshot.subjectName,
+        title: snapshot.title,
+        type: snapshot.type,
+        totalMarks: snapshot.totalMarks,
+      },
+      isMixed: snapshot.type === "Mixed",
+      objectiveTotal: snapshot.objectiveTotal ?? 0,
+      deleted: { term: snapshot.term, academicYear: snapshot.academicYear },
+    });
+  }
+
+  for (const { examId, lean, isMixed, objectiveTotal, deleted } of sources) {
+    const submissions = await Submission.find({ exam: examId })
       .select(isMixed ? "student status score totalMarks answers" : "student status score totalMarks")
       .lean();
     // Scoped to this class's own students before it feeds into
@@ -74,12 +113,13 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
     // subject-level aggregate isn't unless it's filtered too.
     const classSubmissions = submissions.filter((s) => studentIds.has(s.student.toString()));
 
-    subjects.push(
-      buildSubjectResult(exam as unknown as ExamLean, classSubmissions, totalStudents),
-    );
+    subjects.push({
+      ...buildSubjectResult(lean, classSubmissions, totalStudents),
+      ...(deleted ? { examDeleted: true, ...deleted } : {}),
+    });
 
     const submissionByStudent = new Map(classSubmissions.map((s) => [s.student.toString(), s]));
-    scoresBySubject[exam._id.toString()] = students.map((student) => {
+    scoresBySubject[examId] = students.map((student) => {
       const submission = submissionByStudent.get(student._id.toString());
       const isMarked = submission?.status === "Marked";
 

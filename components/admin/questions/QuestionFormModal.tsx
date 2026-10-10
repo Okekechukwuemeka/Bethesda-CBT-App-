@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
-import type { Passage, QuestionInput, Subject } from "@/types/question";
+import type { Passage, QuestionGroupSummary, QuestionInput, Subject } from "@/types/question";
+import GroupPicker from "@/components/questions/GroupPicker";
 import { CLASS_LEVELS, PASSAGE_KINDS } from "@/lib/models/constants";
 
 interface NewPassageData {
@@ -18,6 +19,11 @@ interface QuestionFormModalProps {
   isLoadingSubjects: boolean;
   passages: Passage[];
   isLoadingPassages: boolean;
+  // Existing question groups to pick from (the field itself is optional).
+  groups: QuestionGroupSummary[];
+  isLoadingGroups: boolean;
+  // Overrides the default explanation under the group field.
+  groupHelpText?: string;
   newPassageData: NewPassageData;
   onChange: (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
@@ -44,6 +50,9 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
   isLoadingSubjects,
   passages,
   isLoadingPassages,
+  groups,
+  isLoadingGroups,
+  groupHelpText,
   newPassageData,
   onChange,
   onNewPassageChange,
@@ -261,6 +270,24 @@ const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="md:col-span-2">
+                <GroupPicker
+                  value={formData.group ?? ""}
+                  onChange={(value) =>
+                    onChange({
+                      target: { name: "group", value },
+                    } as React.ChangeEvent<HTMLInputElement>)
+                  }
+                  groups={groups}
+                  isLoadingGroups={isLoadingGroups}
+                  disabled={isSubmitting}
+                  helpText={
+                    groupHelpText ??
+                    "Groups keep the question bank organised, for example by term or session, and can be used to filter questions when building an exam."
+                  }
+                />
               </div>
 
               <div className="md:col-span-2">

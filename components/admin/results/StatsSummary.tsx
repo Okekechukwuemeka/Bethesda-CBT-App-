@@ -7,10 +7,11 @@ interface StatsSummaryProps {
 
 const StatsSummary: React.FC<StatsSummaryProps> = ({ subjects }) => {
   const completedCount = subjects.filter((s) => s.status === "completed").length;
+  const awaitingMarkingCount = subjects.filter((s) => s.status === "awaiting-marking").length;
   const pendingCount = subjects.filter((s) => s.status === "pending").length;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <div
         className="bg-white rounded-xl border border-[#C5D8EC] p-4 shadow-sm"
         role="group"
@@ -24,6 +25,13 @@ const StatsSummary: React.FC<StatsSummaryProps> = ({ subjects }) => {
         aria-label={`Completed: ${completedCount}`}>
         <p className="text-sm text-[#5A7A9A]">Completed</p>
         <p className="text-2xl font-bold text-green-600">{completedCount}</p>
+      </div>
+      <div
+        className="bg-white rounded-xl border border-[#C5D8EC] p-4 shadow-sm"
+        role="group"
+        aria-label={`Awaiting marking: ${awaitingMarkingCount}`}>
+        <p className="text-sm text-[#5A7A9A]">Awaiting Marking</p>
+        <p className="text-2xl font-bold text-amber-600">{awaitingMarkingCount}</p>
       </div>
       <div
         className="bg-white rounded-xl border border-[#C5D8EC] p-4 shadow-sm"

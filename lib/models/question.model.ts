@@ -20,6 +20,13 @@ export interface IQuestion extends Document {
   // majority) simply omits both, unchanged from before this existed.
   passageId?: mongoose.Types.ObjectId;
   passageOrder?: number; // this question's position within its passage group, e.g. 1, 2, 3
+  // Free-text label the question bank is organised by, e.g. "First Term
+  // 2026" or an exam's own title. Optional: every question that existed
+  // before grouping was introduced has none and shows up as "Ungrouped".
+  // Always stored trimmed with spaces collapsed, and re-using the spelling of
+  // an existing group when only the capitalisation differs (see
+  // lib/question-groups.ts).
+  group?: string;
   createdBy: mongoose.Types.ObjectId;
   // Which collection createdBy points into - "Admin" for questions added
   // from the admin question bank, "Staff" for ones a teacher added/imported
@@ -70,6 +77,7 @@ const questionSchema = new Schema<IQuestion>(
       type: Number,
       min: [1, "passageOrder must be at least 1"],
     },
+    group: { type: String, trim: true, maxlength: [100, "Group name must be 100 characters or fewer"] },
     createdByModel: {
       type: String,
       enum: ["Admin", "Staff"],
@@ -115,6 +123,16 @@ questionSchema.index({ type: 1 });
 // Reassembling a passage's sub-questions in order - e.g. when populating
 // an exam session or rendering the passage group in the admin bank table.
 questionSchema.index({ passageId: 1, passageOrder: 1 });
+// Filtering the bank / the exam question picker by group.
+questionSchema.index({ group: 1 });
+
+// Dev-server hot reload keeps the FIRST compiled Question model in
+// mongoose.models, which would silently drop the new `group` path from every
+// write until the server restarts (questions would save without their group).
+// Discard a cached model that predates it - same approach as Exam/Submission.
+if (models.Question && !models.Question.schema.path("group")) {
+  mongoose.deleteModel("Question");
+}
 
 export const Question =
   (models.Question as mongoose.Model<IQuestion>) || model<IQuestion>("Question", questionSchema);

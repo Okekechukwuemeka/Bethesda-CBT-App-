@@ -1,5 +1,11 @@
 export type ExamTypeLower = "objective" | "theory" | "mixed";
-export type ResultStatus = "completed" | "pending" | "in-progress";
+// Exam-level status on the Results page:
+//  - pending:          nobody has started it
+//  - in-progress:      at least one student is still writing it
+//  - awaiting-marking: everyone who sat it has SUBMITTED; only marking (e.g.
+//                      the theory part of a mixed exam) is outstanding
+//  - completed:        every student's script is marked
+export type ResultStatus = "completed" | "pending" | "in-progress" | "awaiting-marking";
 export type ScriptStatus = "marked" | "pending" | "in-progress" | "not-started";
 export type Performance = "excellent" | "good" | "average" | "poor";
 
@@ -21,6 +27,12 @@ export interface SubjectResult {
   lowestScore: number;
   completed: number;
   status: ResultStatus;
+  // True when this row describes results whose exam has since been deleted.
+  // Such rows are built from the snapshot kept on the submissions, can still
+  // be viewed/exported, and (for admins) deleted.
+  examDeleted?: boolean;
+  term?: string;
+  academicYear?: string;
 }
 
 export interface StudentAnswer {

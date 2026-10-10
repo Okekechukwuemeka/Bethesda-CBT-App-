@@ -59,4 +59,6 @@ export interface BankQuestion {
   // passages existed.
   passage?: BankQuestionPassage;
   passageOrder?: number;
+  // Question group the bank question belongs to, if any.
+  group?: string;
 }

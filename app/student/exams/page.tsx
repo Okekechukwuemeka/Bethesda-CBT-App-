@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import ExamPageHeader from "@/components/student/ExamPageHeader";
+import StudentIdentityBar from "@/components/student/StudentIdentityBar";
 import ExamList from "@/components/student/ExamList";
 import Modal from "@/components/ui/Modal";
 import ExamCodeForm from "@/components/student/ExamCodeForm";
@@ -38,6 +39,7 @@ const StudentExamsPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#E8F0FE] py-8 px-4 font-sans">
       <div aria-hidden={isModalOpen ? true : undefined} className="max-w-4xl mx-auto">
+        <StudentIdentityBar allowLogout className="mb-4" />
         <ExamPageHeader
           examCount={exams.length}
           studentClass={mounted ? session?.user?.class : undefined}

@@ -37,33 +37,36 @@ const StudentScriptRow: React.FC<StudentScriptRowProps> = ({
     hasMcqScore && student.status === "pending" ? "Theory Awaiting Marking" : statusLabels[student.status];
 
   return (
-    <li className="flex items-center justify-between gap-3 bg-white border border-[#E8EEF5] rounded-lg p-3">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-[#1A3A5C] truncate">{student.studentName}</p>
-        <p className="text-xs text-[#5A7A9A]">{student.admissionNo}</p>
+    <li className="flex flex-col gap-3 bg-white border border-[#E8EEF5] rounded-lg p-4 sm:flex-row sm:items-center sm:justify-between">
+      {/* Full name always shown (wraps rather than being cut off); the
+          details to its right drop underneath on narrow screens. */}
+      <div className="min-w-0 sm:flex-1">
+        <p className="text-base font-medium text-[#1A3A5C] break-words">{student.studentName}</p>
+        <p className="text-sm text-[#5A7A9A]">Admission no: {student.admissionNo}</p>
       </div>
-      <div className="flex items-center gap-3 flex-shrink-0">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:justify-end sm:flex-shrink-0">
         {student.status === "marked" && (
-          <span className="text-sm font-semibold text-[#1A3A5C]">
+          <span className="text-sm font-semibold text-[#1A3A5C] whitespace-nowrap">
             {student.score}/{student.totalMarks}{" "}
             <span className="text-xs font-normal text-[#5A7A9A]">({student.percentage}%)</span>
           </span>
         )}
         {hasMcqScore && (
-          <span className="text-sm font-semibold text-[#1A3A5C]">
+          <span className="text-sm font-semibold text-[#1A3A5C] whitespace-nowrap">
             <span className="text-xs font-normal text-[#5A7A9A]">MCQ </span>
             {student.objectiveScore}/{student.objectiveTotal}
           </span>
         )}
         <span
-          className={`text-xs px-2 py-1 rounded-full font-medium ${statusStyles[student.status]}`}>
+          className={`text-xs px-3 py-1 rounded-full font-medium whitespace-nowrap ${statusStyles[student.status]}`}>
           {statusLabel}
         </span>
         {showScriptDownload && hasAnswers && (
           <button
             type="button"
             onClick={onDownloadScript}
-            className="text-xs bg-[#E8F0FE] text-[#2B6CB0] font-medium px-3 py-1.5 rounded-lg hover:bg-[#D5E4F7] transition">
+            aria-label={`Download script for ${student.studentName}`}
+            className="text-sm bg-[#E8F0FE] text-[#2B6CB0] font-medium px-4 py-2 rounded-lg hover:bg-[#D5E4F7] transition focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] whitespace-nowrap">
             Download Script
           </button>
         )}

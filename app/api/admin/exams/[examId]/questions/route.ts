@@ -4,6 +4,11 @@ import { connectDB } from "@/lib/db";
 import { requireAdmin } from "@/lib/api-guards";
 import { Exam, recomputeExamTotals } from "@/lib/models/exam.model";
 import { Question, IQuestion } from "@/lib/models/question.model";
+import {
+  GROUP_MAX_LENGTH,
+  normalizeGroupName,
+  resolveGroupName,
+} from "@/lib/question-groups";
 
 // GET /api/admin/exams/[examId]/questions
 // Returns this exam's attached questions, in this exam's order - pulled
@@ -34,6 +39,9 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ examId
 }
 
 interface NewQuestionInput {
+  // Question group. When omitted, a question created from inside an exam is
+  // filed under that exam's title (same rule as the exam's CSV import).
+  group?: string;
   text?: string;
   type?: string;
   marks?: number;
@@ -108,9 +116,21 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
   }
 
   // --- Validate new questions up front, before writing anything ------
+  // Resolved once: either the exam's title or whatever the caller asked for,
+  // joined to an existing group of the same name when there is one.
+  const defaultGroup = await resolveGroupName(
+    normalizeGroupName(exam.title).slice(0, GROUP_MAX_LENGTH),
+  );
+  const groupFor = async (input: NewQuestionInput) => {
+    const requested = normalizeGroupName(input.group).slice(0, GROUP_MAX_LENGTH);
+    return requested ? await resolveGroupName(requested) : defaultGroup;
+  };
+  const groups = await Promise.all(newQuestionInputs.map(groupFor));
+
   const candidates: IQuestion[] = newQuestionInputs.map(
-    (input) =>
+    (input, index) =>
       new Question({
+        group: groups[index],
         text: input.text,
         type: input.type,
         marks: input.marks,

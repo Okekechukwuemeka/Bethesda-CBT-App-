@@ -43,7 +43,10 @@ const emptyPassageForm: PassageInput = {
 // the status messages produced here (passage created/updated/deleted)
 // funnel through the one showStatus/statusMessage that page.tsx already
 // renders, rather than needing a second status region on the page.
-export const usePassages = (showStatus: ShowStatus) => {
+export const usePassages = (
+  showStatus: ShowStatus,
+  apiBase: string = "/api/admin/passages",
+) => {
   const [passages, setPassages] = useState<Passage[]>([]);
   const [isLoadingPassages, setIsLoadingPassages] = useState(true);
   const [passagesError, setPassagesError] = useState<string | null>(null);
@@ -73,7 +76,7 @@ export const usePassages = (showStatus: ShowStatus) => {
       if (subject) params.set("subject", subject);
       if (classLevel) params.set("class", classLevel);
 
-      const res = await fetch(`/api/admin/passages?${params.toString()}`);
+      const res = await fetch(`${apiBase}?${params.toString()}`);
       if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to load passages"));
       const { passages: apiPassages } = await res.json();
       setPassages(apiPassages);
@@ -82,7 +85,7 @@ export const usePassages = (showStatus: ShowStatus) => {
     } finally {
       setIsLoadingPassages(false);
     }
-  }, []);
+  }, [apiBase]);
 
   useEffect(() => {
     fetchPassagesList();
@@ -167,9 +170,7 @@ export const usePassages = (showStatus: ShowStatus) => {
 
       setIsSavingPassage(true);
       try {
-        const url = editingPassage
-          ? `/api/admin/passages/${editingPassage._id}`
-          : "/api/admin/passages";
+        const url = editingPassage ? `${apiBase}/${editingPassage._id}` : apiBase;
         const method = editingPassage ? "PATCH" : "POST";
         // PATCH only accepts title/text (see the route) - subject/class/kind
         // are set once at creation and not editable afterward, so this is
@@ -195,7 +196,7 @@ export const usePassages = (showStatus: ShowStatus) => {
         setIsSavingPassage(false);
       }
     },
-    [passageFormData, editingPassage, showStatus, fetchPassagesList],
+    [passageFormData, editingPassage, showStatus, fetchPassagesList, apiBase],
   );
 
   // --- manager: delete ---
@@ -217,7 +218,7 @@ export const usePassages = (showStatus: ShowStatus) => {
     setIsDeletingPassage(true);
     setDeletePassageError(null);
     try {
-      const res = await fetch(`/api/admin/passages/${pendingDeletePassage._id}`, {
+      const res = await fetch(`${apiBase}/${pendingDeletePassage._id}`, {
         method: "DELETE",
       });
       if (!res.ok) {
@@ -236,7 +237,7 @@ export const usePassages = (showStatus: ShowStatus) => {
     } finally {
       setIsDeletingPassage(false);
     }
-  }, [pendingDeletePassage, showStatus, fetchPassagesList]);
+  }, [pendingDeletePassage, showStatus, fetchPassagesList, apiBase]);
 
   return {
     passages,
