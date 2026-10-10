@@ -490,17 +490,11 @@ export async function deleteResultsOfDeletedExam(
 ): Promise<DeleteResultsOutcome> {
   await connectDB();
 
-<<<<<<< HEAD
-  if (await Exam.exists({ _id: examId })) return { ok: false, reason: "exam-still-exists" };
-
-  const sample = await Submission.findOne({ exam: examId, examSnapshot: { $exists: true } })
-=======
   const examObjectId = new mongoose.Types.ObjectId(examId);
 
   if (await Exam.exists({ _id: examObjectId })) return { ok: false, reason: "exam-still-exists" };
 
   const sample = await Submission.findOne({ exam: examObjectId, examSnapshot: { $exists: true } })
->>>>>>> dec5f6225600b421121f5d76dd0fbeba598d6227
     .select("examSnapshot")
     .lean();
   const snapshot = sample?.examSnapshot;
@@ -511,11 +505,7 @@ export async function deleteResultsOfDeletedExam(
     : snapshot.class === className;
   if (!appliesToClass) return { ok: false, reason: "not-found" };
 
-<<<<<<< HEAD
-  const filter: Record<string, unknown> = { exam: examId, examSnapshot: { $exists: true } };
-=======
   const filter: Record<string, unknown> = { exam: examObjectId, examSnapshot: { $exists: true } };
->>>>>>> dec5f6225600b421121f5d76dd0fbeba598d6227
   if (snapshot.isGeneral) {
     const classStudents = await Student.find({ class: className }).select("_id").lean();
     filter.student = { $in: classStudents.map((s) => s._id) };

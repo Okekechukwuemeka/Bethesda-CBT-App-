@@ -11,6 +11,8 @@ import ConfirmDeleteModal from "@/components/admin/questions/ConfirmDeleteModal"
 import BulkDeleteQuestionsModal from "@/components/admin/questions/BulkDeleteQuestionsModal";
 import SubjectFormModal from "@/components/admin/questions/SubjectFormModal";
 import PassageManagerModal from "@/components/admin/questions/PassageManagerModal";
+import Pagination from "@/components/ui/Pagination";
+import MoveToGroupModal from "@/components/questions/MoveToGroupModal";
 
 const QuestionsPage: React.FC = () => {
   const {
@@ -350,12 +352,12 @@ const QuestionsPage: React.FC = () => {
                 className="bg-white text-[#1A3A5C] hover:bg-[#E8F0FE] font-medium px-4 py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-white/60">
                 Move Selected to a Group
               </button>
-            <button
-              type="button"
-              onClick={requestBulkDelete}
-              className="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-red-500/50">
-              Delete Selected
-            </button>
+              <button
+                type="button"
+                onClick={requestBulkDelete}
+                className="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-red-500/50">
+                Delete Selected
+              </button>
             </div>
           </div>
         )}

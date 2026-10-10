@@ -30,7 +30,6 @@ export async function DELETE(
     return NextResponse.json({ error: "Invalid exam ID format" }, { status: 400 });
   }
 
-<<<<<<< HEAD
   await connectDB();
   const outcome = await deleteResultsOfDeletedExam(className, examId);
 
@@ -51,34 +50,4 @@ export async function DELETE(
   }
 
   return NextResponse.json({ deleted: true, deletedCount: outcome.deletedCount });
-=======
-  try {
-    await connectDB();
-    const outcome = await deleteResultsOfDeletedExam(className, examId);
-
-    if (!outcome.ok) {
-      if (outcome.reason === "exam-still-exists") {
-        return NextResponse.json(
-          {
-            error:
-              "This exam still exists. Results can only be deleted here once the exam itself has been deleted.",
-          },
-          { status: 409 },
-        );
-      }
-      return NextResponse.json(
-        { error: "No saved results from a deleted exam were found for this class." },
-        { status: 404 },
-      );
-    }
-
-    return NextResponse.json({ deleted: true, deletedCount: outcome.deletedCount });
-  } catch (error) {
-    // Without this, any thrown error became an empty 500 and the UI could
-    // only show a generic message. Log the real cause and return it.
-    console.error("[DELETE results] failed:", error);
-    const message = error instanceof Error ? error.message : "Failed to delete results";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
->>>>>>> dec5f6225600b421121f5d76dd0fbeba598d6227
 }
