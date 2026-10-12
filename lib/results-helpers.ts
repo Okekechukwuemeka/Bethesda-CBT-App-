@@ -61,11 +61,34 @@ export function objectiveTotalMarks(
 }
 
 // Sum of marks the auto-grader awarded on this submission's MCQ answers.
-export function objectiveScoreFromAnswers(answers: AnswerLean[] | undefined): number {
-  return (answers ?? []).reduce(
-    (sum, a) => (typeof a.isCorrect === "boolean" ? sum + (a.marksAwarded ?? 0) : sum),
-    0,
-  );
+//
+// Hardened so it can never report more than the MCQ section is worth:
+//  - each question is counted at most once (duplicate answer records for the
+//    same question are ignored),
+//  - when `validQuestionIds` is given, answers to questions that are NOT part
+//    of the exam's current MCQ set are ignored (e.g. the question list was
+//    edited/replaced after the student started - typical with a rescheduled
+//    exam - leaving stale graded answers behind),
+//  - when `maxTotal` is given (> 0), the result is clamped to it as a last
+//    line of defence, so "18/15" can never be displayed or exported.
+export function objectiveScoreFromAnswers(
+  answers: (AnswerLean & { question?: { toString(): string } | string | null })[] | undefined,
+  opts: { validQuestionIds?: Set<string>; maxTotal?: number } = {},
+): number {
+  const seen = new Set<string>();
+  let sum = 0;
+  for (const a of answers ?? []) {
+    if (typeof a.isCorrect !== "boolean") continue;
+    const qid = a.question ? a.question.toString() : undefined;
+    if (qid) {
+      if (seen.has(qid)) continue;
+      seen.add(qid);
+      if (opts.validQuestionIds && !opts.validQuestionIds.has(qid)) continue;
+    }
+    sum += a.marksAwarded ?? 0;
+  }
+  const { maxTotal } = opts;
+  return maxTotal && maxTotal > 0 ? Math.min(sum, maxTotal) : sum;
 }
 
 interface SubmissionLean {
@@ -341,6 +364,9 @@ export interface ExamResultsContext {
   // script answers Q1, Q2...).
   theoryQuestionIds: string[];
   objectiveTotal: number;
+  // Ids of the exam's current Objective questions. Undefined for a deleted
+  // exam (the snapshot doesn't keep them) - scoring then relies on the clamp.
+  objectiveQuestionIds?: string[];
 }
 
 interface PopulatedExamForResults {
@@ -390,6 +416,9 @@ export async function loadExamResultsContext(examId: string): Promise<ExamResult
       theoryQuestionIds,
       // Only ever read for Mixed exams; cheap either way.
       objectiveTotal,
+      objectiveQuestionIds: [...metaById.entries()]
+        .filter(([, m]) => m.type === "Objective")
+        .map(([id]) => id),
     };
   }
 
@@ -427,6 +456,7 @@ export async function buildStudentScripts(
   // auto-graded already - expose it so the sheet/modal can show it.
   const isMixed = ctx.type === "Mixed";
   const objectiveTotal = isMixed ? ctx.objectiveTotal : 0;
+  const objectiveIds = ctx.objectiveQuestionIds ? new Set(ctx.objectiveQuestionIds) : undefined;
 
   const students = await Student.find({ class: className, isActive: true })
     .select("firstName lastName admissionNumber")
@@ -462,7 +492,10 @@ export async function buildStudentScripts(
       answers: theoryQuestionsInOrder.length > 0 ? answers : undefined,
       ...(isMixed && (submission?.status === "Submitted" || isMarked)
         ? {
-            objectiveScore: objectiveScoreFromAnswers(submission?.answers),
+            objectiveScore: objectiveScoreFromAnswers(submission?.answers, {
+              validQuestionIds: objectiveIds,
+              maxTotal: objectiveTotal,
+            }),
             objectiveTotal,
           }
         : {}),

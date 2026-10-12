@@ -56,6 +56,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
     lean: ExamLean;
     isMixed: boolean;
     objectiveTotal: number;
+    objectiveIds?: Set<string>;
     deleted?: { term?: string; academicYear?: string };
   }
   const sources: ExportSource[] = [];
@@ -66,6 +67,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
     // is withheld below - but its auto-graded MCQ part is already known.
     // Needs the attached questions' type/marks to work out the MCQ total.
     let objectiveTotal = 0;
+    let objectiveIds: Set<string> | undefined;
     if (isMixed) {
       const attached = await Question.find({
         _id: { $in: (exam.questions ?? []).map((q) => q.question) },
@@ -73,12 +75,16 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
         .select("type marks")
         .lean();
       objectiveTotal = objectiveTotalMarks(attached.map((question) => ({ question })));
+      objectiveIds = new Set(
+        attached.filter((q) => q.type === "Objective").map((q) => q._id.toString()),
+      );
     }
     sources.push({
       examId: exam._id.toString(),
       lean: exam as unknown as ExamLean,
       isMixed,
       objectiveTotal,
+      objectiveIds,
     });
   }
 
@@ -100,7 +106,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
     });
   }
 
-  for (const { examId, lean, isMixed, objectiveTotal, deleted } of sources) {
+  for (const { examId, lean, isMixed, objectiveTotal, objectiveIds, deleted } of sources) {
     const submissions = await Submission.find({ exam: examId })
       .select(isMixed ? "student status score totalMarks answers" : "student status score totalMarks")
       .lean();
@@ -136,8 +142,12 @@ export async function GET(req: NextRequest, context: { params: Promise<{ classNa
         ...(isMixed && (submission?.status === "Submitted" || isMarked)
           ? {
               objectiveScore: objectiveScoreFromAnswers(
-                (submission as { answers?: { isCorrect?: boolean; marksAwarded?: number }[] })
-                  .answers,
+                (
+                  submission as {
+                    answers?: { question?: unknown; isCorrect?: boolean; marksAwarded?: number }[];
+                  }
+                ).answers as Parameters<typeof objectiveScoreFromAnswers>[0],
+                { validQuestionIds: objectiveIds, maxTotal: objectiveTotal },
               ),
               objectiveTotal,
             }

@@ -55,7 +55,11 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
   if (Array.isArray(body.answers) && body.answers.length > 0) {
     const questionIds = body.answers.map((a) => a.questionId);
     const questions = await Question.find({ _id: { $in: questionIds } });
-    const questionById = new Map(questions.map((q) => [q.id, q]));
+    // Only accept answers for questions that actually belong to this exam.
+    const examQuestionIds = new Set((exam.questions ?? []).map((r) => String(r.question)));
+    const questionById = new Map(
+      questions.filter((q) => examQuestionIds.has(q.id)).map((q) => [q.id, q]),
+    );
 
     for (const incoming of body.answers) {
       const question = questionById.get(incoming.questionId);
@@ -92,6 +96,10 @@ export async function POST(req: NextRequest, context: { params: Promise<{ examId
   submission.totalMarks = exam.totalMarks;
   if (submission.status === "Marked") {
     submission.markedAt = new Date();
+  }
+  // Never let an auto-graded score exceed the exam's total.
+  if (submission.totalMarks > 0 && submission.score > submission.totalMarks) {
+    submission.score = submission.totalMarks;
   }
 
   await submission.save();

@@ -57,7 +57,11 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ examI
 
   const questionIds = body.answers.map((a) => a.questionId);
   const questions = await Question.find({ _id: { $in: questionIds } });
-  const questionById = new Map(questions.map((q) => [q.id, q]));
+  // Only accept answers for questions that actually belong to this exam.
+  const examQuestionIds = new Set((exam.questions ?? []).map((r) => String(r.question)));
+  const questionById = new Map(
+    questions.filter((q) => examQuestionIds.has(q.id)).map((q) => [q.id, q]),
+  );
 
   for (const incoming of body.answers) {
     const question = questionById.get(incoming.questionId);
