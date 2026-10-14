@@ -34,7 +34,6 @@ function resultColumns(subject: SubjectResult): string[] {
       "Admission No.",
       "Student Name",
       "MCQ Score",
-      "MCQ (%)",
       "Theory",
       "Total Score",
       "Status",
@@ -58,13 +57,14 @@ function resultRowValues(subject: SubjectResult, r: ResultRowLike): (string | nu
 
   const hasMcq = r.objectiveScore !== undefined && r.objectiveTotal !== undefined;
   const mcqScore = hasMcq ? `${r.objectiveScore}/${r.objectiveTotal}` : "—";
-  const mcqPct =
-    hasMcq && (r.objectiveTotal ?? 0) > 0
-      ? Math.round(((r.objectiveScore ?? 0) / (r.objectiveTotal ?? 1)) * 100)
-      : "";
 
   let theory = "—";
-  if (r.status === "marked") theory = "Marked";
+  if (r.status === "marked") {
+    // Theory part = total minus the MCQ part, so it needs no extra data.
+    theory = hasMcq
+      ? `${Math.round(((r.score - (r.objectiveScore ?? 0)) + Number.EPSILON) * 100) / 100}/${r.totalMarks - (r.objectiveTotal ?? 0)}`
+      : "Marked";
+  }
   else if (r.status === "pending") theory = "Script submitted - awaiting marking";
   else if (r.status === "in-progress") theory = "In Progress";
   else if (r.status === "not-started") theory = "Did Not Take Exam";
@@ -73,7 +73,6 @@ function resultRowValues(subject: SubjectResult, r: ResultRowLike): (string | nu
     r.admissionNo,
     r.studentName,
     mcqScore,
-    mcqPct,
     theory,
     r.status === "marked" ? `${r.score}/${r.totalMarks}` : "Pending theory marking",
     status,
@@ -219,6 +218,120 @@ export async function generateClassResultsExcel(
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     `${className}_All_Subjects_Results.xlsx`,
   );
+}
+
+// ---------- CSV (everything: MCQ + theory + total) ----------
+// One row per student. Scores are only filled in where they exist: a script
+// still awaiting its theory mark has its MCQ part but a blank theory and
+// total, and the Status column says why. The theory part is worked out as
+// total - MCQ, so the same rows serve the single-exam and whole-class exports.
+const CSV_HEADERS = [
+  "Class",
+  "Subject",
+  "Exam",
+  "Exam Type",
+  "Admission No.",
+  "Student Name",
+  "MCQ Score",
+  "MCQ Total",
+  "Theory Score",
+  "Theory Total",
+  "Total Score",
+  "Total Marks",
+  "Percentage (%)",
+  "Status",
+];
+
+function csvCell(value: string | number): string {
+  const text = String(value);
+  // Quote anything with a comma, quote or line break (and double inner quotes).
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function csvRowValues(
+  className: string,
+  subject: SubjectResult,
+  r: ResultRowLike,
+): (string | number)[] {
+  const total = r.totalMarks > 0 ? r.totalMarks : subject.totalMarks;
+  const marked = r.status === "marked";
+  const sat = r.status !== "not-started" && r.status !== "in-progress";
+
+  let mcqScore: string | number = "";
+  let mcqTotal: string | number = "";
+  let theoryScore: string | number = "";
+  let theoryTotal: string | number = "";
+
+  if (subject.examType === "objective") {
+    mcqTotal = total;
+    if (marked) mcqScore = r.score;
+  } else if (subject.examType === "theory") {
+    theoryTotal = total;
+    if (marked) theoryScore = r.score;
+  } else {
+    const hasMcq = r.objectiveScore !== undefined && r.objectiveTotal !== undefined;
+    if (hasMcq) {
+      mcqScore = r.objectiveScore ?? "";
+      mcqTotal = r.objectiveTotal ?? "";
+    }
+    theoryTotal = Math.max(total - (r.objectiveTotal ?? 0), 0);
+    if (marked) theoryScore = round2(r.score - (r.objectiveScore ?? 0));
+  }
+
+  return [
+    className,
+    subject.subject,
+    subject.examTitle,
+    subject.examType,
+    r.admissionNo,
+    r.studentName,
+    mcqScore,
+    mcqTotal,
+    theoryScore,
+    theoryTotal,
+    marked ? r.score : "",
+    sat || marked ? total : "",
+    marked ? r.percentage : "",
+    STATUS_LABELS[r.status] ?? r.status,
+  ];
+}
+
+function downloadCsv(lines: (string | number)[][], filename: string) {
+  // The byte-order mark makes Excel read names with accents correctly.
+  const text = "\uFEFF" + lines.map((row) => row.map(csvCell).join(",")).join("\r\n");
+  const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function generateResultsCsv(
+  className: string,
+  subject: SubjectResult,
+  students: StudentScript[],
+) {
+  downloadCsv(
+    [CSV_HEADERS, ...students.map((s) => csvRowValues(className, subject, s))],
+    `${className}_${subject.subject}_Results.csv`,
+  );
+}
+
+export function generateClassResultsCsv(
+  className: string,
+  subjects: SubjectResult[],
+  scoresBySubject: Record<string, ClassExportRow[]>,
+) {
+  const rows = subjects.flatMap((subject) =>
+    (scoresBySubject[subject.id] ?? []).map((r) => csvRowValues(className, subject, r)),
+  );
+  downloadCsv([CSV_HEADERS, ...rows], `${className}_All_Subjects_Results.csv`);
 }
 
 function downloadBlob(buffer: ExcelJS.Buffer, type: string, filename: string) {

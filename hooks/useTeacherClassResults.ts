@@ -1,11 +1,17 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import type { StudentScript, SubjectResult } from "@/types/admin-results";
+import type {
+  SaveTheoryScoresResponse,
+  StudentScript,
+  SubjectResult,
+  TheoryScoreEntry,
+} from "@/types/admin-results";
 import {
   generateObjectiveExcel,
   generateAllTheoryScriptsPDF,
   generateTheoryScriptPDF,
+  generateResultsCsv,
 } from "@/lib/resultExport";
 
 interface StatusMessage {
@@ -37,26 +43,38 @@ export const useTeacherClassResults = (className: string) => {
   const triggerRef = useRef<HTMLElement | null>(null);
 
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const [isSavingScores, setIsSavingScores] = useState(false);
 
   const showStatus = useCallback((message: StatusMessage, durationMs = 4000) => {
     setStatusMessage(message);
     setTimeout(() => setStatusMessage(null), durationMs);
   }, []);
 
-  const fetchSubjects = useCallback(async () => {
-    setIsLoading(true);
-    setSubjectsError(null);
-    try {
-      const res = await fetch(`/api/staff/results/${encodeURIComponent(className)}/subjects`);
-      if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to load subject results"));
-      const { subjects: data } = await res.json();
-      setSubjects(data);
-    } catch (err) {
-      setSubjectsError(err instanceof Error ? err.message : "Failed to load subject results.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [className]);
+  // `silent` refreshes the numbers (stats cards, status badges) without
+  // swapping the whole page for the "Loading exams..." message - used after a
+  // save so the screen doesn't flicker or lose its place.
+  const fetchSubjects = useCallback(
+    async (silent = false) => {
+      if (!silent) {
+        setIsLoading(true);
+        setSubjectsError(null);
+      }
+      try {
+        const res = await fetch(`/api/staff/results/${encodeURIComponent(className)}/subjects`);
+        if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to load subject results"));
+        const { subjects: data } = await res.json();
+        setSubjects(data);
+      } catch (err) {
+        // A failed background refresh keeps the numbers already on screen.
+        if (!silent) {
+          setSubjectsError(err instanceof Error ? err.message : "Failed to load subject results.");
+        }
+      } finally {
+        if (!silent) setIsLoading(false);
+      }
+    },
+    [className],
+  );
 
   useEffect(() => {
     fetchSubjects();
@@ -125,6 +143,25 @@ export const useTeacherClassResults = (className: string) => {
     [className, ensureStudentsLoaded, showStatus],
   );
 
+  const exportCsv = useCallback(
+    async (subject: SubjectResult) => {
+      setExportingId(subject.id);
+      try {
+        const students = await ensureStudentsLoaded(subject.id);
+        generateResultsCsv(className, subject, students);
+        showStatus({ type: "success", text: `Downloaded the ${subject.subject} CSV.` });
+      } catch (err) {
+        showStatus({
+          type: "error",
+          text: err instanceof Error ? err.message : "Failed to export the CSV.",
+        });
+      } finally {
+        setExportingId(null);
+      }
+    },
+    [className, ensureStudentsLoaded, showStatus],
+  );
+
   const exportAllScripts = useCallback(
     async (subject: SubjectResult) => {
       setExportingId(subject.id);
@@ -159,6 +196,34 @@ export const useTeacherClassResults = (className: string) => {
     [showStatus],
   );
 
+  // Saves the theory marks a teacher/admin typed in. The server marks each
+  // saved script as Marked and hands back the class's fresh script list; that
+  // replaces the cached list (so the dialog and the exports show the new
+  // scores), and the subject rows are re-fetched so the stats cards and status
+  // badges move from "Awaiting Marking" towards "Completed". Throws on a
+  // request-level failure so the dialog can show it next to the form.
+  const saveTheoryScores = useCallback(
+    async (subject: SubjectResult, entries: TheoryScoreEntry[]): Promise<SaveTheoryScoresResponse> => {
+      setIsSavingScores(true);
+      try {
+        const res = await fetch(`/api/staff/results/${encodeURIComponent(className)}/scores`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ examId: subject.id, scores: entries }),
+        });
+        if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to save theory scores"));
+        const data = (await res.json()) as SaveTheoryScoresResponse;
+
+        setStudentsByExam((prev) => ({ ...prev, [subject.id]: data.students }));
+        if (data.savedCount > 0) await fetchSubjects(true);
+        return data;
+      } finally {
+        setIsSavingScores(false);
+      }
+    },
+    [className, fetchSubjects],
+  );
+
   return {
     className,
     subjects,
@@ -172,9 +237,12 @@ export const useTeacherClassResults = (className: string) => {
     showScriptModal,
     triggerRef,
     exportingId,
+    isSavingScores,
+    saveTheoryScores,
     handleViewScripts,
     closeScriptModal,
     exportExcel,
+    exportCsv,
     exportAllScripts,
     exportSingleScript,
   };

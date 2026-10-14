@@ -23,9 +23,12 @@ const TeacherClassResultsPage: React.FC = () => {
     selectedSubject,
     showScriptModal,
     exportingId,
+    isSavingScores,
+    saveTheoryScores,
     handleViewScripts,
     closeScriptModal,
     exportExcel,
+    exportCsv,
     exportAllScripts,
     exportSingleScript,
   } = useTeacherClassResults(className);
@@ -39,7 +42,7 @@ const TeacherClassResultsPage: React.FC = () => {
         </div>
         <Link
           href="/staff/results"
-          className="bg-[#E8EEF5] hover:bg-[#D5DFE8] text-[#1A3A5C] font-medium px-4 py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/30 flex items-center gap-2 w-fit">
+          className="inline-flex min-h-11 w-fit items-center justify-center gap-2 rounded-lg bg-[#E8EEF5] px-4 py-2 text-sm font-medium text-[#1A3A5C] transition duration-200 hover:bg-[#D5DFE8] focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/30">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
@@ -72,6 +75,7 @@ const TeacherClassResultsPage: React.FC = () => {
             className={className}
             exportingId={exportingId}
             onExportExcel={exportExcel}
+            onExportCsv={exportCsv}
             onExportAllScripts={exportAllScripts}
             onViewScripts={handleViewScripts}
           />
@@ -86,6 +90,8 @@ const TeacherClassResultsPage: React.FC = () => {
         onClose={closeScriptModal}
         onDownloadScript={(student) => selectedSubject && exportSingleScript(selectedSubject, student)}
         onDownloadAll={() => selectedSubject && exportAllScripts(selectedSubject)}
+        onSaveTheoryScores={saveTheoryScores}
+        isSavingScores={isSavingScores}
       />
     </div>
   );

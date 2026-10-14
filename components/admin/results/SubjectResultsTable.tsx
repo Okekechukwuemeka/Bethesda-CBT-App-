@@ -9,6 +9,7 @@ interface SubjectResultsTableProps {
   exportingId: string | null;
   onExportExcel: (subject: SubjectResult) => void;
   onExportAllScripts: (subject: SubjectResult) => void;
+  onExportCsv?: (subject: SubjectResult) => void;
   onViewScripts: (subject: SubjectResult, e: React.MouseEvent<HTMLButtonElement>) => void;
   // Only the admin page passes these. Teachers can view results of a deleted
   // exam but never delete them, so without them no delete button is shown.
@@ -29,6 +30,7 @@ const SubjectResultsTable: React.FC<SubjectResultsTableProps> = ({
   exportingId,
   onExportExcel,
   onExportAllScripts,
+  onExportCsv,
   onViewScripts,
   onDeleteResults,
 }) => {
@@ -60,9 +62,13 @@ const SubjectResultsTable: React.FC<SubjectResultsTableProps> = ({
   const actions = (subject: SubjectResult) => {
     // "mixed" exams need BOTH buttons - a single label switch
     // based only on `=== "theory"` silently drops one of them.
-    const showExcelExport = subject.examType !== "theory";
+    // Theory exams can now be scored too (teachers type the marks in), so
+    // every exam type has a results spreadsheet.
+    const showExcelExport = true;
     const showScriptExport = subject.examType !== "objective";
     const isExporting = exportingId === subject.id;
+    // The CSV holds every score for the exam; name it for what the exam is.
+    const csvLabel = subject.examType === "theory" ? "Download Scores CSV" : "Download MCQ CSV";
 
     return (
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2">
@@ -83,14 +89,24 @@ const SubjectResultsTable: React.FC<SubjectResultsTableProps> = ({
             {isExporting ? "Preparing..." : "Download Results"}
           </button>
         )}
+        {onExportCsv && (
+          <button
+            type="button"
+            onClick={() => onExportCsv(subject)}
+            disabled={isExporting}
+            aria-label={`${csvLabel} for ${subject.subject}, ${subject.examTitle}`}
+            className={`${buttonBase} bg-green-600 hover:bg-green-700 text-white focus:ring-green-500`}>
+            {isExporting ? "Preparing..." : csvLabel}
+          </button>
+        )}
         {showScriptExport && (
           <button
             type="button"
             onClick={() => onExportAllScripts(subject)}
             disabled={isExporting}
-            aria-label={`Download all student scripts for ${subject.subject}, ${subject.examTitle}`}
+            aria-label={`Download theory scripts for all students, ${subject.subject}, ${subject.examTitle}`}
             className={`${buttonBase} bg-purple-600 hover:bg-purple-700 text-white focus:ring-purple-500`}>
-            {isExporting ? "Preparing..." : "Download Scripts"}
+            {isExporting ? "Preparing..." : "Download Theory Scripts"}
           </button>
         )}
         {subject.examDeleted && onDeleteResults && (

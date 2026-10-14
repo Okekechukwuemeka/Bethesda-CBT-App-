@@ -73,6 +73,16 @@ export interface ISubmission extends Document {
   submittedAt?: Date;
   markedAt?: Date;
   markedBy?: mongoose.Types.ObjectId;
+  // The theory (essay) part of the score, typed in by a teacher or admin after
+  // they have marked the downloaded script. Only ever present on Theory and
+  // Mixed submissions that have been marked; `score` is then the auto-graded
+  // MCQ part (Mixed only) plus this. Absent on every older submission, so
+  // existing data is unaffected.
+  theoryScore?: number;
+  // Who entered theoryScore. Not a ref: it is an Admin id or a Staff id
+  // depending on `theoryMarkedByRole`.
+  theoryMarkedBy?: mongoose.Types.ObjectId;
+  theoryMarkedByRole?: "admin" | "staff";
   // Last time the offline-sync endpoint successfully wrote answers for
   // this submission. Purely informational (e.g. for an admin "last seen"
   // column) - the timer itself is always derived from startedAt, never
@@ -141,6 +151,9 @@ const submissionSchema = new Schema<ISubmission>(
     submittedAt: Date,
     markedAt: Date,
     markedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
+    theoryScore: { type: Number, min: 0 },
+    theoryMarkedBy: { type: Schema.Types.ObjectId },
+    theoryMarkedByRole: { type: String, enum: ["admin", "staff"] },
     lastSyncedAt: Date,
     examSnapshot: { type: examSnapshotSchema, default: undefined },
   },
@@ -155,8 +168,9 @@ submissionSchema.index({ "examSnapshot.class": 1 });
 submissionSchema.index({ "examSnapshot.classes": 1 });
 
 // Auto-grade objective answers and roll the score up whenever answers change.
-// Theory answers are left alone here since those are scored manually via
-// markedBy/markedAt once a human reviews the uploaded script.
+// Theory answers are left alone here since those are scored manually: a
+// teacher or admin types the theory score in after marking the script (see
+// applyTheoryScores in lib/results-helpers.ts).
 submissionSchema.pre("save", async function (this: ISubmission) {
   if (!this.isModified("answers") || this.answers.length === 0) return;
 
@@ -167,12 +181,15 @@ submissionSchema.pre("save", async function (this: ISubmission) {
 });
 
 // Dev-server hot reload keeps the FIRST compiled Submission model in
-// mongoose.models forever, so the newly added examSnapshot path would be
-// silently dropped from writes until the server is restarted - which would
-// make a snapshot "succeed" without storing anything. Discard a cached model
-// that predates it so the current schema is registered (same approach as
+// mongoose.models forever, so a newly added path (examSnapshot, theoryScore)
+// would be silently dropped from writes until the server is restarted - which
+// would make a save "succeed" without storing anything. Discard a cached model
+// that predates them so the current schema is registered (same approach as
 // the Exam model).
-if (models.Submission && !models.Submission.schema.path("examSnapshot")) {
+if (
+  models.Submission &&
+  (!models.Submission.schema.path("examSnapshot") || !models.Submission.schema.path("theoryScore"))
+) {
   mongoose.deleteModel("Submission");
 }
 

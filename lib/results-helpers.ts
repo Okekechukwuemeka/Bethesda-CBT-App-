@@ -13,6 +13,8 @@ import type {
   ScriptStatus,
   StudentScript,
   SubjectResult,
+  TheoryScoreEntry,
+  TheoryScoreFailure,
 } from "@/types/admin-results";
 
 export function toLowerExamType(type: string): ExamTypeLower {
@@ -360,6 +362,8 @@ export interface ExamResultsContext {
   // Null only for a legacy exam whose subject wasn't a real reference.
   subjectId: string | null;
   deleted: boolean;
+  // Total marks of the whole exam (from the snapshot once it has been deleted).
+  totalMarks: number;
   // Theory questions in presentation order (this order is what numbers the
   // script answers Q1, Q2...).
   theoryQuestionIds: string[];
@@ -373,6 +377,7 @@ interface PopulatedExamForResults {
   _id: mongoose.Types.ObjectId;
   title: string;
   type: string;
+  totalMarks?: number;
   subject?: unknown;
   questions?: {
     question?: { _id: mongoose.Types.ObjectId; type: string; marks: number } | null;
@@ -413,6 +418,7 @@ export async function loadExamResultsContext(examId: string): Promise<ExamResult
       type: exam.type,
       subjectId: mongoose.Types.ObjectId.isValid(rawSubject) ? rawSubject : null,
       deleted: false,
+      totalMarks: exam.totalMarks ?? 0,
       theoryQuestionIds,
       // Only ever read for Mixed exams; cheap either way.
       objectiveTotal,
@@ -434,9 +440,22 @@ export async function loadExamResultsContext(examId: string): Promise<ExamResult
     type: snapshot.type,
     subjectId: snapshot.subject ? snapshot.subject.toString() : null,
     deleted: true,
+    totalMarks: snapshot.totalMarks ?? 0,
     theoryQuestionIds: (snapshot.theoryQuestionIds ?? []).map((id) => id.toString()),
     objectiveTotal: snapshot.objectiveTotal ?? 0,
   };
+}
+
+// The most a marker can award for the theory part of this exam. A Theory exam
+// is all theory; a Mixed exam is worth whatever is left once the MCQ section
+// (already auto-graded) is taken off. `submissionTotal` is the total recorded
+// on the student's own submission when they handed in - it wins over the
+// exam's current total so a later edit to the exam can't move the goalposts
+// for scripts already written.
+export function theoryMarksAvailable(ctx: ExamResultsContext, submissionTotal?: number): number {
+  if (ctx.type === "Objective") return 0;
+  const total = submissionTotal && submissionTotal > 0 ? submissionTotal : ctx.totalMarks;
+  return ctx.type === "Mixed" ? Math.max(total - ctx.objectiveTotal, 0) : total;
 }
 
 // One StudentScript per active student in the class, whether or not they
@@ -457,6 +476,7 @@ export async function buildStudentScripts(
   const isMixed = ctx.type === "Mixed";
   const objectiveTotal = isMixed ? ctx.objectiveTotal : 0;
   const objectiveIds = ctx.objectiveQuestionIds ? new Set(ctx.objectiveQuestionIds) : undefined;
+  const hasTheoryPart = ctx.type === "Theory" || ctx.type === "Mixed";
 
   const students = await Student.find({ class: className, isActive: true })
     .select("firstName lastName admissionNumber")
@@ -464,7 +484,7 @@ export async function buildStudentScripts(
     .lean();
 
   const submissions = await Submission.find({ exam: ctx.examId })
-    .select("student score totalMarks status submittedAt answers")
+    .select("student score totalMarks status submittedAt answers theoryScore")
     .lean();
   const submissionByStudent = new Map(submissions.map((s) => [s.student.toString(), s]));
 
@@ -499,8 +519,153 @@ export async function buildStudentScripts(
             objectiveTotal,
           }
         : {}),
+      // Only students who have handed in can be given a theory score.
+      ...(hasTheoryPart && (submission?.status === "Submitted" || isMarked)
+        ? {
+            theoryScore: typeof submission?.theoryScore === "number" ? submission.theoryScore : null,
+            theoryTotal: theoryMarksAvailable(ctx, submission?.totalMarks),
+          }
+        : {}),
     };
   });
+}
+
+// ---- Entering theory scores ---------------------------------------------
+// MCQ answers are scored by the platform the moment a student submits. The
+// theory part is marked by a teacher on the downloaded script, who then types
+// the mark in here. Saving a mark records it, adds it to the MCQ score (Mixed
+// exams), and flips the submission to "Marked" - which is what moves the
+// Results page stats (Awaiting Marking -> Completed) and lets the student see
+// their score. Only new optional fields and the existing score/status are
+// written, so nothing already stored is altered for a script nobody marks.
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+export interface ApplyTheoryScoresResult {
+  savedCount: number;
+  failures: TheoryScoreFailure[];
+}
+
+// `entries` are validated one by one: a bad row is reported in `failures` and
+// the good rows are still saved, so one typo doesn't throw away a teacher's
+// whole sheet of marks. The caller is responsible for authorising `className`
+// and the exam (admin: anything; teacher: assigned subject + class only).
+export async function applyTheoryScores(
+  className: ClassLevel,
+  ctx: ExamResultsContext,
+  entries: TheoryScoreEntry[],
+  marker: { id: string; role: "admin" | "staff" },
+): Promise<ApplyTheoryScoresResult> {
+  await connectDB();
+
+  const failures: TheoryScoreFailure[] = [];
+  const fail = (studentId: string, error: string) => failures.push({ studentId, error });
+
+  const classStudents = await Student.find({ class: className, isActive: true })
+    .select("_id firstName lastName")
+    .lean();
+  const nameById = new Map(
+    classStudents.map((s) => [s._id.toString(), `${s.firstName} ${s.lastName}`]),
+  );
+
+  // Later entries for the same student win.
+  const byStudent = new Map<string, TheoryScoreEntry>();
+  for (const entry of entries) byStudent.set(entry.studentId, entry);
+
+  const wanted = [...byStudent.keys()].filter((id) => nameById.has(id));
+  const submissions = await Submission.find({
+    exam: ctx.examId,
+    student: { $in: wanted },
+  })
+    .select("student status totalMarks answers")
+    .lean();
+  const submissionByStudent = new Map(submissions.map((s) => [s.student.toString(), s]));
+
+  const objectiveIds = ctx.objectiveQuestionIds ? new Set(ctx.objectiveQuestionIds) : undefined;
+  const markerId = mongoose.Types.ObjectId.isValid(marker.id)
+    ? new mongoose.Types.ObjectId(marker.id)
+    : undefined;
+  const now = new Date();
+
+  const ops: mongoose.AnyBulkWriteOperation<(typeof submissions)[number]>[] = [];
+
+  for (const [studentId, entry] of byStudent) {
+    const name = nameById.get(studentId);
+    if (!name) {
+      fail(studentId, "This student is not an active member of this class.");
+      continue;
+    }
+    const submission = submissionByStudent.get(studentId);
+    if (!submission || (submission.status !== "Submitted" && submission.status !== "Marked")) {
+      fail(studentId, `${name} has not submitted this exam yet, so there is nothing to mark.`);
+      continue;
+    }
+
+    const submissionTotal = submission.totalMarks > 0 ? submission.totalMarks : ctx.totalMarks;
+    const objectivePart =
+      ctx.type === "Mixed"
+        ? objectiveScoreFromAnswers(submission.answers, {
+            validQuestionIds: objectiveIds,
+            maxTotal: ctx.objectiveTotal,
+          })
+        : 0;
+
+    if (entry.theoryScore === null) {
+      // Take a mark back: the script returns to "Awaiting Marking".
+      ops.push({
+        updateOne: {
+          filter: { _id: submission._id },
+          update: {
+            $set: { status: "Submitted", score: objectivePart },
+            $unset: {
+              theoryScore: "",
+              markedAt: "",
+              theoryMarkedBy: "",
+              theoryMarkedByRole: "",
+            },
+          },
+        },
+      });
+      continue;
+    }
+
+    const value = entry.theoryScore;
+    const max = theoryMarksAvailable(ctx, submission.totalMarks);
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      fail(studentId, `${name}: the theory score must be a number.`);
+      continue;
+    }
+    if (value < 0) {
+      fail(studentId, `${name}: the theory score cannot be negative.`);
+      continue;
+    }
+    if (value > max) {
+      fail(studentId, `${name}: the theory score cannot be more than ${max}.`);
+      continue;
+    }
+
+    const theoryScore = round2(value);
+    ops.push({
+      updateOne: {
+        filter: { _id: submission._id },
+        update: {
+          $set: {
+            theoryScore,
+            score: round2(Math.min(objectivePart + theoryScore, submissionTotal)),
+            totalMarks: submissionTotal,
+            status: "Marked",
+            markedAt: now,
+            ...(markerId ? { theoryMarkedBy: markerId, theoryMarkedByRole: marker.role } : {}),
+          },
+        },
+      },
+    });
+  }
+
+  if (ops.length > 0) await Submission.bulkWrite(ops);
+  return { savedCount: ops.length, failures };
 }
 
 export type DeleteResultsOutcome =

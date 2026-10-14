@@ -54,6 +54,33 @@ export interface StudentScript {
   // marked, but the MCQ part is already known the moment the student submits.
   objectiveScore?: number;
   objectiveTotal?: number;
+  // Theory (essay) part, for Theory and Mixed exams only. `theoryTotal` is the
+  // most a marker can award for it (the whole exam for a Theory exam, the exam
+  // minus the MCQ section for a Mixed one). `theoryScore` is the mark a teacher
+  // or admin has already entered, or null while the script is still unmarked.
+  // Only set for students who have submitted.
+  theoryScore?: number | null;
+  theoryTotal?: number;
+}
+
+export interface TheoryScoreEntry {
+  studentId: string;
+  // null removes a previously entered score (the script goes back to
+  // "Awaiting Marking").
+  theoryScore: number | null;
+}
+
+export interface TheoryScoreFailure {
+  studentId: string;
+  error: string;
+}
+
+export interface SaveTheoryScoresResponse {
+  savedCount: number;
+  failures: TheoryScoreFailure[];
+  // The class's refreshed script list for the exam, so the screen can update
+  // without a second request.
+  students: StudentScript[];
 }
 
 export interface ClassExportRow {

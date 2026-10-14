@@ -25,12 +25,16 @@ const ClassResultsPage: React.FC = () => {
     showScriptModal,
     exportingId,
     isExportingClass,
+    isSavingScores,
+    saveTheoryScores,
     handleViewScripts,
     closeScriptModal,
     exportExcel,
+    exportCsv,
     exportAllScripts,
     exportSingleScript,
     exportClassResults,
+    exportClassCsv,
     resultsPendingDelete,
     isDeletingResults,
     requestDeleteResults,
@@ -40,37 +44,45 @@ const ClassResultsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-bold text-[#1A3A5C]">{className} Results</h1>
           <p className="text-[#5A7A9A] text-sm">View and manage subject results</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        {/* Equal-width, equal-height buttons in one tidy row (stacked on
+            phones), instead of buttons of different widths wrapping raggedly. */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:max-w-3xl">
           <Link
             href="/admin/results"
-            className="bg-[#E8EEF5] hover:bg-[#D5DFE8] text-[#1A3A5C] font-medium px-4 py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/30 flex items-center gap-2">
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#E8EEF5] px-4 py-2 text-sm font-medium text-[#1A3A5C] transition duration-200 hover:bg-[#D5DFE8] focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/30">
             <svg
-              className="w-5 h-5"
+              className="h-5 w-5 shrink-0"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
               aria-hidden="true">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10 19l-7-7m0 0l7-7m-7 7h18"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
             Back to Classes
           </Link>
           {subjects.length > 0 && (
             <button
               type="button"
+              onClick={exportClassCsv}
+              disabled={isExportingClass}
+              aria-label="Download class CSV for all subjects"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-md transition duration-200 hover:bg-green-700 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-green-500/50 disabled:opacity-50">
+              {isExportingClass ? "Preparing..." : "Download Class CSV"}
+            </button>
+          )}
+          {subjects.length > 0 && (
+            <button
+              type="button"
               onClick={exportClassResults}
               disabled={isExportingClass}
-              className="bg-[#1A3A5C] hover:bg-[#14304D] text-white font-medium px-4 py-2 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50 disabled:opacity-50">
-              {isExportingClass ? "Preparing..." : "Download Class Results (All Subjects)"}
+              aria-label="Download class results spreadsheet for all subjects"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#1A3A5C] px-4 py-2 text-sm font-medium text-white shadow-md transition duration-200 hover:bg-[#14304D] hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#2B6CB0]/50 disabled:opacity-50">
+              {isExportingClass ? "Preparing..." : "Download Class Results"}
             </button>
           )}
         </div>
@@ -108,6 +120,7 @@ const ClassResultsPage: React.FC = () => {
             className={className}
             exportingId={exportingId}
             onExportExcel={exportExcel}
+            onExportCsv={exportCsv}
             onExportAllScripts={exportAllScripts}
             onViewScripts={handleViewScripts}
             onDeleteResults={requestDeleteResults}
@@ -125,6 +138,8 @@ const ClassResultsPage: React.FC = () => {
           selectedSubject && exportSingleScript(selectedSubject, student)
         }
         onDownloadAll={() => selectedSubject && exportAllScripts(selectedSubject)}
+        onSaveTheoryScores={saveTheoryScores}
+        isSavingScores={isSavingScores}
       />
 
       <ConfirmDialog
