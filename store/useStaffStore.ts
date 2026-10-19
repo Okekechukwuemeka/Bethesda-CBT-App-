@@ -276,7 +276,7 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
           body: JSON.stringify(payload),
         });
         if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to create staff member"));
-        const { staff, tempPassword } = await res.json();
+        const { staff, tempPassword, emailStatus, emailedTo } = await res.json();
         set((state) => ({
           staff: [fromApiStaff(staff), ...state.staff],
           statusMessage: {
@@ -288,6 +288,8 @@ export const useStaffStore = create<StaffStoreState>((set, get) => ({
             staffId: staff.staffId,
             username: staff.username,
             tempPassword,
+            emailStatus,
+            emailedTo,
           },
           isCreatedModalOpen: true,
         }));

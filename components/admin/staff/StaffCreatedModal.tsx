@@ -13,8 +13,23 @@ const StaffCreatedModal: React.FC = () => {
       <div className="space-y-4">
         <p className="text-sm text-[#4A6A8A]">
           <strong className="text-[#1A3A5C]">{createdStaffInfo.name}</strong> has been added.
-          Share these login details with them now — the password won't be shown again.
+          {createdStaffInfo.emailStatus === "sent"
+            ? `Their login details have been emailed to ${createdStaffInfo.emailedTo}. The password won't be shown again after you close this window.`
+            : "Share these login details with them now — the password won't be shown again."}
         </p>
+        {createdStaffInfo.emailStatus === "failed" && (
+          <p
+            role="alert"
+            className="text-sm font-medium text-red-800 bg-red-100 border border-red-300 rounded-lg p-3">
+            The email could not be sent. Please give these details to them yourself.
+          </p>
+        )}
+        {createdStaffInfo.emailStatus === "no-email" && (
+          <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3">
+            No email address was entered, so nothing was emailed. Without one they also cannot use
+            Forgot Password.
+          </p>
+        )}
         <div className="bg-[#F8FAFE] border border-[#C5D8EC] rounded-lg p-4 space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-[#5A7A9A]">Staff ID</span>

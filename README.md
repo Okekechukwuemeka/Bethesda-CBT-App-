@@ -33,6 +33,17 @@ Access to each portal is enforced by role-based middleware, so a student session
 - **Offline-resilient exam taking** — exam progress is persisted to IndexedDB (via `idb`) and synced back to the server, so a dropped connection mid-exam doesn't lose answers
 - View results after submission
 
+## Password recovery
+
+- **Admin and staff** use *Forgot Password* (`/admin/forgot-password`, `/staff/forgot-password`). They enter their username or registered email; a 6-digit code (valid 10 minutes, single use, 5 wrong guesses, 60 s between emails, 5 emails/hour) is emailed to the account's registered address, then they choose a new password. Codes are stored only as keyed hashes. Responses never reveal whether an account exists.
+- **Students** cannot recover their own password. An admin resets it from the Students list or the student's profile; the new temporary password is shown once.
+- Admins without a recovery email set one under **Account** (`/admin/account`). Staff emails are set in the staff form.
+- Email uses a Gmail account with a Google **App Password** (needs 2-Step Verification on that account). Credentials come only from the environment variables above.
+
+## Student profiles
+
+Admins open `/admin/students/[id]` (click a student's name) to see their details, examination history grouped by term (completed / partially marked / awaiting marking / in progress), a per-examination subject breakdown at `/admin/students/[id]/examinations/[key]`, and their upcoming exams. All of it is read from the database on each request.
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -98,6 +109,11 @@ NEXTAUTH_URL=http://localhost:3000
 # One-time secret used to bootstrap the very first admin account
 # (only required until an admin exists — see "First-time Setup" below)
 ADMIN_SETUP_SECRET=choose_a_temporary_secret
+
+# Email via Gmail SMTP (Nodemailer) - see "Password recovery" below
+GMAIL_USER=your.school.account@gmail.com
+GMAIL_APP_PASSWORD=your_google_app_password
+MAIL_FROM_NAME=Bethesda CBT
 ```
 
 ### First-time Setup

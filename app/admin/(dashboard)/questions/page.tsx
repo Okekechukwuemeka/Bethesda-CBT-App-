@@ -520,4 +520,4 @@ const QuestionsPage: React.FC = () => {
   );
 };
 
-export default QuestionsPage;
+export default QuestionsPage;

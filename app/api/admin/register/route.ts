@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/api-guards";
 import { Admin } from "@/lib/models/admin.model";
 
 // POST /api/admin/register
-// Body: { username, password, firstName, lastName, setupSecret? }
+// Body: { username, password, firstName, lastName, email?, setupSecret? }
 //
 // Two modes, chosen automatically based on whether any admin exists yet:
 //
@@ -48,6 +48,9 @@ export async function POST(req: NextRequest) {
       password: body.password,
       firstName: body.firstName,
       lastName: body.lastName,
+      // Optional recovery email for the "forgot password" flow; an admin
+      // without one can add it later from /admin/account.
+      email: typeof body.email === "string" && body.email.trim() ? body.email : undefined,
     });
 
     return NextResponse.json(
@@ -57,6 +60,7 @@ export async function POST(req: NextRequest) {
           username: admin.username,
           firstName: admin.firstName,
           lastName: admin.lastName,
+          email: admin.email,
         },
       },
       { status: 201 },
@@ -64,8 +68,9 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to register admin";
     const isDuplicate = message.includes("duplicate key");
+    const duplicateField = message.includes("email") ? "email address" : "username";
     return NextResponse.json(
-      { error: isDuplicate ? "That username is already taken" : message },
+      { error: isDuplicate ? `That ${duplicateField} is already taken` : message },
       { status: 400 },
     );
   }

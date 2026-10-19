@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { signIn } from "next-auth/react";
 import Input from "@/components/auth/Input";
 import PasswordInput from "@/components/auth/PasswordInput";
@@ -104,7 +105,12 @@ const StaffLoginPage: React.FC = () => {
               </LoadingButton>
             </form>
 
-            <div className="mt-6 text-center">
+            <div className="mt-6 space-y-3 text-center">
+              <Link
+                href="/staff/forgot-password"
+                className="text-sm text-[#2B6CB0] hover:text-[#1A3A5C] font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] rounded px-1 transition">
+                Forgot Password?
+              </Link>
               <p className="text-xs text-[#8A9CAE] border-t border-[#E8EEF5] pt-3">
                 Secure staff access &copy; {new Date().getFullYear()}
               </p>

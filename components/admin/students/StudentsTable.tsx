@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import StudentStatusBadge from "./StudentStatusBadge";
 import type { Student } from "@/hooks/useStudents";
 
@@ -6,6 +7,7 @@ interface StudentsTableProps {
   students: Student[];
   onEdit: (student: Student, e: React.MouseEvent<HTMLButtonElement>) => void;
   onDelete: (student: Student, e: React.MouseEvent<HTMLButtonElement>) => void;
+  onResetPassword: (student: Student) => void;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: () => void;
@@ -15,6 +17,7 @@ const StudentsTable: React.FC<StudentsTableProps> = ({
   students,
   onEdit,
   onDelete,
+  onResetPassword,
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
@@ -142,8 +145,13 @@ const StudentsTable: React.FC<StudentsTableProps> = ({
                 <td className="px-4 py-3 text-sm font-medium text-[#1A3A5C]">
                   {student.admissionNo}
                 </td>
-                <td className="px-4 py-3 text-sm text-[#4A6A8A]">
-                  {student.firstName} {student.lastName}
+                <td className="px-4 py-3 text-sm">
+                  <Link
+                    href={`/admin/students/${student.id}`}
+                    className="text-[#2B6CB0] hover:text-[#1A3A5C] font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] rounded px-0.5"
+                    aria-label={`View profile of ${student.firstName} ${student.lastName}`}>
+                    {student.firstName} {student.lastName}
+                  </Link>
                 </td>
                 <td className="px-4 py-3 text-sm text-[#4A6A8A]">{student.class}</td>
                 <td className="px-4 py-3 text-sm text-[#4A6A8A]">{student.gender}</td>
@@ -167,6 +175,26 @@ const StudentsTable: React.FC<StudentsTableProps> = ({
                           strokeLinejoin="round"
                           strokeWidth={2}
                           d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onResetPassword(student)}
+                      className="text-amber-600 hover:text-amber-800 p-1 rounded focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      aria-label={`Reset password for ${student.firstName} ${student.lastName}`}
+                      title="Reset password">
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
                         />
                       </svg>
                     </button>

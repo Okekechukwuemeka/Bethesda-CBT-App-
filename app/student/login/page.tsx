@@ -123,13 +123,12 @@ const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* Support Link */}
+          {/* Students cannot recover their own password - an admin resets it. */}
           <div className="mt-6 text-center">
-            <a
-              href="#"
-              className="text-sm text-[#2B6CB0] hover:text-[#1A3A5C] font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-[#2B6CB0] rounded px-1">
-              Need help signing in?
-            </a>
+            <p className="text-sm text-[#4A6A8A]">
+              Forgot your password? Ask your teacher or the school administrator to reset it
+              for you.
+            </p>
           </div>
         </div>
       </div>

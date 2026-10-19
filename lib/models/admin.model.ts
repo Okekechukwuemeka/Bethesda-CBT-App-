@@ -6,6 +6,10 @@ export interface IAdmin extends Document {
   password: string;
   firstName: string;
   lastName: string;
+  // Recovery address for the "forgot password" flow. Optional so every admin
+  // that already exists keeps working untouched; an admin sets theirs from
+  // the Account page (/admin/account).
+  email?: string;
   isActive: boolean;
   lastLogin?: Date;
   createdAt: Date;
@@ -31,10 +35,23 @@ const adminSchema = new Schema<IAdmin>(
     },
     firstName: { type: String, required: [true, "First name is required"], trim: true },
     lastName: { type: String, required: [true, "Last name is required"], trim: true },
+    email: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Please enter a valid email address"],
+    },
     isActive: { type: Boolean, default: true },
     lastLogin: Date,
   },
   { timestamps: true },
+);
+
+// One admin per recovery email. Partial (only documents that actually have an
+// email) so the many existing admins WITHOUT one never collide with each other.
+adminSchema.index(
+  { email: 1 },
+  { unique: true, partialFilterExpression: { email: { $type: "string" } } },
 );
 
 adminSchema.pre("save", async function (this: IAdmin) {

@@ -10,6 +10,9 @@ import DeleteStudentModal from "@/components/admin/students/DeleteStudentModal";
 import BulkImportModal from "@/components/admin/students/BulkImportModal";
 import StudentCreatedModal from "@/components/admin/students/StudentCreatedModal";
 import BulkImportResultsModal from "@/components/admin/students/BulkImportResultsModal";
+import StudentPasswordReset, {
+  type ResettableStudent,
+} from "@/components/admin/students/StudentPasswordReset";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useStudents } from "@/hooks/useStudents";
 
@@ -74,6 +77,9 @@ const StudentsPage: React.FC = () => {
     confirmBulkDelete,
   } = useStudents();
 
+  // Admin-initiated password reset (students can't recover their own password).
+  const [resetTarget, setResetTarget] = React.useState<ResettableStudent | null>(null);
+
   const formModalRef = React.useRef<HTMLDivElement>(null);
   const deleteModalRef = React.useRef<HTMLDivElement>(null);
   const importModalRef = React.useRef<HTMLDivElement>(null);
@@ -110,7 +116,8 @@ const StudentsPage: React.FC = () => {
     isImportModalOpen ||
     isCreatedModalOpen ||
     isBulkResultsModalOpen ||
-    isBulkDeleteModalOpen;
+    isBulkDeleteModalOpen ||
+    resetTarget !== null;
 
   if (isLoading) {
     return (
@@ -216,6 +223,14 @@ const StudentsPage: React.FC = () => {
           students={currentStudents}
           onEdit={handleEditStudent}
           onDelete={handleDeleteStudent}
+          onResetPassword={(student) =>
+            setResetTarget({
+              id: student.id,
+              firstName: student.firstName,
+              lastName: student.lastName,
+              admissionNo: student.admissionNo,
+            })
+          }
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
           onToggleSelectAll={toggleSelectAll}
@@ -274,6 +289,8 @@ const StudentsPage: React.FC = () => {
         results={bulkImportResults}
         onClose={closeBulkResultsModal}
       />
+
+      <StudentPasswordReset student={resetTarget} onClose={() => setResetTarget(null)} />
 
       <ConfirmDialog
         isOpen={isBulkDeleteModalOpen}

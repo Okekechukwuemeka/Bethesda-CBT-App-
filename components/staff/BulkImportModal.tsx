@@ -219,4 +219,4 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({ subjects, classes }) 
   );
 };
 
-export default BulkImportModal;
+export default BulkImportModal;

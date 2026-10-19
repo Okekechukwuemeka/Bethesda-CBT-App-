@@ -28,4 +28,7 @@ export interface CreatedStaffInfo {
   staffId: string;
   username: string;
   tempPassword?: string;
+  // Whether the welcome email with the login details went out.
+  emailStatus?: "sent" | "failed" | "no-email";
+  emailedTo?: string;
 }

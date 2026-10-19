@@ -23,4 +23,4 @@ const text = await res.text();
 console.log(res.status, res.statusText);
 console.log(text);
 
-process.exit(res.ok ? 0 : 1);
+process.exit(res.ok ? 0 : 1);

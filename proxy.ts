@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-const ADMIN_PUBLIC_PATHS = ["/admin/login"];
+const ADMIN_PUBLIC_PATHS = ["/admin/login", "/admin/forgot-password"];
 const ADMIN_PUBLIC_API_PATHS = ["/api/admin/register"];
 const STUDENT_PUBLIC_PATHS = ["/student/login"];
-const STAFF_PUBLIC_PATHS = ["/staff/login"];
+const STAFF_PUBLIC_PATHS = ["/staff/login", "/staff/forgot-password"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;

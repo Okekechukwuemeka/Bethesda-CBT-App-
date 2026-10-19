@@ -7,4 +7,4 @@ try {
   await mongoose.disconnect();
 } catch (e) {
   console.error(e.name, e.message);
-}
+}
