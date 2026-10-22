@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import StatsSummary from "@/components/admin/results/StatsSummary";
 import SubjectResultsTable from "@/components/admin/results/SubjectResultsTable";
-import StudentScriptsModal from "@/components/admin/results/StudentScriptsModal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useClassResults } from "@/hooks/useClassResults";
 
@@ -17,22 +16,12 @@ const ClassResultsPage: React.FC = () => {
     subjects,
     isLoading,
     subjectsError,
-    studentsError,
     statusMessage,
-    studentsByExam,
-    loadingStudentsFor,
-    selectedSubject,
-    showScriptModal,
     exportingId,
     isExportingClass,
-    isSavingScores,
-    saveTheoryScores,
-    handleViewScripts,
-    closeScriptModal,
     exportExcel,
     exportCsv,
     exportAllScripts,
-    exportSingleScript,
     exportClassResults,
     exportClassCsv,
     resultsPendingDelete,
@@ -122,25 +111,14 @@ const ClassResultsPage: React.FC = () => {
             onExportExcel={exportExcel}
             onExportCsv={exportCsv}
             onExportAllScripts={exportAllScripts}
-            onViewScripts={handleViewScripts}
+            getStudentsHref={(subject) =>
+              `/admin/results/${encodeURIComponent(className)}/${subject.id}`
+            }
             onDeleteResults={requestDeleteResults}
           />
         </>
       )}
 
-      <StudentScriptsModal
-        isOpen={showScriptModal}
-        subject={selectedSubject}
-        students={selectedSubject ? studentsByExam[selectedSubject.id] : undefined}
-        isLoading={selectedSubject ? loadingStudentsFor === selectedSubject.id : false}
-        onClose={closeScriptModal}
-        onDownloadScript={(student) =>
-          selectedSubject && exportSingleScript(selectedSubject, student)
-        }
-        onDownloadAll={() => selectedSubject && exportAllScripts(selectedSubject)}
-        onSaveTheoryScores={saveTheoryScores}
-        isSavingScores={isSavingScores}
-      />
 
       <ConfirmDialog
         isOpen={!!resultsPendingDelete}

@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import type { SubjectResult } from "@/types/admin-results";
 import StatusBadge from "./StatusBadge";
 import ExamTypeBadge from "./ExamTypeBadge";
@@ -10,7 +11,9 @@ interface SubjectResultsTableProps {
   onExportExcel: (subject: SubjectResult) => void;
   onExportAllScripts: (subject: SubjectResult) => void;
   onExportCsv?: (subject: SubjectResult) => void;
-  onViewScripts: (subject: SubjectResult, e: React.MouseEvent<HTMLButtonElement>) => void;
+  // "View Students" is a link to a page of its own (not a dialog), so a
+  // screen reader starts at the top of the new page.
+  getStudentsHref: (subject: SubjectResult) => string;
   // Only the admin page passes these. Teachers can view results of a deleted
   // exam but never delete them, so without them no delete button is shown.
   onDeleteResults?: (subject: SubjectResult, e: React.MouseEvent<HTMLButtonElement>) => void;
@@ -31,7 +34,7 @@ const SubjectResultsTable: React.FC<SubjectResultsTableProps> = ({
   onExportExcel,
   onExportAllScripts,
   onExportCsv,
-  onViewScripts,
+  getStudentsHref,
   onDeleteResults,
 }) => {
   if (subjects.length === 0) {
@@ -72,13 +75,12 @@ const SubjectResultsTable: React.FC<SubjectResultsTableProps> = ({
 
     return (
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2">
-        <button
-          type="button"
-          onClick={(e) => onViewScripts(subject, e)}
+        <Link
+          href={getStudentsHref(subject)}
           aria-label={`View students for ${subject.subject}, ${subject.examTitle}`}
-          className={`${buttonBase} bg-[#E8F0FE] hover:bg-[#D5E4F7] text-[#2B6CB0] focus:ring-[#2B6CB0]`}>
+          className={`${buttonBase} block bg-[#E8F0FE] hover:bg-[#D5E4F7] text-[#2B6CB0] focus:ring-[#2B6CB0]`}>
           View Students
-        </button>
+        </Link>
         {showExcelExport && (
           <button
             type="button"

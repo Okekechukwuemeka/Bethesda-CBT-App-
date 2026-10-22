@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import StatsSummary from "@/components/admin/results/StatsSummary";
 import SubjectResultsTable from "@/components/admin/results/SubjectResultsTable";
-import StudentScriptsModal from "@/components/admin/results/StudentScriptsModal";
 import { useTeacherClassResults } from "@/hooks/useTeacherClassResults";
 
 const TeacherClassResultsPage: React.FC = () => {
@@ -16,21 +15,11 @@ const TeacherClassResultsPage: React.FC = () => {
     subjects,
     isLoading,
     subjectsError,
-    studentsError,
     statusMessage,
-    studentsByExam,
-    loadingStudentsFor,
-    selectedSubject,
-    showScriptModal,
     exportingId,
-    isSavingScores,
-    saveTheoryScores,
-    handleViewScripts,
-    closeScriptModal,
     exportExcel,
     exportCsv,
     exportAllScripts,
-    exportSingleScript,
   } = useTeacherClassResults(className);
 
   return (
@@ -77,22 +66,13 @@ const TeacherClassResultsPage: React.FC = () => {
             onExportExcel={exportExcel}
             onExportCsv={exportCsv}
             onExportAllScripts={exportAllScripts}
-            onViewScripts={handleViewScripts}
+            getStudentsHref={(subject) =>
+              `/staff/results/${encodeURIComponent(className)}/${subject.id}`
+            }
           />
         </>
       )}
 
-      <StudentScriptsModal
-        isOpen={showScriptModal}
-        subject={selectedSubject}
-        students={selectedSubject ? studentsByExam[selectedSubject.id] : undefined}
-        isLoading={selectedSubject ? loadingStudentsFor === selectedSubject.id : false}
-        onClose={closeScriptModal}
-        onDownloadScript={(student) => selectedSubject && exportSingleScript(selectedSubject, student)}
-        onDownloadAll={() => selectedSubject && exportAllScripts(selectedSubject)}
-        onSaveTheoryScores={saveTheoryScores}
-        isSavingScores={isSavingScores}
-      />
     </div>
   );
 };
