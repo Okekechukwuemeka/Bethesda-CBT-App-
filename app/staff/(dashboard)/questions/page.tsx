@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTeacherProfileStore } from "@/store/useTeacherProfileStore";
 import { useTeacherQuestionsStore } from "@/store/useTeacherQuestionsStore";
 import SelectField from "@/components/ui/form/SelectField";
@@ -10,6 +10,7 @@ import QuestionFormModal from "@/components/staff/QuestionFormModal";
 import BulkImportModal from "@/components/staff/BulkImportModal";
 import GroupFilterSelect from "@/components/questions/GroupFilterSelect";
 import MoveToGroupModal from "@/components/questions/MoveToGroupModal";
+import BulkDeleteQuestionsModal from "@/components/admin/questions/BulkDeleteQuestionsModal";
 import PassageManagerModal from "@/components/admin/questions/PassageManagerModal";
 import { usePassages } from "@/hooks/usePassages";
 
@@ -45,9 +46,22 @@ const TeacherQuestionsPage: React.FC = () => {
     openEditModal,
     openImportModal,
     deleteQuestion,
+    selectedIds,
+    toggleSelect,
+    toggleSelectAll,
+    isBulkDeleteModalOpen,
+    isBulkDeleting,
+    bulkDeleteError,
+    bulkDeleteBlocked,
+    requestBulkDelete,
+    closeBulkDeleteModal,
+    runBulkDelete,
   } = useTeacherQuestionsStore();
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const bulkDeleteTriggerRef = useRef<HTMLButtonElement>(null);
+  const wasBulkModalOpen = useRef(false);
 
   useEffect(() => {
     fetchProfile();
@@ -61,6 +75,37 @@ const TeacherQuestionsPage: React.FC = () => {
 
   const subjects = profile?.assignedSubjects ?? [];
   const classes = profile?.assignedClasses ?? [];
+
+  // A teacher can only delete questions they added themselves, so only those
+  // rows get a checkbox and "select all" covers exactly those.
+  const selectableIds = useMemo(
+    () =>
+      profile
+        ? questions
+            .filter((q) => q.createdByModel === "Staff" && q.createdBy === profile.id)
+            .map((q) => q.id)
+        : [],
+    [questions, profile],
+  );
+  const selectableSet = useMemo(() => new Set(selectableIds), [selectableIds]);
+  const selectedCount = selectableIds.filter((id) => selectedIds.has(id)).length;
+  const allSelected = selectableIds.length > 0 && selectedCount === selectableIds.length;
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = selectedCount > 0 && !allSelected;
+    }
+  }, [selectedCount, allSelected]);
+
+  // After the delete dialog closes, put keyboard / screen reader focus back
+  // somewhere sensible: the Delete Selected button if it is still there,
+  // otherwise the select-all checkbox.
+  useEffect(() => {
+    if (wasBulkModalOpen.current && !isBulkDeleteModalOpen) {
+      (bulkDeleteTriggerRef.current ?? selectAllRef.current)?.focus();
+    }
+    wasBulkModalOpen.current = isBulkDeleteModalOpen;
+  }, [isBulkDeleteModalOpen]);
 
   // Passages share this page's status banner (the store's statusMessage).
   const showPassageStatus = useCallback(
@@ -91,7 +136,8 @@ const TeacherQuestionsPage: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <>
+    <div className="space-y-6" inert={isBulkDeleteModalOpen}>
       <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#1A3A5C]">Question Bank</h1>
@@ -215,6 +261,21 @@ const TeacherQuestionsPage: React.FC = () => {
         {isLoading ? "Loading questions" : `${questions.length} question${questions.length !== 1 ? "s" : ""} found`}
       </p>
 
+      {selectedCount > 0 && (
+        <div className="bg-[#1A3A5C] text-white rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm font-medium" role="status" aria-live="polite">
+            {selectedCount} question{selectedCount !== 1 ? "s" : ""} selected
+          </p>
+          <button
+            ref={bulkDeleteTriggerRef}
+            type="button"
+            onClick={requestBulkDelete}
+            className="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg transition duration-200 focus:outline-none focus:ring-4 focus:ring-red-500/50">
+            Delete Selected
+          </button>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
           <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-[#1A3A5C] border-t-transparent" aria-hidden="true" />
@@ -234,6 +295,20 @@ const TeacherQuestionsPage: React.FC = () => {
               <caption className="sr-only">Your questions</caption>
               <thead className="bg-[#F8FAFE] border-b border-[#E8EEF5]">
                 <tr>
+                  <th scope="col" className="px-4 py-3 w-10">
+                    {selectableIds.length > 0 ? (
+                      <input
+                        ref={selectAllRef}
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={() => toggleSelectAll(selectableIds)}
+                        aria-label={`Select all ${selectableIds.length} of your questions`}
+                        className="w-4 h-4 text-[#1A3A5C] focus:ring-2 focus:ring-[#2B6CB0] rounded"
+                      />
+                    ) : (
+                      <span className="sr-only">Select</span>
+                    )}
+                  </th>
                   {["Question", "Subject", "Class", "Type", "Marks", "Group", "Actions"].map((h) => (
                     <th key={h} scope="col" className="px-4 py-3 text-left text-xs font-medium text-[#5A7A9A] uppercase tracking-wider">
                       {h}
@@ -244,6 +319,19 @@ const TeacherQuestionsPage: React.FC = () => {
               <tbody className="divide-y divide-[#E8EEF5]">
                 {questions.map((q) => (
                   <tr key={q.id} className="hover:bg-[#F8FAFE]">
+                    <td className="px-4 py-3">
+                      {selectableSet.has(q.id) ? (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(q.id)}
+                          onChange={() => toggleSelect(q.id)}
+                          aria-label={`Select question: ${q.text.length > 40 ? `${q.text.slice(0, 40)}…` : q.text}`}
+                          className="w-4 h-4 text-[#1A3A5C] focus:ring-2 focus:ring-[#2B6CB0] rounded"
+                        />
+                      ) : (
+                        <span className="sr-only">Added by someone else, cannot be selected</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-sm text-[#1A3A5C] max-w-md truncate">{q.text}</td>
                     <td className="px-4 py-3 text-sm text-[#4A6A8A] whitespace-nowrap">{q.subject.name}</td>
                     <td className="px-4 py-3 text-sm text-[#4A6A8A] whitespace-nowrap">{q.class}</td>
@@ -332,6 +420,18 @@ const TeacherQuestionsPage: React.FC = () => {
         onCancel={() => setPendingDeleteId(null)}
       />
     </div>
+
+    <BulkDeleteQuestionsModal
+      isOpen={isBulkDeleteModalOpen}
+      selectedCount={selectedCount}
+      isProcessing={isBulkDeleting}
+      error={bulkDeleteError}
+      blocked={bulkDeleteBlocked}
+      onConfirm={() => runBulkDelete(false)}
+      onForceConfirm={() => runBulkDelete(true)}
+      onCancel={closeBulkDeleteModal}
+    />
+    </>
   );
 };
 

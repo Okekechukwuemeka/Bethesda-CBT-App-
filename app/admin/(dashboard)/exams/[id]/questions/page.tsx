@@ -73,6 +73,7 @@ const ExamQuestionsPage: React.FC = () => {
     // bulk attach from bank
     selectedBankIds,
     toggleBankSelect,
+    toggleBankSelectAll,
     handleAttachSelected,
     isAttaching,
 
@@ -240,6 +241,7 @@ const ExamQuestionsPage: React.FC = () => {
             onAddQuestion={handleAddFromBank}
             checkedIds={selectedBankIds}
             onToggleCheck={toggleBankSelect}
+            onToggleCheckAll={toggleBankSelectAll}
             onAttachSelected={handleAttachSelected}
             isAttachingSelected={isAttaching}
           />

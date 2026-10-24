@@ -344,6 +344,37 @@ export const useExamQuestions = (examId: string) => {
 
   const clearBankSelection = useCallback(() => setSelectedBankIds(new Set()), []);
 
+  // Ids that can still be ticked: every question on screen that is not
+  // already attached to this exam.
+  const selectableBankIds = useMemo(
+    () => filteredBankQuestions.filter((q) => !attachedIds.has(q._id)).map((q) => q._id),
+    [filteredBankQuestions, attachedIds],
+  );
+
+  // One action ticks (or unticks) every question the current filters show,
+  // so nobody has to tick 50 boxes one at a time.
+  const toggleBankSelectAll = useCallback(() => {
+    setSelectedBankIds((prev) => {
+      const allSelected =
+        selectableBankIds.length > 0 && selectableBankIds.every((id) => prev.has(id));
+      return allSelected ? new Set() : new Set(selectableBankIds);
+    });
+  }, [selectableBankIds]);
+
+  // Keep the selection limited to what is on screen, so the "N selected"
+  // count always matches the questions the admin can see after changing a
+  // filter or search.
+  useEffect(() => {
+    const visible = new Set(selectableBankIds);
+    setSelectedBankIds((prev) => {
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (visible.has(id)) next.add(id);
+      });
+      return next.size === prev.size ? prev : next;
+    });
+  }, [selectableBankIds]);
+
   const handleAttachSelected = useCallback(async () => {
     const idsToAttach = Array.from(selectedBankIds).filter((id) => !attachedIds.has(id));
     if (idsToAttach.length === 0) return;
@@ -765,6 +796,7 @@ export const useExamQuestions = (examId: string) => {
     // bulk attach from bank
     selectedBankIds,
     toggleBankSelect,
+    toggleBankSelectAll,
     clearBankSelection,
     handleAttachSelected,
 

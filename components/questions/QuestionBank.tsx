@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import Link from "next/link";
 import { BankQuestion } from "@/types/exam.types";
 import type { QuestionGroupSummary } from "@/types/question";
@@ -30,6 +30,8 @@ interface QuestionBankProps {
   onAddQuestion: (question: BankQuestion) => void;
   checkedIds?: Set<string>;
   onToggleCheck?: (id: string) => void;
+  // Ticks / unticks every question currently shown (that isn't already added).
+  onToggleCheckAll?: () => void;
   onAttachSelected?: () => void;
   isAttachingSelected?: boolean;
 }
@@ -58,9 +60,21 @@ const QuestionBank: React.FC<QuestionBankProps> = ({
   onAddQuestion,
   checkedIds,
   onToggleCheck,
+  onToggleCheckAll,
   onAttachSelected,
   isAttachingSelected,
 }) => {
+  // Questions that can still be ticked (not already on the exam).
+  const selectable = questions.filter((q) => !selectedQuestions.some((sq) => sq.id === q.id));
+  const checkedCount = selectable.filter((q) => checkedIds?.has(q.id)).length;
+  const allChecked = selectable.length > 0 && checkedCount === selectable.length;
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = checkedCount > 0 && !allChecked;
+    }
+  }, [checkedCount, allChecked]);
+
   return (
     <div>
       <button
@@ -108,6 +122,22 @@ const QuestionBank: React.FC<QuestionBankProps> = ({
                     : " from all groups"
                 }`}
           </p>
+          {onToggleCheckAll && selectable.length > 0 && (
+            <div className="mb-3 flex items-center gap-3 rounded-lg border border-[#C5D8EC] bg-[#F8FAFE] px-3 py-2">
+              <input
+                id="bank-select-all"
+                ref={selectAllRef}
+                type="checkbox"
+                checked={allChecked}
+                onChange={onToggleCheckAll}
+                className="w-4 h-4 flex-shrink-0 text-[#1A3A5C] focus:ring-2 focus:ring-[#2B6CB0] rounded"
+              />
+              <label htmlFor="bank-select-all" className="text-sm font-medium text-[#1A3A5C]">
+                Select all {selectable.length} question{selectable.length !== 1 ? "s" : ""} shown
+                {selectable.length !== questions.length ? " (not yet added)" : ""}
+              </label>
+            </div>
+          )}
           <div className="max-h-60 overflow-y-auto space-y-2">
             {questions.length === 0 ? (
               <p className="text-sm text-[#8A9CAE] text-center py-4">
@@ -136,7 +166,7 @@ const QuestionBank: React.FC<QuestionBankProps> = ({
 
           {onAttachSelected && checkedIds && checkedIds.size > 0 && (
             <div className="mt-3 bg-[#1A3A5C] text-white rounded-lg px-3 py-2 flex items-center justify-between">
-              <p className="text-sm font-medium">
+              <p className="text-sm font-medium" role="status" aria-live="polite">
                 {checkedIds.size} question{checkedIds.size !== 1 ? "s" : ""} selected
               </p>
               <button

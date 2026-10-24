@@ -12,6 +12,9 @@ export interface TeacherQuestion {
   options?: string[];
   correctAnswer?: string;
   group?: string;
+  // Who added it. Teachers can only delete questions they added themselves.
+  createdBy?: string;
+  createdByModel?: "Admin" | "Staff";
 }
 
 interface StatusMessage {
@@ -66,6 +69,8 @@ function fromApiQuestion(q: any): TeacherQuestion {
     options: q.options,
     correctAnswer: q.correctAnswer,
     group: q.group ?? undefined,
+    createdBy: q.createdBy ? String(q.createdBy?._id ?? q.createdBy) : undefined,
+    createdByModel: q.createdByModel,
   };
 }
 
@@ -94,6 +99,19 @@ interface TeacherQuestionsState {
   openMoveModal: () => void;
   closeMoveModal: () => void;
   confirmMove: (group: string) => Promise<void>;
+
+  // bulk selection / bulk delete (own questions only)
+  selectedIds: Set<string>;
+  toggleSelect: (id: string) => void;
+  toggleSelectAll: (selectableIds: string[]) => void;
+  clearSelection: () => void;
+  isBulkDeleteModalOpen: boolean;
+  isBulkDeleting: boolean;
+  bulkDeleteError: string | null;
+  bulkDeleteBlocked: { questionId: string; exams: { id: string; title: string }[] }[] | null;
+  requestBulkDelete: () => void;
+  closeBulkDeleteModal: () => void;
+  runBulkDelete: (force: boolean) => Promise<void>;
 
   isModalOpen: boolean;
   isEditing: boolean;
@@ -158,6 +176,12 @@ export const useTeacherQuestionsStore = create<TeacherQuestionsState>((set, get)
   isMoving: false,
   moveError: null,
 
+  selectedIds: new Set<string>(),
+  isBulkDeleteModalOpen: false,
+  isBulkDeleting: false,
+  bulkDeleteError: null,
+  bulkDeleteBlocked: null,
+
   isModalOpen: false,
   isEditing: false,
   selectedQuestion: null,
@@ -203,7 +227,12 @@ export const useTeacherQuestionsStore = create<TeacherQuestionsState>((set, get)
       const res = await fetch(`/api/staff/questions?${params.toString()}`);
       if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to load questions"));
       const { questions } = await res.json();
-      set({ questions: questions.map(fromApiQuestion) });
+      const mapped: TeacherQuestion[] = questions.map(fromApiQuestion);
+      // Selection only ever covers what is on screen, so a changed filter or
+      // search can't leave hidden questions ticked.
+      const visible = new Set(mapped.map((q) => q.id));
+      const kept = new Set([...get().selectedIds].filter((id) => visible.has(id)));
+      set({ questions: mapped, selectedIds: kept });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : "Failed to load questions." });
     } finally {
@@ -382,6 +411,7 @@ export const useTeacherQuestionsStore = create<TeacherQuestionsState>((set, get)
       if (!res.ok) throw new Error(await parseErrorMessage(res, "Failed to delete question"));
       set((state) => ({
         questions: state.questions.filter((q) => q.id !== id),
+        selectedIds: new Set([...state.selectedIds].filter((x) => x !== id)),
         statusMessage: { type: "success", text: "Question deleted." },
       }));
       get().fetchGroups();
@@ -392,6 +422,82 @@ export const useTeacherQuestionsStore = create<TeacherQuestionsState>((set, get)
           text: err instanceof Error ? err.message : "Failed to delete question.",
         },
       });
+    }
+  },
+
+  toggleSelect: (id) =>
+    set((state) => {
+      const next = new Set(state.selectedIds);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return { selectedIds: next };
+    }),
+
+  // Ticks every question the teacher can delete in the current list, or
+  // clears them all if they were already all ticked.
+  toggleSelectAll: (selectableIds) =>
+    set((state) => {
+      const allSelected =
+        selectableIds.length > 0 && selectableIds.every((id) => state.selectedIds.has(id));
+      return { selectedIds: allSelected ? new Set<string>() : new Set(selectableIds) };
+    }),
+
+  clearSelection: () => set({ selectedIds: new Set<string>() }),
+
+  requestBulkDelete: () => {
+    if (get().selectedIds.size === 0) return;
+    set({ isBulkDeleteModalOpen: true, bulkDeleteError: null, bulkDeleteBlocked: null });
+  },
+
+  closeBulkDeleteModal: () => {
+    if (get().isBulkDeleting) return;
+    set({ isBulkDeleteModalOpen: false, bulkDeleteError: null, bulkDeleteBlocked: null });
+  },
+
+  // First call is a plain delete. If some questions are attached to exams the
+  // server answers 409 with the list, the modal shows it, and a second call
+  // with force detaches them from those exams and deletes.
+  runBulkDelete: async (force) => {
+    const { selectedIds } = get();
+    if (selectedIds.size === 0) return;
+    set({ isBulkDeleting: true, bulkDeleteError: null });
+    try {
+      const res = await fetch("/api/staff/questions/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedIds), force }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 409 && data.blocked) {
+          set({ bulkDeleteBlocked: data.blocked });
+          return;
+        }
+        throw new Error(data.error ?? "Failed to delete questions");
+      }
+      const deleted: number = data.deletedCount ?? 0;
+      const skipped: number = data.skipped ?? 0;
+      set({
+        isBulkDeleteModalOpen: false,
+        bulkDeleteBlocked: null,
+        selectedIds: new Set<string>(),
+        statusMessage: {
+          type: "success",
+          text:
+            `Deleted ${deleted} question${deleted !== 1 ? "s" : ""}.` +
+            (skipped > 0
+              ? ` ${skipped} selected question${skipped !== 1 ? "s were" : " was"} not yours to delete, so ${skipped !== 1 ? "they were" : "it was"} left as ${skipped !== 1 ? "they are" : "it is"}.`
+              : ""),
+        },
+      });
+      await get().fetchQuestions();
+      get().fetchGroups();
+    } catch (err) {
+      set({
+        bulkDeleteError: err instanceof Error ? err.message : "Failed to delete questions.",
+      });
+    } finally {
+      set({ isBulkDeleting: false });
     }
   },
 
